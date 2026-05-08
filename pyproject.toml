@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "clanker-soul"
+version = "0.1.0"
+description = "The 3-layer VADUGWI runtime: Soul / Mood / Conversational. Persistent emotional state for LLM agents."
+readme = "README.md"
+license = { text = "AGPL-3.0" }
+requires-python = ">=3.10"
+authors = [{ name = "deucebucket" }]
+keywords = ["vadugwi", "clanker", "emotional-state", "llm-agent", "ai-personality"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "License :: OSI Approved :: GNU Affero General Public License v3",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.0",
+  "pytest-asyncio>=0.21",
+]
+
+[project.urls]
+Homepage = "https://github.com/deucebucket/clanker-soul"
+"Engine (clanker)" = "https://github.com/deucebucket/clanker"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["clanker_soul*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
