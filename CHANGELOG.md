@@ -9,6 +9,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **PendingAction tracking + outcome classification (#57).** New
+  module `clanker_soul.pending` extends the action loop to actions
+  whose outcome arrives later — or never. `PendingAction` is a frozen
+  dataclass capturing the action body, surface key, soul snapshot at
+  firing, expected response, status, and TTL. `PendingActionStore`
+  Protocol with two reference impls: `InMemoryPendingActionStore`
+  (default, process-local) and `SqlitePendingActionStore` (durable,
+  reuses the `SoulStore` connection, survives process restart via
+  the new `pending_actions` table). `OutcomeClassifier` Protocol with
+  a trivial `KeywordOutcomeClassifier` reference impl that parses
+  `expected_response` strings like `"ack:hi,hello;ignore:cancel,no"`.
+  `PendingCoordinator` orchestrates the full loop: `record(pending)`
+  on fire, `observe(surface_key, observation)` on inbound (runs the
+  classifier, marks resolved status, applies the configured mood
+  delta as a synthetic `Score` ingested into physics), `tick(now)` to
+  expire stale pendings. `PendingDeltaConfig` lets operators tune the
+  per-status mood deltas — defaults match the spec table
+  (acknowledged_fast +6V/+4W, acknowledged_late +3V/+2W, mixed
+  -2V/-2W, ignored -8V/-6W/-3G/-2I, expired -3V/-3W/-2G).
+  `SoulPlugin.build_pending_coordinator(classifier, *, store=,
+  delta_config=, durable=True)` is the documented one-call helper —
+  durable defaults to True (SQLite), `store=` lets hosts plug in a
+  custom impl. New types exported from `clanker_soul`:
+  `PendingAction`, `PendingStatus`, `ClassifyOutcome`,
+  `PendingDeltaConfig`, `PendingActionStore`,
+  `InMemoryPendingActionStore`, `SqlitePendingActionStore`,
+  `OutcomeClassifier`, `KeywordOutcomeClassifier`,
+  `PendingCoordinator`, `ResolutionResult`. 33 new unit tests covering
+  data model, both stores, the keyword classifier, the full
+  coordinator loop including classifier soft-fail and SQLite
+  persistence across restart.
+
 - **`PulseDispatcher` — generic host-agnostic action router (#53).**
   New `clanker_soul.pulse.dispatcher.PulseDispatcher` turns any
   :py:class:`PulseAction` into a real-world effect via constructor-
