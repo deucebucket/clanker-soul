@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   v0.1 databases (which only had `soul_state`) in place without data loss.
 - `SoulStore.connection` and `SoulStore.lock` properties so sibling modules can share the
   same SQLite connection and write lock (avoids second-handle contention).
+- **`clanker-soul` CLI** (#8): minimal local-ops surface for v0.2 soul.db files.
+  - `clanker-soul info --db PATH` — db size, table row counts, agent ids, oldest/newest event timestamps
+  - `clanker-soul prune --db PATH --before YYYY-MM-DD [--agent-id X] [-y]` — deletes events + pulses older than the date; refuses without `-y`; supports per-agent scoping
+  - `clanker-soul ui --db PATH [--agent-id X] [--port 7900]` — Phase-2 stub today; auto-dispatches to `clanker_soul.ui.launch` once that subpackage exists
+  - Wired through `[project.scripts]` in `pyproject.toml` so `pip install -e .` registers the binary.
 - **Phase 1 integration test suite** (#7): `tests/test_phase1_integration.py` exercises
   the full drop-in promise end-to-end — full lifecycle (construct, preset apply, ingest
   warm and harsh events, verify event log, switch personality at runtime, persist,

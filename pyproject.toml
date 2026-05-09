@@ -32,6 +32,9 @@ dev = [
 Homepage = "https://github.com/deucebucket/clanker-soul"
 "Engine (clanker)" = "https://github.com/deucebucket/clanker"
 
+[project.scripts]
+clanker-soul = "clanker_soul.__main__:main"
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["clanker_soul*"]
