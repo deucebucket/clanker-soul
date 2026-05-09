@@ -66,6 +66,7 @@ from clanker_soul.physics import (
 )
 from clanker_soul.pulse import (
     ACTION_KINDS,
+    ActionHandler,
     ActionOutcome,
     DEFAULT_FACES,
     CorpusStore,
@@ -74,6 +75,7 @@ from clanker_soul.pulse import (
     PromptFace,
     PulseAction,
     PulseConfig,
+    PulseDispatcher,
     PulseEngine,
     PulseHost,
     PulseTarget,
@@ -137,6 +139,9 @@ __all__ = [
     # Corpus persistence (M3.3)
     "CorpusStore",
     "PersistentRecencyLog",
+    # PulseDispatcher (#53)
+    "PulseDispatcher",
+    "ActionHandler",
     # Event log
     "EventLog",
     "IngestRecord",
