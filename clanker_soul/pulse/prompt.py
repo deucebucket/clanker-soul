@@ -20,6 +20,7 @@ etc. Templates that reference unknown keys silently fall back to the
 legacy string (better to ship the safe-known-good prompt than to ship a
 broken corpus prompt).
 """
+
 from __future__ import annotations
 
 import logging
@@ -101,8 +102,13 @@ def compose_self_prompt_with_face(
         return _legacy_static_prompt(trigger), None
 
     face = corpus.sample(
-        trigger, situation_tags, memory_topics_present, recency, now,
-        primed=primed, previous_face_id=previous_face_id,
+        trigger,
+        situation_tags,
+        memory_topics_present,
+        recency,
+        now,
+        primed=primed,
+        previous_face_id=previous_face_id,
     )
     if face is None:
         # Empty corpus / fully filtered out → safe fallback.
@@ -115,7 +121,9 @@ def compose_self_prompt_with_face(
         logger.warning(
             "PromptFace(id=%r) template render failed (%s); falling "
             "back to legacy prompt for trigger=%s",
-            face.id, exc, trigger.kind,
+            face.id,
+            exc,
+            trigger.kind,
         )
         return _legacy_static_prompt(trigger), None
     return rendered, face
@@ -161,20 +169,28 @@ def _render_namespace(trigger: Trigger) -> dict:
     # absent and any template using mood_v / mood_w / etc. will fall
     # back to legacy via KeyError.
     if mood:
-        ns.update({
-            "mood_v": mood[0], "mood_a": mood[1], "mood_d": mood[2],
-            "mood_u": mood[3], "mood_g": mood[4], "mood_w": mood[5],
-            "mood_i": mood[6],
-        })
-    ns.update({
-        "soul_v": soul.get("v", "?"),
-        "soul_a": soul.get("a", "?"),
-        "soul_d": soul.get("d", "?"),
-        "soul_u": soul.get("u", "?"),
-        "soul_g": soul.get("g", "?"),
-        "soul_w": soul.get("w", "?"),
-        "soul_i": soul.get("i", "?"),
-    })
+        ns.update(
+            {
+                "mood_v": mood[0],
+                "mood_a": mood[1],
+                "mood_d": mood[2],
+                "mood_u": mood[3],
+                "mood_g": mood[4],
+                "mood_w": mood[5],
+                "mood_i": mood[6],
+            }
+        )
+    ns.update(
+        {
+            "soul_v": soul.get("v", "?"),
+            "soul_a": soul.get("a", "?"),
+            "soul_d": soul.get("d", "?"),
+            "soul_u": soul.get("u", "?"),
+            "soul_g": soul.get("g", "?"),
+            "soul_w": soul.get("w", "?"),
+            "soul_i": soul.get("i", "?"),
+        }
+    )
     return ns
 
 

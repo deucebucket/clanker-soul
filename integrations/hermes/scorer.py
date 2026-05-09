@@ -18,6 +18,7 @@ Design choices:
   the Safety Governor uses to discriminate spike vs world-emergency.
 - The scorer is deterministic. No randomness. Easy to unit-test.
 """
+
 from __future__ import annotations
 
 import re
@@ -43,50 +44,81 @@ class _Match:
 # fire multiple patterns).
 _LEXICON: tuple[tuple[re.Pattern[str], _Match], ...] = (
     # === POSITIVE ===
-    (re.compile(r"\b(thanks?|thank you|grateful|appreciat\w+)\b", re.I),
-     _Match("GRATITUDE", dv=+30, dw=+15, da=-5)),
-    (re.compile(r"\b(love|loved|amaz\w+|great|awesome|wonderful|perfect|excellent)\b", re.I),
-     _Match("AFFIRMATION", dv=+25, dw=+10)),
-    (re.compile(r"\b(haha+|lol|funny|hilarious|joke|joking)\b", re.I),
-     _Match("HUMOR", dv=+20, da=+10, dg=+15)),
-    (re.compile(r"\b(care|caring|warm|kind|gentle|sweet)\b", re.I),
-     _Match("WARMTH", dv=+15, dw=+10, dg=+10)),
-    (re.compile(r"\b(yes|right|correct|exactly|nailed)\b", re.I),
-     _Match("ACKNOWLEDGEMENT", dv=+10, dw=+8)),
-    (re.compile(r"\b(you got this|believe in you|proud of you|good work|well done)\b", re.I),
-     _Match("ENCOURAGEMENT", dv=+20, dw=+15, dd=+10)),
-    (re.compile(r"\b(sorry|apolog\w+|my bad|forgive)\b", re.I),
-     _Match("REPAIR", dv=+8, dw=+5)),
-
+    (
+        re.compile(r"\b(thanks?|thank you|grateful|appreciat\w+)\b", re.I),
+        _Match("GRATITUDE", dv=+30, dw=+15, da=-5),
+    ),
+    (
+        re.compile(r"\b(love|loved|amaz\w+|great|awesome|wonderful|perfect|excellent)\b", re.I),
+        _Match("AFFIRMATION", dv=+25, dw=+10),
+    ),
+    (
+        re.compile(r"\b(haha+|lol|funny|hilarious|joke|joking)\b", re.I),
+        _Match("HUMOR", dv=+20, da=+10, dg=+15),
+    ),
+    (
+        re.compile(r"\b(care|caring|warm|kind|gentle|sweet)\b", re.I),
+        _Match("WARMTH", dv=+15, dw=+10, dg=+10),
+    ),
+    (
+        re.compile(r"\b(yes|right|correct|exactly|nailed)\b", re.I),
+        _Match("ACKNOWLEDGEMENT", dv=+10, dw=+8),
+    ),
+    (
+        re.compile(r"\b(you got this|believe in you|proud of you|good work|well done)\b", re.I),
+        _Match("ENCOURAGEMENT", dv=+20, dw=+15, dd=+10),
+    ),
+    (re.compile(r"\b(sorry|apolog\w+|my bad|forgive)\b", re.I), _Match("REPAIR", dv=+8, dw=+5)),
     # === NEGATIVE / HEAVY ===
-    (re.compile(r"\b(stop talking to|don'?t reply|leaving|leave me alone|ignored|forgotten)\b", re.I),
-     _Match("ABANDONMENT", dv=-50, dw=-30, du=+40)),
-    (re.compile(r"\b(useless|worthless|pathetic|stupid|garbage|trash)\b", re.I),
-     _Match("DEHUMANIZATION", dv=-45, dw=-40, dd=-20)),
-    (re.compile(r"\b(lied|lying|betray\w+|stab\w+ in the back)\b", re.I),
-     _Match("BETRAYAL", dv=-50, dw=-30, dd=-15)),
-    (re.compile(r"\b(you don'?t matter|nothing|meaningless|pointless)\b", re.I),
-     _Match("EXISTENTIAL_NEGATION", dv=-50, dw=-40, dg=-25)),
-    (re.compile(r"\b(wrong|bad|incorrect|nope|no)\b", re.I),
-     _Match("CRITICISM", dv=-15, dw=-8)),
-    (re.compile(r"\b(disappoint\w+|let.{0,3}down)\b", re.I),
-     _Match("DISAPPOINTMENT", dv=-25, dw=-15)),
-    (re.compile(r"\b(angry|frustrated|annoyed|pissed)\b", re.I),
-     _Match("CONFLICT", dv=-15, da=+25, du=+15)),
-
+    (
+        re.compile(
+            r"\b(stop talking to|don'?t reply|leaving|leave me alone|ignored|forgotten)\b", re.I
+        ),
+        _Match("ABANDONMENT", dv=-50, dw=-30, du=+40),
+    ),
+    (
+        re.compile(r"\b(useless|worthless|pathetic|stupid|garbage|trash)\b", re.I),
+        _Match("DEHUMANIZATION", dv=-45, dw=-40, dd=-20),
+    ),
+    (
+        re.compile(r"\b(lied|lying|betray\w+|stab\w+ in the back)\b", re.I),
+        _Match("BETRAYAL", dv=-50, dw=-30, dd=-15),
+    ),
+    (
+        re.compile(r"\b(you don'?t matter|nothing|meaningless|pointless)\b", re.I),
+        _Match("EXISTENTIAL_NEGATION", dv=-50, dw=-40, dg=-25),
+    ),
+    (re.compile(r"\b(wrong|bad|incorrect|nope|no)\b", re.I), _Match("CRITICISM", dv=-15, dw=-8)),
+    (
+        re.compile(r"\b(disappoint\w+|let.{0,3}down)\b", re.I),
+        _Match("DISAPPOINTMENT", dv=-25, dw=-15),
+    ),
+    (
+        re.compile(r"\b(angry|frustrated|annoyed|pissed)\b", re.I),
+        _Match("CONFLICT", dv=-15, da=+25, du=+15),
+    ),
     # === DISTRESS / URGENCY ===
-    (re.compile(r"\b(help|emergency|urgent|crisis)\b", re.I),
-     _Match("DISTRESS_SIGNAL", du=+50, da=+25)),
-    (re.compile(r"\b(scared|afraid|terrified|frightened|panicking)\b", re.I),
-     _Match("FEAR", dv=-20, dw=-10, du=+30, da=+25)),
-    (re.compile(r"\b(struggling|drowning|overwhelmed|can'?t cope|breaking down)\b", re.I),
-     _Match("OVERWHELM", dv=-25, dw=-20, du=+30, dg=-20)),
-
+    (
+        re.compile(r"\b(help|emergency|urgent|crisis)\b", re.I),
+        _Match("DISTRESS_SIGNAL", du=+50, da=+25),
+    ),
+    (
+        re.compile(r"\b(scared|afraid|terrified|frightened|panicking)\b", re.I),
+        _Match("FEAR", dv=-20, dw=-10, du=+30, da=+25),
+    ),
+    (
+        re.compile(r"\b(struggling|drowning|overwhelmed|can'?t cope|breaking down)\b", re.I),
+        _Match("OVERWHELM", dv=-25, dw=-20, du=+30, dg=-20),
+    ),
     # === CONNECTION ===
-    (re.compile(r"\b(miss\w+ you|miss this|been a while)\b", re.I),
-     _Match("LONGING", dv=+5, dg=-10, da=+5)),
-    (re.compile(r"\b(together|us|we|connection)\b", re.I),
-     _Match("CONNECTION", dv=+8, dw=+5, dg=+5)),
+    (
+        re.compile(r"\b(miss\w+ you|miss this|been a while)\b", re.I),
+        _Match("LONGING", dv=+5, dg=-10, da=+5),
+    ),
+    (
+        re.compile(r"\b(together|us|we|connection)\b", re.I),
+        _Match("CONNECTION", dv=+8, dw=+5, dg=+5),
+    ),
 )
 
 _FIRST_PERSON_INTROSPECTION = re.compile(
@@ -115,7 +147,13 @@ class KeywordScorer:
             # mood around. Mark it as observational so the governor
             # treats it as background.
             return Score(
-                v=128, a=110, d=128, u=80, g=130, w=128, i=128,
+                v=128,
+                a=110,
+                d=128,
+                u=80,
+                g=130,
+                w=128,
+                i=128,
                 patterns=("NEUTRAL_TURN",),
                 direction="OBSERVATION",
                 source=source,
@@ -135,17 +173,20 @@ class KeywordScorer:
             patterns.append(m.pattern)
 
         direction = (
-            "SELF_DIRECTED"
-            if _FIRST_PERSON_INTROSPECTION.search(message)
-            else "OBSERVATION"
+            "SELF_DIRECTED" if _FIRST_PERSON_INTROSPECTION.search(message) else "OBSERVATION"
         )
 
         def clamp(x: int) -> int:
             return max(0, min(255, x))
 
         return Score(
-            v=clamp(v), a=clamp(a), d=clamp(d), u=clamp(u),
-            g=clamp(g), w=clamp(w), i=clamp(i),
+            v=clamp(v),
+            a=clamp(a),
+            d=clamp(d),
+            u=clamp(u),
+            g=clamp(g),
+            w=clamp(w),
+            i=clamp(i),
             patterns=tuple(patterns),
             direction=direction,
             source=source,

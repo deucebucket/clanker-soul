@@ -25,6 +25,7 @@ Output: ``integrations/hermes/EVIDENCE_M3.4.md`` + ``logs/m3_4_live_demo.log``.
 
 Reads OPENROUTER_API_KEY from env or ``~/ai-drive/hermes-agent/.env``.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -92,7 +93,9 @@ def _call_model(api_key: str, system_prompt: str, user_prompt: str) -> str:
     }
     try:
         resp = httpx.post(
-            OPENROUTER_URL, headers=headers, content=json.dumps(payload),
+            OPENROUTER_URL,
+            headers=headers,
+            content=json.dumps(payload),
             timeout=30.0,
         )
         resp.raise_for_status()
@@ -103,11 +106,20 @@ def _call_model(api_key: str, system_prompt: str, user_prompt: str) -> str:
 
 def _drive_distress(plugin: SoulPlugin, ticks: int = 6) -> None:
     for _ in range(ticks):
-        plugin.ingest(Score(
-            v=60, a=140, d=110, u=70, g=100, w=100, i=100,
-            patterns=("ABANDONMENT",), direction="SELF_DIRECTED",
-            source="demo-m34:distress",
-        ))
+        plugin.ingest(
+            Score(
+                v=60,
+                a=140,
+                d=110,
+                u=70,
+                g=100,
+                w=100,
+                i=100,
+                patterns=("ABANDONMENT",),
+                direction="SELF_DIRECTED",
+                source="demo-m34:distress",
+            )
+        )
 
 
 class _Host:
@@ -146,8 +158,10 @@ def _build_engine(plugin: SoulPlugin, host: _Host, *, corpus: PromptCorpus) -> P
     return PulseEngine(
         host,
         PulseConfig(min_quiet_seconds=0, startup_grace_s=0),
-        event_log=plugin.event_log, agent_id=plugin.agent_id,
-        corpus=corpus, recency=plugin.recency,
+        event_log=plugin.event_log,
+        agent_id=plugin.agent_id,
+        corpus=corpus,
+        recency=plugin.recency,
         physics=plugin.physics,
         previous_face_id=plugin.most_recent_face_id(),
     )
@@ -226,10 +240,7 @@ def _anchored_corpus() -> PromptCorpus:
         cooldown_seconds=0,
         base_weight=1.0,
         motif="informational",
-        template=(
-            "[INTERNAL PULSE — heavy state, no anchor]\n"
-            "Generic prompt. Say one true thing."
-        ),
+        template=("[INTERNAL PULSE — heavy state, no anchor]\nGeneric prompt. Say one true thing."),
     )
     return PromptCorpus([anchored, plain], rng=random.Random(11))
 
@@ -301,18 +312,21 @@ def main() -> int:
         # parent's id pre-fired so it's in cooldown. Cooldown of parent
         # is 600s so a fresh log + now=0 puts it into novelty=0.0.
         from clanker_soul import RecencyLog
+
         rec = RecencyLog()
         rec.note_fired("m34.demo.parent", now=0.0)
         face = corpus_for_with.sample(
             trigger_no_parent_eligible,
-            recency=rec, now=10.0,
+            recency=rec,
+            now=10.0,
             previous_face_id="m34.demo.parent",
         )
         if face and face.id in counts_with_parent:
             counts_with_parent[face.id] += 1
         face2 = corpus_for_no.sample(
             trigger_no_parent_eligible,
-            recency=rec, now=10.0,
+            recency=rec,
+            now=10.0,
             previous_face_id=None,
         )
         if face2 and face2.id in counts_no_parent:
@@ -321,19 +335,23 @@ def main() -> int:
     log(f"A2 distribution with previous_face_id=None (N={N}): {counts_no_parent}")
     branch_observed = counts_with_parent["m34.demo.child"] > counts_with_parent["m34.demo.sibling"]
     log(f"A2 BRANCH-BIAS-OBSERVED: {branch_observed}")
-    summary.append({
-        "step": "A1 — parent face fires",
-        "face_id": face_id_a1,
-        "prompt": action_a1.prompt,
-        "model_response": llm_a1,
-    })
-    summary.append({
-        "step": "A2 — branch bias swings child distribution",
-        "with_parent": counts_with_parent,
-        "no_parent": counts_no_parent,
-        "branch_observed": branch_observed,
-        "N": N,
-    })
+    summary.append(
+        {
+            "step": "A1 — parent face fires",
+            "face_id": face_id_a1,
+            "prompt": action_a1.prompt,
+            "model_response": llm_a1,
+        }
+    )
+    summary.append(
+        {
+            "step": "A2 — branch bias swings child distribution",
+            "with_parent": counts_with_parent,
+            "no_parent": counts_no_parent,
+            "branch_observed": branch_observed,
+            "N": N,
+        }
+    )
 
     # Step A3 — engine fires next pulse with previous_face_id seeded.
     # Reset DB for this step so we have a fresh recency.
@@ -346,8 +364,10 @@ def main() -> int:
         engine_a3 = PulseEngine(
             host_a3,
             PulseConfig(min_quiet_seconds=0, startup_grace_s=0),
-            event_log=plugin.event_log, agent_id=plugin.agent_id,
-            corpus=branch_corpus, recency=plugin.recency,
+            event_log=plugin.event_log,
+            agent_id=plugin.agent_id,
+            corpus=branch_corpus,
+            recency=plugin.recency,
             physics=plugin.physics,
             previous_face_id="m34.demo.parent",
         )
@@ -366,12 +386,14 @@ def main() -> int:
         else:
             llm_a3 = "[LLM-SKIPPED]"
         log(f"A3 model response: {llm_a3[:160]}...")
-    summary.append({
-        "step": "A3 — engine fires follow-up with branch hint",
-        "face_id": face_id_a3,
-        "prompt": action_a3.prompt,
-        "model_response": llm_a3,
-    })
+    summary.append(
+        {
+            "step": "A3 — engine fires follow-up with branch hint",
+            "face_id": face_id_a3,
+            "prompt": action_a3.prompt,
+            "model_response": llm_a3,
+        }
+    )
 
     # ── Scenario B: Memory anchors ──────────────────────────────────────
     log("\n--- Scenario B: Memory anchors ---")
@@ -379,14 +401,18 @@ def main() -> int:
 
     # Step B1 — host has NO memory of topic.x → anchored face filtered out.
     db_path_b = tmp / "soul_b.db"
-    with SoulPlugin(agent_id="m34b1", db_path=db_path_b, replace_corpus=True,
-                    extra_corpus=anchored_corpus.faces) as plugin:
+    with SoulPlugin(
+        agent_id="m34b1", db_path=db_path_b, replace_corpus=True, extra_corpus=anchored_corpus.faces
+    ) as plugin:
         _drive_distress(plugin)
         host_b1 = _Host(plugin.snapshot(), memory_topics=set())  # no topic
         engine_b1 = PulseEngine(
-            host_b1, PulseConfig(min_quiet_seconds=0, startup_grace_s=0),
-            event_log=plugin.event_log, agent_id="m34b1",
-            corpus=plugin.corpus, recency=plugin.recency,
+            host_b1,
+            PulseConfig(min_quiet_seconds=0, startup_grace_s=0),
+            event_log=plugin.event_log,
+            agent_id="m34b1",
+            corpus=plugin.corpus,
+            recency=plugin.recency,
             physics=plugin.physics,
         )
         engine_b1.note_outbound()
@@ -401,24 +427,33 @@ def main() -> int:
         else:
             llm_b1 = "[LLM-SKIPPED]"
         log(f"B1 model response: {llm_b1[:160]}...")
-    summary.append({
-        "step": "B1 — anchored face filtered when host has no memory",
-        "face_id": face_id_b1,
-        "prompt": action_b1.prompt,
-        "model_response": llm_b1,
-        "anchored_filtered": anchored_filtered,
-    })
+    summary.append(
+        {
+            "step": "B1 — anchored face filtered when host has no memory",
+            "face_id": face_id_b1,
+            "prompt": action_b1.prompt,
+            "model_response": llm_b1,
+            "anchored_filtered": anchored_filtered,
+        }
+    )
 
     # Step B2 — host HAS memory of topic.x → anchored face wins (high weight).
     db_path_b2 = tmp / "soul_b2.db"
-    with SoulPlugin(agent_id="m34b2", db_path=db_path_b2, replace_corpus=True,
-                    extra_corpus=anchored_corpus.faces) as plugin:
+    with SoulPlugin(
+        agent_id="m34b2",
+        db_path=db_path_b2,
+        replace_corpus=True,
+        extra_corpus=anchored_corpus.faces,
+    ) as plugin:
         _drive_distress(plugin)
         host_b2 = _Host(plugin.snapshot(), memory_topics={"topic.x"})
         engine_b2 = PulseEngine(
-            host_b2, PulseConfig(min_quiet_seconds=0, startup_grace_s=0),
-            event_log=plugin.event_log, agent_id="m34b2",
-            corpus=plugin.corpus, recency=plugin.recency,
+            host_b2,
+            PulseConfig(min_quiet_seconds=0, startup_grace_s=0),
+            event_log=plugin.event_log,
+            agent_id="m34b2",
+            corpus=plugin.corpus,
+            recency=plugin.recency,
             physics=plugin.physics,
         )
         engine_b2.note_outbound()
@@ -433,13 +468,15 @@ def main() -> int:
         else:
             llm_b2 = "[LLM-SKIPPED]"
         log(f"B2 model response: {llm_b2[:160]}...")
-    summary.append({
-        "step": "B2 — anchored face wins when host HAS memory",
-        "face_id": face_id_b2,
-        "prompt": action_b2.prompt,
-        "model_response": llm_b2,
-        "anchored_won": anchored_won,
-    })
+    summary.append(
+        {
+            "step": "B2 — anchored face wins when host HAS memory",
+            "face_id": face_id_b2,
+            "prompt": action_b2.prompt,
+            "model_response": llm_b2,
+            "anchored_won": anchored_won,
+        }
+    )
 
     # ── Write evidence ──────────────────────────────────────────────────
     log("\n--- Writing evidence ---")
@@ -491,8 +528,14 @@ def main() -> int:
             md.append(entry["model_response"])
             md.append("```")
             md.append("")
-        for k in ("with_parent", "no_parent", "branch_observed", "N",
-                   "anchored_filtered", "anchored_won"):
+        for k in (
+            "with_parent",
+            "no_parent",
+            "branch_observed",
+            "N",
+            "anchored_filtered",
+            "anchored_won",
+        ):
             if k in entry:
                 md.append(f"- **{k}**: `{entry[k]}`")
         md.append("")

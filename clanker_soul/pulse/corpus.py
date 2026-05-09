@@ -40,6 +40,7 @@ Design choices locked here:
   * **In-memory recency only for M3.1.** ``RecencyLog`` is a dict
     persisted by the caller (engine state) until M3.3 introduces SQLite.
 """
+
 from __future__ import annotations
 
 import logging
@@ -66,7 +67,13 @@ _VALID_MOTIFS: frozenset[str] = frozenset(
 # as a 7-int list in V/A/D/U/G/W/I order; soul is a dict with
 # lowercase keys.
 _DIM_TO_MOOD_INDEX: dict[str, int] = {
-    "V": 0, "A": 1, "D": 2, "U": 3, "G": 4, "W": 5, "I": 6,
+    "V": 0,
+    "A": 1,
+    "D": 2,
+    "U": 3,
+    "G": 4,
+    "W": 5,
+    "I": 6,
 }
 
 
@@ -101,23 +108,16 @@ class VadugwiPredicate:
     def __post_init__(self) -> None:
         if self.dim not in _VALID_DIMS:
             raise ValueError(
-                f"VadugwiPredicate.dim={self.dim!r} must be one of "
-                f"{sorted(_VALID_DIMS)}"
+                f"VadugwiPredicate.dim={self.dim!r} must be one of {sorted(_VALID_DIMS)}"
             )
         if self.op not in _VALID_OPS:
-            raise ValueError(
-                f"VadugwiPredicate.op={self.op!r} must be one of "
-                f"{sorted(_VALID_OPS)}"
-            )
+            raise ValueError(f"VadugwiPredicate.op={self.op!r} must be one of {sorted(_VALID_OPS)}")
         if self.layer not in _VALID_LAYERS:
             raise ValueError(
-                f"VadugwiPredicate.layer={self.layer!r} must be one of "
-                f"{sorted(_VALID_LAYERS)}"
+                f"VadugwiPredicate.layer={self.layer!r} must be one of {sorted(_VALID_LAYERS)}"
             )
         if not 0 <= self.value <= 255:
-            raise ValueError(
-                f"VadugwiPredicate.value={self.value} must be in [0, 255]"
-            )
+            raise ValueError(f"VadugwiPredicate.value={self.value} must be in [0, 255]")
 
     def evaluate(
         self,
@@ -260,10 +260,7 @@ class PromptFace:
         if not self.id:
             raise ValueError("PromptFace.id must be non-empty")
         if not self.trigger_kinds:
-            raise ValueError(
-                f"PromptFace(id={self.id!r}) must declare at least one "
-                f"trigger kind"
-            )
+            raise ValueError(f"PromptFace(id={self.id!r}) must declare at least one trigger kind")
         if self.situation_match not in _VALID_SITUATION_MATCH:
             raise ValueError(
                 f"PromptFace(id={self.id!r}).situation_match="
@@ -276,17 +273,11 @@ class PromptFace:
                 f"one of {sorted(_VALID_MOTIFS)}"
             )
         if self.cooldown_seconds < 0:
-            raise ValueError(
-                f"PromptFace(id={self.id!r}).cooldown_seconds must be >= 0"
-            )
+            raise ValueError(f"PromptFace(id={self.id!r}).cooldown_seconds must be >= 0")
         if self.base_weight < 0:
-            raise ValueError(
-                f"PromptFace(id={self.id!r}).base_weight must be >= 0"
-            )
+            raise ValueError(f"PromptFace(id={self.id!r}).base_weight must be >= 0")
         if not self.template:
-            raise ValueError(
-                f"PromptFace(id={self.id!r}).template must be non-empty"
-            )
+            raise ValueError(f"PromptFace(id={self.id!r}).template must be non-empty")
 
     def situation_eligible(self, present_tags: frozenset[str]) -> bool:
         if not self.situation_tags:
@@ -302,9 +293,7 @@ class PromptFace:
         soul: dict,
         primed: list[int] | None = None,
     ) -> bool:
-        return all(
-            p.evaluate(mood, soul, primed) for p in self.vadugwi_predicates
-        )
+        return all(p.evaluate(mood, soul, primed) for p in self.vadugwi_predicates)
 
 
 # ── Recency tracking ────────────────────────────────────────────────────
@@ -509,9 +498,7 @@ class PromptCorpus:
         seen: set[str] = set()
         for f in self._faces:
             if f.id in seen:
-                raise ValueError(
-                    f"PromptCorpus: duplicate face id {f.id!r}"
-                )
+                raise ValueError(f"PromptCorpus: duplicate face id {f.id!r}")
             seen.add(f.id)
         self._rng = rng or random.Random()
         # Index by trigger kind for cheap eligibility filtering.
@@ -563,9 +550,9 @@ class PromptCorpus:
                 return bool(memory_topics_present(face.memory_anchor))
             except Exception:
                 logger.exception(
-                    "memory_topics_present(%r) raised; treating face %r "
-                    "as ineligible",
-                    face.memory_anchor, face.id,
+                    "memory_topics_present(%r) raised; treating face %r as ineligible",
+                    face.memory_anchor,
+                    face.id,
                 )
                 return False
 
@@ -607,8 +594,12 @@ class PromptCorpus:
     ) -> PromptFace | None:
         """Roll a weighted die over eligible faces. Returns None if none."""
         weighted = self.faces_for(
-            trigger, situation_tags, memory_topics_present,
-            recency, now, primed=primed,
+            trigger,
+            situation_tags,
+            memory_topics_present,
+            recency,
+            now,
+            primed=primed,
             previous_face_id=previous_face_id,
         )
         if not weighted:

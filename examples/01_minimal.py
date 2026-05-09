@@ -22,6 +22,7 @@ What it shows:
   reservoir accounting, and breach behavior — not just the V/A/D
   numbers.
 """
+
 from __future__ import annotations
 
 import tempfile
@@ -38,17 +39,25 @@ def main() -> None:
     with SoulPlugin(agent_id="demo-agent", db_path=db) as plugin:
         # Three positive events.
         for _ in range(3):
-            plugin.ingest(Score(
-                v=200, a=140, w=190,
-                patterns=("AFFIRMATION", "GRATITUDE"),
-            ))
+            plugin.ingest(
+                Score(
+                    v=200,
+                    a=140,
+                    w=190,
+                    patterns=("AFFIRMATION", "GRATITUDE"),
+                )
+            )
 
         # One small negative event with a self-directed tag.
-        plugin.ingest(Score(
-            v=60, w=70, u=180,
-            patterns=("CRITICISM",),
-            direction="SELF_DIRECTED",
-        ))
+        plugin.ingest(
+            Score(
+                v=60,
+                w=70,
+                u=180,
+                patterns=("CRITICISM",),
+                direction="SELF_DIRECTED",
+            )
+        )
 
         snap = plugin.snapshot()
         print("snapshot:")

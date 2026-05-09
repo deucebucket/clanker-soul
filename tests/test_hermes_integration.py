@@ -13,6 +13,7 @@ integrations/hermes/EVIDENCE.md, captured manually against
 DeepSeek V4 Flash via OpenRouter — that's not in CI (no LLM in the
 loop) but is part of the release contract.
 """
+
 from __future__ import annotations
 
 import json
@@ -40,14 +41,16 @@ for _k in list(sys.modules):
 # package on disk (no setup.py — it gets symlinked into hermes), so we
 # can't `import` it via dotted name.
 _scorer_spec = importlib.util.spec_from_file_location(
-    "scorer", str(_PLUGIN_DIR / "scorer.py"),
+    "scorer",
+    str(_PLUGIN_DIR / "scorer.py"),
 )
 scorer_mod = importlib.util.module_from_spec(_scorer_spec)
 sys.modules["scorer"] = scorer_mod
 _scorer_spec.loader.exec_module(scorer_mod)
 
 _plugin_spec = importlib.util.spec_from_file_location(
-    "clanker_soul_hermes_plugin", str(_PLUGIN_DIR / "__init__.py"),
+    "clanker_soul_hermes_plugin",
+    str(_PLUGIN_DIR / "__init__.py"),
     submodule_search_locations=[str(_PLUGIN_DIR)],
 )
 plugin_mod = importlib.util.module_from_spec(_plugin_spec)

@@ -1,4 +1,5 @@
 """Trigger + target + action + outcome dataclasses for :py:class:`PulseEngine`."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -48,14 +49,16 @@ class PulseTarget:
 # enacts — it asks; the host decides how. Hosts are free to map the same
 # kind onto different real-world tools (e.g. ``post_public`` could be
 # Twitter for one host and Mastodon for another).
-ACTION_KINDS: frozenset[str] = frozenset({
-    "direct_message",   # DM a target
-    "post_public",      # tweet / blog / Reddit / etc
-    "comment_reply",    # reply to an existing thread
-    "browse_topic",     # kick off research/exploration
-    "withdraw",         # explicit do-nothing signal
-    "tool_invocation",  # generic — host defines the tool
-})
+ACTION_KINDS: frozenset[str] = frozenset(
+    {
+        "direct_message",  # DM a target
+        "post_public",  # tweet / blog / Reddit / etc
+        "comment_reply",  # reply to an existing thread
+        "browse_topic",  # kick off research/exploration
+        "withdraw",  # explicit do-nothing signal
+        "tool_invocation",  # generic — host defines the tool
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -89,8 +92,7 @@ class PulseAction:
     def __post_init__(self) -> None:
         if self.kind not in ACTION_KINDS:
             raise ValueError(
-                f"PulseAction.kind={self.kind!r} not in ACTION_KINDS "
-                f"({sorted(ACTION_KINDS)})"
+                f"PulseAction.kind={self.kind!r} not in ACTION_KINDS ({sorted(ACTION_KINDS)})"
             )
 
 

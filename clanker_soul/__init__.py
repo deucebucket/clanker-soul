@@ -21,6 +21,7 @@ The ``PulseEngine`` is host-agnostic: hosts implement ``PulseHost`` and
 the engine fires self-prompts when mood drifts far enough from soul or
 trauma load passes thresholds.
 """
+
 from clanker_soul.eventlog import (
     EventLog,
     IngestRecord,

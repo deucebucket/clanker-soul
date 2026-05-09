@@ -10,6 +10,7 @@ Covers:
 - Mixed host (both methods) → dispatch_action takes precedence
 - Non-DM action kinds reject cleanly on legacy hosts
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -37,13 +38,18 @@ from clanker_soul import (
 
 
 def _trigger() -> Trigger:
-    return Trigger(kind="distress", soul={"v": 145, "w": 175}, mood=[40, 110, 100, 200, 130, 30, 100])
+    return Trigger(
+        kind="distress", soul={"v": 145, "w": 175}, mood=[40, 110, 100, 200, 130, 30, 100]
+    )
 
 
 def test_pulse_action_accepts_known_kinds() -> None:
     for kind in ACTION_KINDS:
         action = PulseAction(
-            kind=kind, trigger=_trigger(), target=None, prompt="hi",
+            kind=kind,
+            trigger=_trigger(),
+            target=None,
+            prompt="hi",
         )
         assert action.kind == kind
 
@@ -55,8 +61,12 @@ def test_pulse_action_rejects_unknown_kind() -> None:
 
 def test_action_kinds_includes_all_six() -> None:
     expected = {
-        "direct_message", "post_public", "comment_reply",
-        "browse_topic", "withdraw", "tool_invocation",
+        "direct_message",
+        "post_public",
+        "comment_reply",
+        "browse_topic",
+        "withdraw",
+        "tool_invocation",
     }
     assert ACTION_KINDS == expected
 
@@ -70,17 +80,22 @@ class _BaseHost:
     """Implements snapshot/drift/target/reminders so we can focus tests
     on the dispatch surface."""
 
-    def __init__(self, soul: SoulState | None = None,
-                 mood: list[int] | None = None) -> None:
+    def __init__(self, soul: SoulState | None = None, mood: list[int] | None = None) -> None:
         self.soul = soul or SoulState(v=145, w=175)
         self.mood = mood or [40, 110, 100, 200, 130, 30, 100]
         self.target = PulseTarget(payload={"channel": "test"})
 
     def snapshot(self) -> dict:
         return {
-            "soul": {"v": self.soul.v, "a": self.soul.a, "d": self.soul.d,
-                     "u": self.soul.u, "g": self.soul.g, "w": self.soul.w,
-                     "i": self.soul.i},
+            "soul": {
+                "v": self.soul.v,
+                "a": self.soul.a,
+                "d": self.soul.d,
+                "u": self.soul.u,
+                "g": self.soul.g,
+                "w": self.soul.w,
+                "i": self.soul.i,
+            },
             "mood": self.mood,
             "soul_distance": 60.0,  # > distance_trigger so trigger fires
             "trauma_load": 5.0,
@@ -274,7 +289,10 @@ def test_legacy_host_cannot_handle_non_dm_action() -> None:
     engine = PulseEngine(host, config=_LOW_MOOD_CFG)
 
     action = PulseAction(
-        kind="post_public", trigger=_trigger(), target=host.target, prompt="ok",
+        kind="post_public",
+        trigger=_trigger(),
+        target=host.target,
+        prompt="ok",
     )
     outcome = asyncio.run(engine._dispatch_action_via_host(action))
     assert outcome is not None
@@ -297,7 +315,9 @@ def test_action_outcome_defaults_empty_consequences() -> None:
 def test_action_outcome_carries_consequences_and_note() -> None:
     s = Score(v=200, w=200, patterns=("AFFIRMATION",))
     o = ActionOutcome(
-        delivered=True, consequences=(s,), note="post got 50 likes",
+        delivered=True,
+        consequences=(s,),
+        note="post got 50 likes",
     )
     assert o.consequences == (s,)
     assert o.note == "post got 50 likes"

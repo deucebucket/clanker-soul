@@ -25,6 +25,7 @@ default; consequences feed back into the soul; that IS the learning.
 :py:data:`STRICT_CAPABILITY_PROFILES` is the conservative alternative
 operators can opt into with a single kwarg.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -46,16 +47,11 @@ class CapabilityLevel(IntEnum):
 
 
 _LEVEL_DESCRIPTIONS = {
-    CapabilityLevel.UNRESTRICTED:
-        "everything works",
-    CapabilityLevel.NON_DESTRUCTIVE:
-        "destructive ops blocked (file delete, force-push, system commands); reads + comms + non-destructive writes OK",
-    CapabilityLevel.READ_ONLY:
-        "all writes blocked; reads, computation, and comms still work",
-    CapabilityLevel.VOICE_ONLY:
-        "tool use blocked; can only message the user",
-    CapabilityLevel.CRISIS_LOCKOUT:
-        "template-only crisis message to user; everything else blocked (opt-in)",
+    CapabilityLevel.UNRESTRICTED: "everything works",
+    CapabilityLevel.NON_DESTRUCTIVE: "destructive ops blocked (file delete, force-push, system commands); reads + comms + non-destructive writes OK",
+    CapabilityLevel.READ_ONLY: "all writes blocked; reads, computation, and comms still work",
+    CapabilityLevel.VOICE_ONLY: "tool use blocked; can only message the user",
+    CapabilityLevel.CRISIS_LOCKOUT: "template-only crisis message to user; everything else blocked (opt-in)",
 }
 
 
@@ -98,10 +94,16 @@ class CapabilityProfile:
 
 # All six action kinds — useful for building permissive profiles
 # without hardcoding the literal set in callers.
-_ALL_ACTION_KINDS: frozenset[str] = frozenset({
-    "direct_message", "post_public", "comment_reply",
-    "browse_topic", "withdraw", "tool_invocation",
-})
+_ALL_ACTION_KINDS: frozenset[str] = frozenset(
+    {
+        "direct_message",
+        "post_public",
+        "comment_reply",
+        "browse_topic",
+        "withdraw",
+        "tool_invocation",
+    }
+)
 
 
 def _permissive_profiles() -> dict[CapabilityLevel, CapabilityProfile]:
@@ -142,9 +144,14 @@ def _strict_profiles() -> dict[CapabilityLevel, CapabilityProfile]:
             description="non-destructive: public actions rate-limited 1/hr",
         ),
         CapabilityLevel.READ_ONLY: CapabilityProfile(
-            allowed_action_kinds=frozenset({
-                "direct_message", "browse_topic", "withdraw", "tool_invocation",
-            }),
+            allowed_action_kinds=frozenset(
+                {
+                    "direct_message",
+                    "browse_topic",
+                    "withdraw",
+                    "tool_invocation",
+                }
+            ),
             user_message_allowed=True,
             description="read-only: no public_post / comment_reply",
         ),
@@ -164,12 +171,8 @@ def _strict_profiles() -> dict[CapabilityLevel, CapabilityProfile]:
 
 
 # Public constants.
-DEFAULT_CAPABILITY_PROFILES: dict[CapabilityLevel, CapabilityProfile] = (
-    _permissive_profiles()
-)
-STRICT_CAPABILITY_PROFILES: dict[CapabilityLevel, CapabilityProfile] = (
-    _strict_profiles()
-)
+DEFAULT_CAPABILITY_PROFILES: dict[CapabilityLevel, CapabilityProfile] = _permissive_profiles()
+STRICT_CAPABILITY_PROFILES: dict[CapabilityLevel, CapabilityProfile] = _strict_profiles()
 
 
 @dataclass

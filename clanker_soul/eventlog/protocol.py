@@ -10,6 +10,7 @@ satisfies the protocol via :py:func:`isinstance` (it's
 failure. Log a warning and continue. Physics catches sink exceptions
 too as defense-in-depth; not relying on that is still the contract.
 """
+
 from __future__ import annotations
 
 from typing import Protocol, runtime_checkable

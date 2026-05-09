@@ -20,6 +20,7 @@ The user-facing API lives on :py:class:`SoulPlugin`:
 Hosts that need custom thresholds can construct their own
 :py:class:`GovernorConfig` and pass it to the plugin (or to the
 underlying functions directly for advanced use)."""
+
 from clanker_soul.governor.assessment import assess_capability
 from clanker_soul.governor.context import compose_state_context
 from clanker_soul.governor.crisis import CrisisDiagnosis, crisis_signal

@@ -4,6 +4,7 @@ Skips cleanly if the ``[ui]`` extra isn't installed
 (``pytest.importorskip``). Subsequent UI tests (events log, config
 panel, simulator) live in sibling files.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -24,8 +25,7 @@ def _populated_db(tmp_path) -> str:
     with SoulPlugin(agent_id="alice", db_path=db) as p:
         p.ingest(Score(v=200, w=210, patterns=("AFFIRMATION",)))
     with SoulPlugin(agent_id="bob", db_path=db) as p:
-        p.ingest(Score(v=80, w=50, patterns=("ABANDONMENT",),
-                       direction="SELF_DIRECTED"))
+        p.ingest(Score(v=80, w=50, patterns=("ABANDONMENT",), direction="SELF_DIRECTED"))
     return str(db)
 
 
@@ -36,12 +36,14 @@ def _populated_db(tmp_path) -> str:
 
 def test_ui_module_exposes_launch_and_create_app() -> None:
     from clanker_soul.ui import create_app, launch
+
     assert callable(create_app)
     assert callable(launch)
 
 
 def test_create_app_raises_when_db_missing(tmp_path) -> None:
     from clanker_soul.ui import create_app
+
     with pytest.raises(FileNotFoundError):
         create_app(tmp_path / "nope.db")
 

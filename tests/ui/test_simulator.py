@@ -1,4 +1,5 @@
 """Simulator — deterministic replay + sandbox isolation + routes."""
+
 from __future__ import annotations
 
 import pytest
@@ -27,8 +28,7 @@ def _populated_db(tmp_path) -> str:
     db = tmp_path / "sim.db"
     with SoulPlugin(agent_id="alice", db_path=db) as p:
         for _ in range(6):
-            p.ingest(Score(v=40, w=40, u=180, patterns=("ABANDONMENT",),
-                           direction="SELF_DIRECTED"))
+            p.ingest(Score(v=40, w=40, u=180, patterns=("ABANDONMENT",), direction="SELF_DIRECTED"))
         for _ in range(4):
             p.ingest(Score(v=200, w=200, patterns=("AFFIRMATION",)))
     return str(db)
@@ -75,12 +75,14 @@ def test_replay_different_configs_produce_different_trajectories(tmp_path) -> No
     db = _populated_db(tmp_path)
     records = _records(db)
     soft = replay_events(
-        records, SoulState(),
+        records,
+        SoulState(),
         PhysicsConfig(blend_alpha=0.05),  # mood barely moves
     )
     hard = replay_events(
-        records, SoulState(),
-        PhysicsConfig(blend_alpha=0.6),   # mood swings hard
+        records,
+        SoulState(),
+        PhysicsConfig(blend_alpha=0.6),  # mood swings hard
     )
     soft_v = [s.mood_sim.v for s in soft.steps]
     hard_v = [s.mood_sim.v for s in hard.steps]
@@ -142,8 +144,7 @@ def test_parse_soul_rejects_out_of_range() -> None:
 
 
 def test_parse_config_reads_provided_fields() -> None:
-    cfg = parse_config({"physics_blend_alpha": "0.3",
-                        "physics_armor_max": "0.7"})
+    cfg = parse_config({"physics_blend_alpha": "0.3", "physics_armor_max": "0.7"})
     assert cfg.blend_alpha == 0.3
     assert cfg.armor_max == 0.7
 
@@ -201,8 +202,7 @@ def test_simulate_run_rejects_out_of_range_field(tmp_path) -> None:
     with TestClient(app) as client:
         res = client.post(
             "/simulate/run",
-            data={"agent_id": "alice", "n_events": "5",
-                  "physics_blend_alpha": "9.9"},
+            data={"agent_id": "alice", "n_events": "5", "physics_blend_alpha": "9.9"},
         )
     assert res.status_code == 400
 
@@ -232,6 +232,7 @@ def test_simulate_apply_writes_only_non_default_fields(tmp_path) -> None:
         )
     assert res.status_code == 303
     from clanker_soul.overrides import ConfigOverrides
+
     bundle = ConfigOverrides(SoulStore.get(db)).get("alice")
     assert bundle.physics == {}
     assert bundle.soul == {}
@@ -252,6 +253,7 @@ def test_simulate_apply_writes_provided_overrides(tmp_path) -> None:
         )
     assert res.status_code == 303
     from clanker_soul.overrides import ConfigOverrides
+
     bundle = ConfigOverrides(SoulStore.get(db)).get("alice")
     assert bundle.soul.get("v") == 200
     assert bundle.physics.get("blend_alpha") == 0.4

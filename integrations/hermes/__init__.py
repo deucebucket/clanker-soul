@@ -14,6 +14,7 @@ The provider:
   ``clanker_soul_dashboard_url``)
 - persists across sessions: same ``agent_id`` → same soul.db
 """
+
 from __future__ import annotations
 
 import json
@@ -99,7 +100,8 @@ class ClankerSoulMemoryProvider(MemoryProvider):  # type: ignore[misc,valid-type
             self._plugin = SoulPlugin(agent_id=agent_id, db_path=self._db_path)
             logger.info(
                 "clanker-soul: initialized agent_id=%s db=%s",
-                agent_id, self._db_path,
+                agent_id,
+                self._db_path,
             )
         except Exception:
             logger.exception("clanker-soul: failed to open SoulPlugin — disabling provider")
@@ -119,8 +121,7 @@ class ClankerSoulMemoryProvider(MemoryProvider):  # type: ignore[misc,valid-type
                 )
                 self._pulse_runner.start()
                 logger.info(
-                    "clanker-soul: pulse-outbound runner started "
-                    "(dispatcher=%s)",
+                    "clanker-soul: pulse-outbound runner started (dispatcher=%s)",
                     "configured" if self._pulse_dispatcher else "from-env-or-noop",
                 )
             except Exception:
@@ -143,7 +144,9 @@ class ClankerSoulMemoryProvider(MemoryProvider):  # type: ignore[misc,valid-type
         return flag in {"1", "true", "yes", "on"}
 
     def set_pulse_dispatcher(
-        self, dispatcher: Any, *,
+        self,
+        dispatcher: Any,
+        *,
         target_factory: Optional[Any] = None,
     ) -> None:
         """Programmatically register the pulse dispatcher BEFORE the
@@ -203,7 +206,10 @@ class ClankerSoulMemoryProvider(MemoryProvider):  # type: ignore[misc,valid-type
         return ""
 
     def on_turn_start(
-        self, turn_number: int, message: str, **kwargs: Any,
+        self,
+        turn_number: int,
+        message: str,
+        **kwargs: Any,
     ) -> None:
         """Score the user's message and ingest it into the soul."""
         if self._plugin is None or not self._enabled:
@@ -218,7 +224,11 @@ class ClankerSoulMemoryProvider(MemoryProvider):  # type: ignore[misc,valid-type
             logger.exception("clanker-soul: ingest on_turn_start failed")
 
     def sync_turn(
-        self, user_content: str, assistant_content: str, *, session_id: str = "",
+        self,
+        user_content: str,
+        assistant_content: str,
+        *,
+        session_id: str = "",
     ) -> None:
         # We already ingested the user message in on_turn_start. We do
         # NOT score the assistant's own response — letting the agent's
@@ -267,7 +277,9 @@ class ClankerSoulMemoryProvider(MemoryProvider):  # type: ignore[misc,valid-type
             logger.exception(
                 "clanker-soul: on_inference_failure ingestion failed "
                 "(reason=%s provider=%s model=%s)",
-                reason, provider, model,
+                reason,
+                provider,
+                model,
             )
 
     # ---- tool exposure ------------------------------------------------------
@@ -331,7 +343,10 @@ class ClankerSoulMemoryProvider(MemoryProvider):  # type: ignore[misc,valid-type
         ]
 
     def handle_tool_call(
-        self, tool_name: str, args: Dict[str, Any], **kwargs: Any,
+        self,
+        tool_name: str,
+        args: Dict[str, Any],
+        **kwargs: Any,
     ) -> str:
         if self._plugin is None or not self._enabled:
             return json.dumps({"error": "clanker-soul provider not initialized"})
@@ -339,15 +354,18 @@ class ClankerSoulMemoryProvider(MemoryProvider):  # type: ignore[misc,valid-type
         if tool_name == "clanker_soul_state":
             try:
                 snap = self._plugin.snapshot()
-                return json.dumps({
-                    "soul": snap.get("soul"),
-                    "mood": snap.get("mood"),
-                    "soul_distance": snap.get("soul_distance"),
-                    "trauma_load": snap.get("trauma_load"),
-                    "nourishment_load": snap.get("nourishment_load"),
-                    "capability_level": self._plugin.capability_level().name,
-                    "state_context": self._plugin.state_context(),
-                }, default=str)
+                return json.dumps(
+                    {
+                        "soul": snap.get("soul"),
+                        "mood": snap.get("mood"),
+                        "soul_distance": snap.get("soul_distance"),
+                        "trauma_load": snap.get("trauma_load"),
+                        "nourishment_load": snap.get("nourishment_load"),
+                        "capability_level": self._plugin.capability_level().name,
+                        "state_context": self._plugin.state_context(),
+                    },
+                    default=str,
+                )
             except Exception as e:
                 return json.dumps({"error": f"snapshot failed: {e}"})
 
@@ -359,22 +377,26 @@ class ClankerSoulMemoryProvider(MemoryProvider):  # type: ignore[misc,valid-type
                 preset = PRESETS[preset_name]
                 preset.apply(self._plugin.overrides, self._plugin.agent_id)
                 self._plugin.tick()  # pick up the override immediately
-                return json.dumps({
-                    "applied": preset_name,
-                    "description": preset.description,
-                })
+                return json.dumps(
+                    {
+                        "applied": preset_name,
+                        "description": preset.description,
+                    }
+                )
             except Exception as e:
                 return json.dumps({"error": f"apply failed: {e}"})
 
         if tool_name == "clanker_soul_dashboard_url":
             port = os.environ.get("CLANKER_SOUL_UI_PORT", "7900")
-            return json.dumps({
-                "url": f"http://127.0.0.1:{port}/?agent_id={self._plugin.agent_id}",
-                "command": (
-                    f"clanker-soul ui --db {self._db_path} "
-                    f"--agent-id {self._plugin.agent_id} --port {port}"
-                ),
-            })
+            return json.dumps(
+                {
+                    "url": f"http://127.0.0.1:{port}/?agent_id={self._plugin.agent_id}",
+                    "command": (
+                        f"clanker-soul ui --db {self._db_path} "
+                        f"--agent-id {self._plugin.agent_id} --port {port}"
+                    ),
+                }
+            )
 
         return json.dumps({"error": f"unknown tool: {tool_name}"})
 

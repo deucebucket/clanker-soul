@@ -1,4 +1,5 @@
 """Live panel — radar geometry, snapshot fragment, governor badges."""
+
 from __future__ import annotations
 
 import pytest
@@ -35,17 +36,24 @@ def _populated_db(tmp_path, agent_id: str = "alice", events=None) -> str:
 def _wounded_db(tmp_path) -> str:
     db = tmp_path / "wounded.db"
     with SoulPlugin(
-        agent_id="hurt", db_path=db,
+        agent_id="hurt",
+        db_path=db,
         default_soul=BRITTLE.soul,
     ) as p:
         BRITTLE.apply(p.overrides, "hurt")
         p.tick()
         for _ in range(8):
-            p.ingest(Score(
-                v=10, w=10, d=20, u=200,
-                patterns=("EXISTENTIAL_NEGATION",),
-                direction="SELF_DIRECTED", source="abuser",
-            ))
+            p.ingest(
+                Score(
+                    v=10,
+                    w=10,
+                    d=20,
+                    u=200,
+                    patterns=("EXISTENTIAL_NEGATION",),
+                    direction="SELF_DIRECTED",
+                    source="abuser",
+                )
+            )
     return str(db)
 
 
@@ -83,6 +91,7 @@ def test_view_radar_polygon_has_seven_points(tmp_path) -> None:
 
 def test_view_capability_level_drops_under_distress(tmp_path) -> None:
     from clanker_soul import CapabilityLevel
+
     db = _wounded_db(tmp_path)
     view = build_live_view(SoulStore.get(db), "hurt")
     assert view.capability_level >= CapabilityLevel.NON_DESTRUCTIVE
@@ -144,11 +153,16 @@ def test_snapshot_fragment_shows_emergency_when_external(tmp_path) -> None:
     db = tmp_path / "crisis.db"
     with SoulPlugin(agent_id="agent", db_path=db) as p:
         for src in ("x.com/1", "x.com/2", "rss/3", "rss/4", "news/5"):
-            p.ingest(Score(
-                v=20, w=20, u=220,
-                patterns=("EXISTENTIAL_NEGATION",),
-                direction="EXTERNAL_REPORT", source=src,
-            ))
+            p.ingest(
+                Score(
+                    v=20,
+                    w=20,
+                    u=220,
+                    patterns=("EXISTENTIAL_NEGATION",),
+                    direction="EXTERNAL_REPORT",
+                    source=src,
+                )
+            )
     app = create_app(db)
     with TestClient(app) as client:
         res = client.get("/snapshot?agent_id=agent")

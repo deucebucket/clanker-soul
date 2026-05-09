@@ -10,6 +10,7 @@ Re-exports:
 
 Importing ``from clanker_soul.soul import X`` keeps working for every
 name that was at the top of the old monolithic ``soul.py``."""
+
 from clanker_soul.soul.reservoirs import (
     RESERVOIR_CAP,
     RESERVOIR_HALF_LIFE_S,

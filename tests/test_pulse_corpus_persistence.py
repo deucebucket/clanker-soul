@@ -12,6 +12,7 @@ Layers covered:
    the plugin and re-opening with a fresh instance.
 5. ``pulse_log.face_id`` — engine fires, the SQL row carries the face id.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -35,12 +36,24 @@ from clanker_soul import (
 
 
 SOUL_DEFAULT = {
-    "v": 145, "a": 110, "d": 160, "u": 80,
-    "g": 130, "w": 175, "i": 135,
+    "v": 145,
+    "a": 110,
+    "d": 160,
+    "u": 80,
+    "g": 130,
+    "w": 175,
+    "i": 135,
 }
 
 
-def _face(face_id: str, *, trigger: str = "distress", template: str = "x", motif: str = "informational", cooldown: int = 30) -> PromptFace:
+def _face(
+    face_id: str,
+    *,
+    trigger: str = "distress",
+    template: str = "x",
+    motif: str = "informational",
+    cooldown: int = 30,
+) -> PromptFace:
     return PromptFace(
         id=face_id,
         trigger_kinds=frozenset({trigger}),
@@ -215,7 +228,9 @@ class TestPluginCorpusWiring:
     def test_extra_corpus_augments_default(self, tmp_path):
         extra = (_face("host.custom.a"), _face("host.custom.b"))
         with SoulPlugin(
-            agent_id="p2", db_path=tmp_path / "p2.db", extra_corpus=extra,
+            agent_id="p2",
+            db_path=tmp_path / "p2.db",
+            extra_corpus=extra,
         ) as plugin:
             ids = {f.id for f in plugin.corpus.faces}
             assert "host.custom.a" in ids
@@ -228,8 +243,10 @@ class TestPluginCorpusWiring:
     def test_replace_corpus_wipes_defaults(self, tmp_path):
         extra = (_face("only.this"),)
         with SoulPlugin(
-            agent_id="p3", db_path=tmp_path / "p3.db",
-            extra_corpus=extra, replace_corpus=True,
+            agent_id="p3",
+            db_path=tmp_path / "p3.db",
+            extra_corpus=extra,
+            replace_corpus=True,
         ) as plugin:
             ids = {f.id for f in plugin.corpus.faces}
             assert ids == {"only.this"}
@@ -311,9 +328,12 @@ class TestCooldownSurvivesRestart:
         host = _Host(_distress_snap())
         with SoulPlugin(agent_id="cd1", db_path=db) as plugin:
             engine = PulseEngine(
-                host, PulseConfig(min_quiet_seconds=0, startup_grace_s=0),
-                event_log=plugin.event_log, agent_id="cd1",
-                corpus=plugin.corpus, recency=plugin.recency,
+                host,
+                PulseConfig(min_quiet_seconds=0, startup_grace_s=0),
+                event_log=plugin.event_log,
+                agent_id="cd1",
+                corpus=plugin.corpus,
+                recency=plugin.recency,
                 physics=plugin.physics,
             )
             engine.note_outbound()
@@ -351,9 +371,12 @@ class TestPulseLogFaceId:
         host = _Host(_distress_snap())
         with SoulPlugin(agent_id="fl1", db_path=db) as plugin:
             engine = PulseEngine(
-                host, PulseConfig(min_quiet_seconds=0, startup_grace_s=0),
-                event_log=plugin.event_log, agent_id="fl1",
-                corpus=plugin.corpus, recency=plugin.recency,
+                host,
+                PulseConfig(min_quiet_seconds=0, startup_grace_s=0),
+                event_log=plugin.event_log,
+                agent_id="fl1",
+                corpus=plugin.corpus,
+                recency=plugin.recency,
                 physics=plugin.physics,
             )
             engine.note_outbound()
@@ -361,8 +384,8 @@ class TestPulseLogFaceId:
             # Read pulse_log row directly.
             with plugin.store.lock:
                 rows = plugin.store.connection.execute(
-                    "SELECT face_id, dispatched FROM pulse_log "
-                    "WHERE agent_id = ? ORDER BY id DESC", ("fl1",),
+                    "SELECT face_id, dispatched FROM pulse_log WHERE agent_id = ? ORDER BY id DESC",
+                    ("fl1",),
                 ).fetchall()
         assert rows, "no pulse_log row written"
         row = rows[0]
@@ -377,13 +400,17 @@ class TestPulseLogFaceId:
         store = SoulStore(db)
         # Build engine WITHOUT a corpus to exercise the legacy fallback.
         from clanker_soul import EmotionalPhysics, SoulState, SqliteEventLog
+
         physics = EmotionalPhysics(
             soul=SoulState(),
-            event_log=SqliteEventLog(store), agent_id="leg",
+            event_log=SqliteEventLog(store),
+            agent_id="leg",
         )
         engine = PulseEngine(
-            host, PulseConfig(min_quiet_seconds=0, startup_grace_s=0),
-            event_log=SqliteEventLog(store), agent_id="leg",
+            host,
+            PulseConfig(min_quiet_seconds=0, startup_grace_s=0),
+            event_log=SqliteEventLog(store),
+            agent_id="leg",
             physics=physics,
         )
         engine.note_outbound()

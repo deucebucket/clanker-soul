@@ -26,6 +26,7 @@ If a host implements both, the engine prefers ``dispatch_action`` for
 non-DM actions and the explicit ``dispatch_pulse`` for legacy DM
 flow.
 """
+
 from __future__ import annotations
 
 from typing import Awaitable, Protocol, runtime_checkable
@@ -61,8 +62,9 @@ class PulseHost(Protocol):
         """Return the freshest external chat target, or None to stay quiet."""
         ...
 
-    def dispatch_pulse(self, target: PulseTarget, trigger: Trigger,
-                      prompt: str) -> Awaitable[bool] | bool:
+    def dispatch_pulse(
+        self, target: PulseTarget, trigger: Trigger, prompt: str
+    ) -> Awaitable[bool] | bool:
         """**Backwards-compatible.** Deliver a direct-message pulse:
         run the synthetic prompt through the agent pipeline and send
         the response. Return True on successful delivery, False if
@@ -76,7 +78,8 @@ class PulseHost(Protocol):
         ...
 
     def dispatch_action(
-        self, action: PulseAction,
+        self,
+        action: PulseAction,
     ) -> "Awaitable[ActionOutcome] | ActionOutcome":
         """Enact a :py:class:`PulseAction` against the real world and
         return what happened.
@@ -103,8 +106,7 @@ class PulseHost(Protocol):
         host-defined."""
         ...
 
-    def deliver_reminder(self, target: PulseTarget,
-                        reminder: dict) -> Awaitable[None] | None:
+    def deliver_reminder(self, target: PulseTarget, reminder: dict) -> Awaitable[None] | None:
         """Send a reminder message. Sync or async; raised exceptions
         are caught and logged."""
         ...

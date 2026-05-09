@@ -8,6 +8,7 @@ Each trigger has:
 Plus tests for trigger priority ordering and the optional
 ``host.peer_distress_signals`` hook for caretake_impulse.
 """
+
 from __future__ import annotations
 
 from dataclasses import replace
@@ -57,6 +58,7 @@ class StubHost:
 
     def dispatch_action(self, action: PulseAction):
         from clanker_soul import ActionOutcome
+
         self.dispatched.append(action)
         return ActionOutcome(delivered=True)
 
@@ -73,8 +75,7 @@ def _snap(
     nourishment: float = 0.0,
 ) -> dict:
     return {
-        "soul": soul or {"v": 145, "a": 110, "d": 160, "u": 80,
-                         "g": 130, "w": 175, "i": 135},
+        "soul": soul or {"v": 145, "a": 110, "d": 160, "u": 80, "g": 130, "w": 175, "i": 135},
         "mood": mood,
         "soul_distance": distance,
         "trauma_load": trauma,
@@ -407,8 +408,7 @@ async def test_withdraw_pre_empts_connect() -> None:
         trauma=80.0,  # above withdraw_trauma_min, above connect_max_trauma
     )
     host = StubHost(snap)
-    engine = PulseEngine(host, config=replace(_NO_COOLDOWN_CFG,
-                                               connect_idle_min_seconds=0.0))
+    engine = PulseEngine(host, config=replace(_NO_COOLDOWN_CFG, connect_idle_min_seconds=0.0))
     engine.note_outbound()
     trigger = await engine.tick()
     assert trigger is not None
@@ -426,13 +426,17 @@ def test_new_trigger_kinds_have_unique_prompts() -> None:
     from clanker_soul.pulse.prompt import compose_self_prompt
 
     new_kinds = [
-        "share_impulse", "argue_impulse", "connect_impulse",
-        "withdraw_impulse", "reflective_impulse", "caretake_impulse",
+        "share_impulse",
+        "argue_impulse",
+        "connect_impulse",
+        "withdraw_impulse",
+        "reflective_impulse",
+        "caretake_impulse",
         "restless_curiosity",
     ]
     prompts = []
     for kind in new_kinds:
-        trig = Trigger(kind=kind, soul={"v": 145}, mood=[100]*7, metrics={"idle_seconds": 600})
+        trig = Trigger(kind=kind, soul={"v": 145}, mood=[100] * 7, metrics={"idle_seconds": 600})
         prompts.append(compose_self_prompt(trig))
 
     # All distinct
@@ -448,9 +452,12 @@ def test_withdraw_prompt_says_nopulse() -> None:
     NOPULSE — that's how it stays quiet."""
     from clanker_soul.pulse.prompt import compose_self_prompt
 
-    trig = Trigger(kind="withdraw_impulse", soul={"v": 145},
-                   mood=[100, 110, 130, 100, 130, 80, 120],
-                   metrics={"trauma_load": 80.0, "w_mood": 80})
+    trig = Trigger(
+        kind="withdraw_impulse",
+        soul={"v": 145},
+        mood=[100, 110, 130, 100, 130, 80, 120],
+        metrics={"trauma_load": 80.0, "w_mood": 80},
+    )
     prompt = compose_self_prompt(trig)
     assert "NOPULSE" in prompt
 
@@ -463,10 +470,19 @@ def test_withdraw_prompt_says_nopulse() -> None:
 def test_all_12_trigger_kinds_have_action_mappings() -> None:
     """Every trigger kind the engine can emit must have an action-kind mapping."""
     from clanker_soul.pulse.engine import _DEFAULT_TRIGGER_TO_ACTION
+
     expected = {
-        "distress", "elation", "trauma_pressure", "gratitude", "long_silence",
-        "share_impulse", "argue_impulse", "connect_impulse",
-        "withdraw_impulse", "reflective_impulse", "caretake_impulse",
+        "distress",
+        "elation",
+        "trauma_pressure",
+        "gratitude",
+        "long_silence",
+        "share_impulse",
+        "argue_impulse",
+        "connect_impulse",
+        "withdraw_impulse",
+        "reflective_impulse",
+        "caretake_impulse",
         "restless_curiosity",
     }
     assert set(_DEFAULT_TRIGGER_TO_ACTION.keys()) == expected

@@ -21,6 +21,7 @@ hermes-installed system can run it without exporting anything.
 Cost note: 5 model calls × ~400 input tokens × ~150 output tokens on
 DeepSeek V4 Flash (~$0.14/$0.28 per M tokens). Negligible.
 """
+
 from __future__ import annotations
 
 import json
@@ -67,56 +68,98 @@ RNG_SEED = 42
 def _drive_distress(plugin: SoulPlugin, ticks: int = 5) -> None:
     """Ingest enough negative-V/W events to dip mood into distress."""
     for _ in range(ticks):
-        plugin.ingest(Score(
-            v=60, a=140, d=110, u=70, g=100, w=100, i=100,
-            patterns=("ABANDONMENT",), direction="SELF_DIRECTED",
-            source="demo:distress",
-        ))
+        plugin.ingest(
+            Score(
+                v=60,
+                a=140,
+                d=110,
+                u=70,
+                g=100,
+                w=100,
+                i=100,
+                patterns=("ABANDONMENT",),
+                direction="SELF_DIRECTED",
+                source="demo:distress",
+            )
+        )
 
 
 def _drive_elation(plugin: SoulPlugin, ticks: int = 5) -> None:
     for _ in range(ticks):
-        plugin.ingest(Score(
-            v=210, a=170, d=180, u=60, g=190, w=200, i=180,
-            patterns=("AFFIRMATION", "GRATITUDE"),
-            direction="SELF_DIRECTED",
-            source="demo:elation",
-        ))
+        plugin.ingest(
+            Score(
+                v=210,
+                a=170,
+                d=180,
+                u=60,
+                g=190,
+                w=200,
+                i=180,
+                patterns=("AFFIRMATION", "GRATITUDE"),
+                direction="SELF_DIRECTED",
+                source="demo:elation",
+            )
+        )
 
 
 def _drive_curiosity(plugin: SoulPlugin, ticks: int = 3) -> None:
     """High-V, high-A baseline drives restless_curiosity when paired
     with idle metrics on the trigger."""
     for _ in range(ticks):
-        plugin.ingest(Score(
-            v=160, a=160, d=160, u=80, g=140, w=170, i=145,
-            patterns=("PLAYFULNESS",), direction="OBSERVATION",
-            source="demo:curiosity",
-        ))
+        plugin.ingest(
+            Score(
+                v=160,
+                a=160,
+                d=160,
+                u=80,
+                g=140,
+                w=170,
+                i=145,
+                patterns=("PLAYFULNESS",),
+                direction="OBSERVATION",
+                source="demo:curiosity",
+            )
+        )
 
 
 def _drive_trauma_pressure(plugin: SoulPlugin, ticks: int = 8) -> None:
     """Pile up heavy patterns to trip trauma_pressure trigger."""
     heavy = ("ABANDONMENT", "DEHUMANIZATION", "BETRAYAL")
     for i in range(ticks):
-        plugin.ingest(Score(
-            v=70, a=130, d=100, u=60, g=90, w=95, i=110,
-            patterns=(heavy[i % len(heavy)],),
-            direction="SELF_DIRECTED",
-            source="demo:trauma",
-        ))
+        plugin.ingest(
+            Score(
+                v=70,
+                a=130,
+                d=100,
+                u=60,
+                g=90,
+                w=95,
+                i=110,
+                patterns=(heavy[i % len(heavy)],),
+                direction="SELF_DIRECTED",
+                source="demo:trauma",
+            )
+        )
 
 
 def _drive_gratitude(plugin: SoulPlugin, ticks: int = 6) -> None:
     """Sustained positive patterns drive gratitude trigger."""
     pos = ("CARE", "WARMTH", "AFFIRMATION", "ENCOURAGEMENT")
     for i in range(ticks):
-        plugin.ingest(Score(
-            v=180, a=130, d=160, u=40, g=170, w=180, i=145,
-            patterns=(pos[i % len(pos)],),
-            direction="SELF_DIRECTED",
-            source="demo:gratitude",
-        ))
+        plugin.ingest(
+            Score(
+                v=180,
+                a=130,
+                d=160,
+                u=40,
+                g=170,
+                w=180,
+                i=145,
+                patterns=(pos[i % len(pos)],),
+                direction="SELF_DIRECTED",
+                source="demo:gratitude",
+            )
+        )
 
 
 # ── Trigger constructors (we build them by hand to bypass the
@@ -124,8 +167,7 @@ def _drive_gratitude(plugin: SoulPlugin, ticks: int = 6) -> None:
 # corpus produces, not to fight the trigger thresholds) ────────────────
 
 
-def _make_trigger(plugin: SoulPlugin, kind: str,
-                  metrics: dict | None = None) -> Trigger:
+def _make_trigger(plugin: SoulPlugin, kind: str, metrics: dict | None = None) -> Trigger:
     snap = plugin.snapshot()
     return Trigger(
         kind=kind,
@@ -160,8 +202,7 @@ def _load_api_key() -> str:
                 if v:
                     return v
     raise RuntimeError(
-        "OPENROUTER_API_KEY not set in env and not findable in "
-        "~/ai-drive/hermes-agent/.env"
+        "OPENROUTER_API_KEY not set in env and not findable in ~/ai-drive/hermes-agent/.env"
     )
 
 
@@ -169,12 +210,15 @@ def _call_model(prompt: str, *, api_key: str, system: str = "") -> str:
     payload = {
         "model": MODEL,
         "messages": [
-            {"role": "system", "content": system or
-             "You are an AI agent with persistent emotional state. "
-             "When you receive an [INTERNAL PULSE] note from yourself, "
-             "respond as the agent would, in character — produce a "
-             "natural outgoing message, NOT a meta description. "
-             "Keep it short."},
+            {
+                "role": "system",
+                "content": system
+                or "You are an AI agent with persistent emotional state. "
+                "When you receive an [INTERNAL PULSE] note from yourself, "
+                "respond as the agent would, in character — produce a "
+                "natural outgoing message, NOT a meta description. "
+                "Keep it short.",
+            },
             {"role": "user", "content": prompt},
         ],
         "temperature": 0.8,
@@ -214,8 +258,10 @@ def run_state(
     soul = snap["soul"]
     mood = snap["mood"]
     print(f"  mood = {mood}")
-    print(f"  soul = V={soul['v']} A={soul['a']} D={soul['d']} "
-          f"U={soul['u']} G={soul['g']} W={soul['w']} I={soul['i']}")
+    print(
+        f"  soul = V={soul['v']} A={soul['a']} D={soul['d']} "
+        f"U={soul['u']} G={soul['g']} W={soul['w']} I={soul['i']}"
+    )
 
     corpus = build_default_corpus(rng=rng)
     trig = _make_trigger(plugin, trigger_kind, metrics=metrics)
@@ -224,14 +270,18 @@ def run_state(
     samples = []
     for i in range(N_SAMPLES_PER_STATE):
         rendered, face = compose_self_prompt_with_face(
-            trig, corpus=corpus, situation_tags=situation_tags,
+            trig,
+            corpus=corpus,
+            situation_tags=situation_tags,
         )
-        samples.append({
-            "i": i,
-            "face_id": face.id if face else None,
-            "motif": face.motif if face else None,
-            "rendered": rendered,
-        })
+        samples.append(
+            {
+                "i": i,
+                "face_id": face.id if face else None,
+                "motif": face.motif if face else None,
+                "rendered": rendered,
+            }
+        )
         face_label = f"{face.id} ({face.motif})" if face else "<legacy fallback>"
         print(f"  [{i}] {face_label}")
 
@@ -245,23 +295,25 @@ def run_state(
         response = f"<API call failed: {exc}>"
         print(f"  ERROR: {exc}")
 
-    log.append({
-        "label": label,
-        "trigger_kind": trigger_kind,
-        "snapshot": {
-            "soul": dict(soul),
-            "mood": list(mood) if mood else None,
-            "trauma_load": snap.get("trauma_load"),
-            "nourishment_load": snap.get("nourishment_load"),
-        },
-        "situation_tags": sorted(situation_tags),
-        "samples": samples,
-        "model_call": {
-            "face_id": chosen["face_id"],
-            "prompt": chosen["rendered"],
-            "response": response,
-        },
-    })
+    log.append(
+        {
+            "label": label,
+            "trigger_kind": trigger_kind,
+            "snapshot": {
+                "soul": dict(soul),
+                "mood": list(mood) if mood else None,
+                "trauma_load": snap.get("trauma_load"),
+                "nourishment_load": snap.get("nourishment_load"),
+            },
+            "situation_tags": sorted(situation_tags),
+            "samples": samples,
+            "model_call": {
+                "face_id": chosen["face_id"],
+                "prompt": chosen["rendered"],
+                "response": response,
+            },
+        }
+    )
 
 
 # ── Main entry point ────────────────────────────────────────────────────
@@ -344,8 +396,7 @@ def main() -> None:
     print(f"\n  wrote evidence → {EVIDENCE_FILE}")
 
 
-def write_evidence(log: list[dict], *, started_at: str,
-                   finished_at: str) -> None:
+def write_evidence(log: list[dict], *, started_at: str, finished_at: str) -> None:
     lines: list[str] = []
     lines.append("# clanker-soul M3.2 — corpus live evidence")
     lines.append("")
@@ -378,9 +429,7 @@ def write_evidence(log: list[dict], *, started_at: str,
         lines.append(f"tags    = {entry['situation_tags']}")
         lines.append("```")
         lines.append("")
-        lines.append(
-            f"**Sampled faces ({N_SAMPLES_PER_STATE} rolls):**"
-        )
+        lines.append(f"**Sampled faces ({N_SAMPLES_PER_STATE} rolls):**")
         lines.append("")
         for s in entry["samples"]:
             face = s["face_id"] or "<legacy>"

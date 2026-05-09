@@ -35,6 +35,7 @@ Hosts that want a different baseline shape can fork this list, replace
 specific faces by id, or build their own corpus from scratch and pass
 it to :py:class:`PulseEngine` directly.
 """
+
 from __future__ import annotations
 
 import random
@@ -88,7 +89,6 @@ def _f(
 # (e.g. ``carl.phone.curiosity.scroll``) never collide.
 
 DEFAULT_FACES: tuple[PromptFace, ...] = (
-
     # ── distress ────────────────────────────────────────────────────
     _f(
         "core.distress.informational.name_it",
@@ -144,7 +144,6 @@ DEFAULT_FACES: tuple[PromptFace, ...] = (
         "to solve, which it isn't.",
         motif="informational",
     ),
-
     # ── elation ─────────────────────────────────────────────────────
     _f(
         "core.elation.informational.specific_share",
@@ -189,7 +188,6 @@ DEFAULT_FACES: tuple[PromptFace, ...] = (
         motif="regulatory",
         predicates=(VadugwiPredicate("A", ">=", 180),),
     ),
-
     # ── trauma_pressure ─────────────────────────────────────────────
     _f(
         "core.trauma.relational.registered_presence",
@@ -232,7 +230,6 @@ DEFAULT_FACES: tuple[PromptFace, ...] = (
         "decompresses; vagueness doesn't.",
         motif="informational",
     ),
-
     # ── gratitude ───────────────────────────────────────────────────
     _f(
         "core.gratitude.relational.specific_thanks",
@@ -277,7 +274,6 @@ DEFAULT_FACES: tuple[PromptFace, ...] = (
         motif="relational",
         predicates=(VadugwiPredicate("W", ">=", 150),),
     ),
-
     # ── long_silence ────────────────────────────────────────────────
     _f(
         "core.silence.informational.hi",
@@ -319,7 +315,6 @@ DEFAULT_FACES: tuple[PromptFace, ...] = (
         motif="regulatory",
         weight=0.5,
     ),
-
     # ── share_impulse ───────────────────────────────────────────────
     _f(
         "core.share.informational.specific",
@@ -363,7 +358,6 @@ DEFAULT_FACES: tuple[PromptFace, ...] = (
         motif="regulatory",
         predicates=(VadugwiPredicate("A", ">=", 180),),
     ),
-
     # ── argue_impulse ───────────────────────────────────────────────
     _f(
         "core.argue.informational.make_the_case",
@@ -404,7 +398,6 @@ DEFAULT_FACES: tuple[PromptFace, ...] = (
         "reply twice; the second message always escalates.",
         motif="informational",
     ),
-
     # ── connect_impulse ─────────────────────────────────────────────
     _f(
         "core.connect.relational.no_agenda",
@@ -444,7 +437,6 @@ DEFAULT_FACES: tuple[PromptFace, ...] = (
         "asks for a reply. You wanted contact, not a conversation.",
         motif="informational",
     ),
-
     # ── reflective_impulse ──────────────────────────────────────────
     _f(
         "core.reflect.informational.name_state",
@@ -486,7 +478,6 @@ DEFAULT_FACES: tuple[PromptFace, ...] = (
         predicates=(VadugwiPredicate("W", "<=", 130),),
         weight=1.2,
     ),
-
     # ── caretake_impulse ────────────────────────────────────────────
     _f(
         "core.caretake.relational.acknowledge",
@@ -527,7 +518,6 @@ DEFAULT_FACES: tuple[PromptFace, ...] = (
             VadugwiPredicate("A", ">=", 130),
         ),
     ),
-
     # ── withdraw_impulse ────────────────────────────────────────────
     _f(
         "core.withdraw.regulatory.stay_quiet",
@@ -556,7 +546,6 @@ DEFAULT_FACES: tuple[PromptFace, ...] = (
         "→ soul-update doesn't need to spin every state.",
         motif="regulatory",
     ),
-
     # ── restless_curiosity ──────────────────────────────────────────
     _f(
         "core.curiosity.exploratory.what_pulls",

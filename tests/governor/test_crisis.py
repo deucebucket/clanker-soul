@@ -1,4 +1,5 @@
 """``crisis_signal`` — distinguishes emotional spike from real emergency."""
+
 from __future__ import annotations
 
 from clanker_soul.eventlog import IngestRecord
@@ -7,18 +8,27 @@ from clanker_soul.score import Score
 from clanker_soul.soul import SoulState
 
 
-def _ev(direction: str | None, source: str | None = None,
-        patterns: tuple[str, ...] = ("BETRAYAL",)) -> IngestRecord:
+def _ev(
+    direction: str | None, source: str | None = None, patterns: tuple[str, ...] = ("BETRAYAL",)
+) -> IngestRecord:
     """Test factory for a heavy negative event with the given direction."""
-    raw = Score(v=40, w=40, u=200, patterns=patterns,
-                direction=direction, source=source)
+    raw = Score(v=40, w=40, u=200, patterns=patterns, direction=direction, source=source)
     return IngestRecord(
-        ts=0.0, agent_id="x", raw=raw, primed=None,
-        mood_before=None, mood_after=Score(),
-        soul_before=SoulState(), soul_after=SoulState(),
-        weight_raw=0.78, armor=0.55, weight_effective=0.42,
-        breached=False, breach_delta=0.0,
-        patterns=patterns, classification="negative",
+        ts=0.0,
+        agent_id="x",
+        raw=raw,
+        primed=None,
+        mood_before=None,
+        mood_after=Score(),
+        soul_before=SoulState(),
+        soul_after=SoulState(),
+        weight_raw=0.78,
+        armor=0.55,
+        weight_effective=0.42,
+        breached=False,
+        breach_delta=0.0,
+        patterns=patterns,
+        classification="negative",
         why="test event",
     )
 

@@ -23,6 +23,7 @@ What it shows:
   inside log_ingest itself. The engine catches uncaught exceptions
   too — defense in depth.
 """
+
 from __future__ import annotations
 
 import json
@@ -108,17 +109,18 @@ def main() -> None:
     )
 
     physics.ingest(Score(v=200, w=200, patterns=("AFFIRMATION",)))
-    physics.ingest(Score(v=40, w=50, u=200, patterns=("ABANDONMENT",),
-                         direction="SELF_DIRECTED"))
+    physics.ingest(Score(v=40, w=50, u=200, patterns=("ABANDONMENT",), direction="SELF_DIRECTED"))
     physics.ingest(Score(v=60, w=80, patterns=("CRITICISM",)))
 
     print("contents of events.ndjson:")
     print("-" * 60)
     for line in log_path.read_text().splitlines():
         row = json.loads(line)
-        print(f"  [{row['type']}] {row['patterns']!r:<25} "
-              f"weight={row['weight_raw']:.3f} "
-              f"breached={row['breached']} why={row['why'][:50]}...")
+        print(
+            f"  [{row['type']}] {row['patterns']!r:<25} "
+            f"weight={row['weight_raw']:.3f} "
+            f"breached={row['breached']} why={row['why'][:50]}..."
+        )
     print("-" * 60)
 
 

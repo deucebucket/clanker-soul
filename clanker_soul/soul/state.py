@@ -12,6 +12,7 @@ State is persisted via :py:class:`clanker_soul.soul.SoulStore`. Without
 persistence the whole exercise is theater — every restart would reset
 the agent to the starting baseline, defeating the point.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -31,7 +32,7 @@ class SoulState:
     v: int = 145  # mild positive baseline
     a: int = 110  # slightly calm — not over-aroused
     d: int = 160  # in-control by default
-    u: int = 80   # low background urgency
+    u: int = 80  # low background urgency
     g: int = 130  # slightly grounded
     w: int = 175  # strong self-worth — agent is allowed to think it's solid
     i: int = 135  # slight forward-intent
@@ -43,8 +44,13 @@ class SoulState:
 
     def to_dict(self) -> dict:
         return {
-            "v": self.v, "a": self.a, "d": self.d, "u": self.u,
-            "g": self.g, "w": self.w, "i": self.i,
+            "v": self.v,
+            "a": self.a,
+            "d": self.d,
+            "u": self.u,
+            "g": self.g,
+            "w": self.w,
+            "i": self.i,
             "last_drift_ts": self.last_drift_ts,
             "last_save_ts": self.last_save_ts,
         }

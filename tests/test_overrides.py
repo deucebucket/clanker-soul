@@ -4,6 +4,7 @@ Verifies the partial-merge semantics: the UI can write one knob at a
 time, removing a knob reverts it to the constructor default, and other
 fields (including drift-modified soul fields) are not disturbed.
 """
+
 from __future__ import annotations
 
 
@@ -30,7 +31,9 @@ def test_apply_overrides_empty_returns_inputs_unchanged() -> None:
     config = PhysicsConfig(blend_alpha=0.55)
     soul = SoulState(v=145, w=175)
     new_config, new_soul = apply_overrides(
-        config, soul, OverrideBundle(physics={}, soul={}),
+        config,
+        soul,
+        OverrideBundle(physics={}, soul={}),
     )
     assert new_config.blend_alpha == 0.55
     assert new_soul.v == 145 and new_soul.w == 175
@@ -40,7 +43,9 @@ def test_apply_overrides_partial_physics() -> None:
     config = PhysicsConfig(blend_alpha=0.55, armor_max=0.55)
     soul = SoulState()
     new_config, _ = apply_overrides(
-        config, soul, OverrideBundle(physics={"blend_alpha": 0.7}, soul={}),
+        config,
+        soul,
+        OverrideBundle(physics={"blend_alpha": 0.7}, soul={}),
     )
     assert new_config.blend_alpha == 0.7
     assert new_config.armor_max == 0.55  # unchanged
@@ -50,7 +55,9 @@ def test_apply_overrides_partial_soul() -> None:
     config = PhysicsConfig()
     soul = SoulState(v=145, w=175, d=160)
     _, new_soul = apply_overrides(
-        config, soul, OverrideBundle(physics={}, soul={"v": 200}),
+        config,
+        soul,
+        OverrideBundle(physics={}, soul={"v": 200}),
     )
     assert new_soul.v == 200
     assert new_soul.w == 175 and new_soul.d == 160
@@ -60,9 +67,9 @@ def test_apply_overrides_unknown_keys_logged_and_ignored(caplog) -> None:
     config = PhysicsConfig()
     soul = SoulState()
     new_config, new_soul = apply_overrides(
-        config, soul,
-        OverrideBundle(physics={"nonexistent_field": 0.5},
-                       soul={"also_nonexistent": 99}),
+        config,
+        soul,
+        OverrideBundle(physics={"nonexistent_field": 0.5}, soul={"also_nonexistent": 99}),
     )
     # No exception raised; original values intact.
     assert new_config.blend_alpha == config.blend_alpha
@@ -126,7 +133,8 @@ def test_reload_overrides_applies_partial_physics(tmp_path) -> None:
     physics = EmotionalPhysics(
         soul=SoulState(),
         config=PhysicsConfig(blend_alpha=0.55, armor_max=0.55),
-        overrides=overrides, agent_id="x",
+        overrides=overrides,
+        agent_id="x",
     )
     assert physics.config.blend_alpha == 0.55  # not yet applied
     physics.reload_overrides()
@@ -141,7 +149,8 @@ def test_reload_overrides_applies_soul_field(tmp_path) -> None:
 
     physics = EmotionalPhysics(
         soul=SoulState(v=145, w=175),
-        overrides=overrides, agent_id="x",
+        overrides=overrides,
+        agent_id="x",
     )
     physics.reload_overrides()
     assert physics.soul.w == 220
@@ -157,7 +166,8 @@ def test_reload_overrides_removed_field_reverts_to_constructor(tmp_path) -> None
     physics = EmotionalPhysics(
         soul=SoulState(v=145, w=175),
         config=PhysicsConfig(blend_alpha=0.55),
-        overrides=overrides, agent_id="x",
+        overrides=overrides,
+        agent_id="x",
     )
     overrides.set("x", physics={"blend_alpha": 0.9}, soul={"w": 220})
     physics.reload_overrides()
@@ -180,7 +190,8 @@ def test_reload_overrides_does_not_clobber_drifted_soul_fields(tmp_path) -> None
 
     physics = EmotionalPhysics(
         soul=SoulState(v=145, w=175),
-        overrides=overrides, agent_id="x",
+        overrides=overrides,
+        agent_id="x",
     )
     physics.reload_overrides()
     assert physics.soul.w == 200
@@ -210,7 +221,8 @@ def test_reload_overrides_ignores_unknown_keys(tmp_path, caplog) -> None:
     physics = EmotionalPhysics(
         soul=SoulState(),
         config=PhysicsConfig(blend_alpha=0.55),
-        overrides=overrides, agent_id="x",
+        overrides=overrides,
+        agent_id="x",
     )
     physics.reload_overrides()
     # Existing fields untouched; warning logged.
@@ -229,7 +241,8 @@ def test_reload_overrides_ingest_picks_up_new_blend_alpha(tmp_path) -> None:
     physics = EmotionalPhysics(
         soul=SoulState(v=145, w=175),
         config=PhysicsConfig(blend_alpha=0.05),
-        overrides=overrides, agent_id="x",
+        overrides=overrides,
+        agent_id="x",
     )
     physics.ingest(Score(v=10, w=10))
     barely_moved = physics.mood

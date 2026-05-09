@@ -18,6 +18,7 @@ Direct use of ``EmotionalPhysics`` is still supported for advanced
 hosts that need to bypass the persistence layer or compose their own
 event log. ``SoulPlugin`` is for everyone else.
 """
+
 from __future__ import annotations
 
 import logging
@@ -132,7 +133,9 @@ class SoulPlugin:
             physics_event_log = self._event_log
 
         self._physics = EmotionalPhysics(
-            soul=soul, trauma=trauma, nourishment=nourishment,
+            soul=soul,
+            trauma=trauma,
+            nourishment=nourishment,
             config=config,
             event_log=physics_event_log,
             overrides=self._overrides,
@@ -279,9 +282,7 @@ class SoulPlugin:
         return {
             "soul": soul.to_dict(),
             "mood": mood.as_list() if mood is not None else None,
-            "soul_distance": (
-                soul_distance(mood, soul) if mood is not None else None
-            ),
+            "soul_distance": (soul_distance(mood, soul) if mood is not None else None),
             "trauma_load": self._physics.trauma.load(),
             "nourishment_load": self._physics.nourishment.load(),
         }
@@ -301,7 +302,9 @@ class SoulPlugin:
         return assess_capability(self.snapshot(), self._governor_config)
 
     def crisis_signal(
-        self, *, recent_events: list[IngestRecord] | None = None,
+        self,
+        *,
+        recent_events: list[IngestRecord] | None = None,
     ) -> CrisisDiagnosis:
         """Discriminate emotional spike vs real-world emergency.
 
@@ -315,7 +318,8 @@ class SoulPlugin:
         return crisis_signal(recent_events, self._governor_config)
 
     def state_context(
-        self, *,
+        self,
+        *,
         level: CapabilityLevel | None = None,
         recent_events: list[IngestRecord] | None = None,
         crisis: CrisisDiagnosis | None = None,
@@ -345,8 +349,11 @@ class SoulPlugin:
         if crisis is None:
             crisis = crisis_signal(recent_events, self._governor_config)
         return compose_state_context(
-            level, snap, self._governor_config,
-            recent_events=recent_events, crisis=crisis,
+            level,
+            snap,
+            self._governor_config,
+            recent_events=recent_events,
+            crisis=crisis,
         )
 
     def _fetch_recent_significant_events(self) -> list[IngestRecord]:
@@ -361,10 +368,7 @@ class SoulPlugin:
             self._agent_id,
             limit=self._governor_config.crisis_window_events * 5,
         )
-        significant = [
-            ev for ev in candidates
-            if ev.classification == "negative" or ev.breached
-        ]
+        significant = [ev for ev in candidates if ev.classification == "negative" or ev.breached]
         return significant[: self._governor_config.crisis_window_events]
 
     # ------------------------------------------------------------------

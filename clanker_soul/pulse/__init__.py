@@ -13,6 +13,7 @@ Re-exports the public surface of the submodules:
     :py:func:`default_tags_from_metrics` (M3.1; engine-wired in M3.2)
 
 ``from clanker_soul.pulse import X`` keeps working unchanged."""
+
 from clanker_soul.pulse.config import PulseConfig
 from clanker_soul.pulse.corpus import (
     PromptCorpus,

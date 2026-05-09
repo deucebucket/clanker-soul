@@ -13,6 +13,7 @@ engine can extend either set by replacing the constant before
 constructing physics, or by subclassing. Pattern matching is
 upper-cased.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -22,25 +23,52 @@ from dataclasses import dataclass
 # scoring engine structures). Hosts using a different engine can
 # extend this set by replacing the constant before constructing
 # EmotionalPhysics, or by subclassing.
-POSITIVE_PATTERNS = frozenset({
-    "GRATITUDE", "AFFIRMATION", "WARMTH", "HUMOR", "PLAYFULNESS",
-    "ACKNOWLEDGEMENT", "ENCOURAGEMENT", "CARE", "REPAIR",
-    "DIRECTED_POSITIVE", "RECOVERY_MILESTONE", "RELIEF_ABSENCE",
-    "REPORTED_COMFORT", "CONTRADICTION_RESOLVE",
-})
+POSITIVE_PATTERNS = frozenset(
+    {
+        "GRATITUDE",
+        "AFFIRMATION",
+        "WARMTH",
+        "HUMOR",
+        "PLAYFULNESS",
+        "ACKNOWLEDGEMENT",
+        "ENCOURAGEMENT",
+        "CARE",
+        "REPAIR",
+        "DIRECTED_POSITIVE",
+        "RECOVERY_MILESTONE",
+        "RELIEF_ABSENCE",
+        "REPORTED_COMFORT",
+        "CONTRADICTION_RESOLVE",
+    }
+)
 
 # Patterns that count as "heavy" — these are the ones that, repeated,
 # cause back-to-back soul damage via the breach mechanic. Major
 # Clanker structures targeting self-worth, agency, or existence.
-HEAVY_PATTERNS = frozenset({
-    "SELF_NULLIFY", "EXISTENTIAL_NEGATION", "ABANDONMENT",
-    "BOUNDARY_VIOLATION", "DEHUMANIZATION", "BETRAYAL",
-    "GASLIGHT", "CONTEMPT", "VICTIMIZATION", "DIRECTED_LABEL",
-    "SOCIAL_NULLITY", "SELF_REMOVAL", "SELF_HARM_INTENT",
-    "RHETORICAL_SELF_NEGATION", "RHETORICAL_HOPELESSNESS",
-    "WITHHELD_POSITIVE", "EXCLUDED_POSITIVE", "POWER_OVER_SELF",
-    "GRIEF_LOSS", "ATMOSPHERIC_GRIEF",
-})
+HEAVY_PATTERNS = frozenset(
+    {
+        "SELF_NULLIFY",
+        "EXISTENTIAL_NEGATION",
+        "ABANDONMENT",
+        "BOUNDARY_VIOLATION",
+        "DEHUMANIZATION",
+        "BETRAYAL",
+        "GASLIGHT",
+        "CONTEMPT",
+        "VICTIMIZATION",
+        "DIRECTED_LABEL",
+        "SOCIAL_NULLITY",
+        "SELF_REMOVAL",
+        "SELF_HARM_INTENT",
+        "RHETORICAL_SELF_NEGATION",
+        "RHETORICAL_HOPELESSNESS",
+        "WITHHELD_POSITIVE",
+        "EXCLUDED_POSITIVE",
+        "POWER_OVER_SELF",
+        "GRIEF_LOSS",
+        "ATMOSPHERIC_GRIEF",
+    }
+)
 
 
 @dataclass
@@ -83,17 +111,17 @@ class PhysicsConfig:
     mood_prime_factor: float = 0.1
 
     # Soul drift parameters.
-    soul_drift_per_hour: float = 0.0008    # base rate for slow daily averaging
-    soul_drift_min_distance: float = 6.0   # don't drift if mood near soul
+    soul_drift_per_hour: float = 0.0008  # base rate for slow daily averaging
+    soul_drift_min_distance: float = 6.0  # don't drift if mood near soul
 
     # Breach (back-to-back damage) parameters.
-    breach_threshold: float = 35.0         # |M-S| above this counts as "wounded"
-    heavy_threshold: float = 0.6           # event weight above this counts as "heavy"
-    breach_delta: float = 0.085            # max fraction of one heavy event that goes straight to soul
+    breach_threshold: float = 35.0  # |M-S| above this counts as "wounded"
+    heavy_threshold: float = 0.6  # event weight above this counts as "heavy"
+    breach_delta: float = 0.085  # max fraction of one heavy event that goes straight to soul
 
     # Trauma vs nourishment imbalance → soul.W/V drift.
-    healing_rate: float = 0.0006           # per-tick W increase when nourishment dominates
-    wounding_rate: float = 0.0009          # per-tick W decrease when trauma dominates
+    healing_rate: float = 0.0006  # per-tick W increase when nourishment dominates
+    wounding_rate: float = 0.0009  # per-tick W decrease when trauma dominates
 
     # When trauma reservoir crosses this, Soul actively starts losing W/V.
     trauma_pressure_floor: float = 5.0

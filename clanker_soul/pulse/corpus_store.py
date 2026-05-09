@@ -21,6 +21,7 @@ schema there would couple two otherwise-independent persistence
 domains. ``CorpusStore`` follows the same pattern as
 :py:class:`SqliteEventLog` and :py:class:`ConfigOverrides`.
 """
+
 from __future__ import annotations
 
 import json
@@ -84,7 +85,9 @@ def _row_to_face(row: tuple) -> PromptFace:
     predicate_dicts = json.loads(predicates_json)
     predicates = tuple(
         VadugwiPredicate(
-            dim=p["dim"], op=p["op"], value=int(p["value"]),
+            dim=p["dim"],
+            op=p["op"],
+            value=int(p["value"]),
             layer=p.get("layer", "mood"),
         )
         for p in predicate_dicts
@@ -126,7 +129,11 @@ class CorpusStore:
     # ------------------------------------------------------------------
 
     def save_face(
-        self, face: PromptFace, *, source: str = "default", created_at: float | None = None,
+        self,
+        face: PromptFace,
+        *,
+        source: str = "default",
+        created_at: float | None = None,
     ) -> None:
         """INSERT OR REPLACE the face row.
 
@@ -135,6 +142,7 @@ class CorpusStore:
         the sampler.
         """
         import time
+
         ts = float(created_at) if created_at is not None else time.time()
         try:
             with self._store.lock:
@@ -154,11 +162,15 @@ class CorpusStore:
             logger.warning("corpus save_face failed for %r (%s) — continuing", face.id, e)
 
     def save_faces(
-        self, faces: Iterable[PromptFace], *, source: str = "default",
+        self,
+        faces: Iterable[PromptFace],
+        *,
+        source: str = "default",
     ) -> None:
         """Bulk save. Each row uses the same ``source``; create_at is
         the current wall-clock time at call-site."""
         import time
+
         now = time.time()
         rows = []
         for face in faces:
@@ -167,7 +179,8 @@ class CorpusStore:
             except Exception as e:
                 logger.warning(
                     "corpus encode failed for face %r (%s) — skipping",
-                    getattr(face, "id", "?"), e,
+                    getattr(face, "id", "?"),
+                    e,
                 )
         if not rows:
             return
@@ -211,7 +224,8 @@ class CorpusStore:
             except Exception as e:
                 logger.warning(
                     "corpus row %r failed to decode (%s) — skipping",
-                    row[0] if row else "?", e,
+                    row[0] if row else "?",
+                    e,
                 )
         return tuple(out)
 
@@ -219,6 +233,7 @@ class CorpusStore:
         """Soft-delete: mark the row retired. Retired rows stay in the
         DB for audit / undo but are excluded from :py:meth:`load_faces`."""
         import time
+
         ts = float(retired_at) if retired_at is not None else time.time()
         try:
             with self._store.lock:
@@ -231,7 +246,10 @@ class CorpusStore:
             logger.warning("corpus retire_face %r failed (%s) — continuing", face_id, e)
 
     def replace_all(
-        self, faces: Iterable[PromptFace], *, source: str = "host",
+        self,
+        faces: Iterable[PromptFace],
+        *,
+        source: str = "host",
     ) -> None:
         """Hard-delete every existing face row, then insert ``faces``.
 
@@ -283,15 +301,16 @@ class CorpusStore:
         except Exception as e:
             logger.warning(
                 "corpus note_fired(%r, %r) failed (%s) — continuing",
-                agent_id, face_id, e,
+                agent_id,
+                face_id,
+                e,
             )
 
     def load_recency(self, agent_id: str) -> dict[str, tuple[float, int]]:
         """Return ``{face_id: (last_fired_at, fire_count)}`` for the agent."""
         with self._store.lock:
             rows = self._store.connection.execute(
-                "SELECT face_id, last_fired_at, fire_count "
-                "FROM face_recency WHERE agent_id = ?",
+                "SELECT face_id, last_fired_at, fire_count FROM face_recency WHERE agent_id = ?",
                 (agent_id,),
             ).fetchall()
         return {row[0]: (float(row[1]), int(row[2])) for row in rows}
@@ -320,7 +339,8 @@ class PersistentRecencyLog(RecencyLog):
         except Exception as e:
             logger.warning(
                 "PersistentRecencyLog preload for %r failed (%s) — starting empty",
-                agent_id, e,
+                agent_id,
+                e,
             )
 
     def note_fired(self, face_id: str, now: float) -> None:

@@ -27,6 +27,7 @@ The four built-ins
 Custom presets are encouraged. The tuple shape is intentionally small
 so anyone can add their own.
 """
+
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, fields

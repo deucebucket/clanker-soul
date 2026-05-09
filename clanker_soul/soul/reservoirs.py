@@ -7,6 +7,7 @@ has its own decaying weight; ``load()`` returns the decayed sum across
 all patterns. Capped per-entry to prevent any single runaway pattern
 from dominating the model.
 """
+
 from __future__ import annotations
 
 import math
@@ -54,7 +55,8 @@ class TraumaReservoir:
         entry = self._entries.get(pattern)
         if entry is None:
             self._entries[pattern] = _ReservoirEntry(
-                weight=min(weight, RESERVOIR_CAP), last_update=now,
+                weight=min(weight, RESERVOIR_CAP),
+                last_update=now,
             )
             return
         decayed = entry.weight * _decay_factor(now - entry.last_update, self._half_life)
@@ -98,7 +100,9 @@ class NourishmentReservoir(TraumaReservoir):
     ``isinstance(x, NourishmentReservoir)`` works correctly."""
 
     @classmethod
-    def from_dict(cls, data: dict, half_life_s: float = RESERVOIR_HALF_LIFE_S) -> "NourishmentReservoir":
+    def from_dict(
+        cls, data: dict, half_life_s: float = RESERVOIR_HALF_LIFE_S
+    ) -> "NourishmentReservoir":
         r = cls(half_life_s=half_life_s)
         for pat, e in (data or {}).items():
             r._entries[pat] = _ReservoirEntry(

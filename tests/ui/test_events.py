@@ -1,4 +1,5 @@
 """Events log — query layer + /events route + filters + pagination."""
+
 from __future__ import annotations
 
 import time
@@ -30,16 +31,30 @@ def _populated_db(tmp_path) -> str:
         # 5 negative ABANDONMENT (one likely breaches by 8th hit, but we
         # only do 5 here so probably no breach yet)
         for _ in range(5):
-            p.ingest(Score(v=40, w=40, u=180, patterns=("ABANDONMENT",),
-                           direction="SELF_DIRECTED", source="hostile_user"))
+            p.ingest(
+                Score(
+                    v=40,
+                    w=40,
+                    u=180,
+                    patterns=("ABANDONMENT",),
+                    direction="SELF_DIRECTED",
+                    source="hostile_user",
+                )
+            )
         # 3 positive AFFIRMATION
         for _ in range(3):
             p.ingest(Score(v=200, w=200, patterns=("AFFIRMATION",)))
         # 1 strong heavy from external source
-        p.ingest(Score(v=20, w=15, u=240,
-                       patterns=("EXISTENTIAL_NEGATION",),
-                       direction="EXTERNAL_REPORT",
-                       source="x.com/post/news"))
+        p.ingest(
+            Score(
+                v=20,
+                w=15,
+                u=240,
+                patterns=("EXISTENTIAL_NEGATION",),
+                direction="EXTERNAL_REPORT",
+                source="x.com/post/news",
+            )
+        )
     return str(db)
 
 
@@ -189,9 +204,7 @@ def test_events_pagination_via_route(tmp_path) -> None:
     db = _populated_db(tmp_path)
     app = create_app(db)
     with TestClient(app) as client:
-        res = client.get(
-            "/events?agent_id=alice&partial=1&page_size=4&page=1"
-        )
+        res = client.get("/events?agent_id=alice&partial=1&page_size=4&page=1")
     assert "page 1" in res.text
     assert "next" in res.text.lower()
 

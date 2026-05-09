@@ -3,6 +3,7 @@
 Pure-data tests; no engine wiring, no persistence. M3.2 / M3.3 / M3.4
 add their own integration tests on top of these.
 """
+
 from __future__ import annotations
 
 import random
@@ -29,8 +30,13 @@ from clanker_soul.pulse.triggers import Trigger
 
 # Default soul vector (matches SoulState defaults)
 SOUL_DEFAULT = {
-    "v": 145, "a": 110, "d": 160, "u": 80,
-    "g": 130, "w": 175, "i": 135,
+    "v": 145,
+    "a": 110,
+    "d": 160,
+    "u": 80,
+    "g": 130,
+    "w": 175,
+    "i": 135,
 }
 
 # A neutral mood — copy of soul, no event bias
@@ -40,8 +46,7 @@ MOOD_NEUTRAL: list[int] = [145, 110, 160, 80, 130, 175, 135]
 MOOD_DISTRESS: list[int] = [80, 130, 110, 70, 100, 110, 100]
 
 
-def _trigger(kind: str, mood: list[int] | None = None,
-             metrics: dict | None = None) -> Trigger:
+def _trigger(kind: str, mood: list[int] | None = None, metrics: dict | None = None) -> Trigger:
     return Trigger(
         kind=kind,
         soul=dict(SOUL_DEFAULT),
@@ -160,8 +165,7 @@ class TestVadugwiPredicate:
 class TestPromptFace:
     def test_validates_id(self):
         with pytest.raises(ValueError, match="id"):
-            PromptFace(id="", trigger_kinds=frozenset({"distress"}),
-                       template="x")
+            PromptFace(id="", trigger_kinds=frozenset({"distress"}), template="x")
 
     def test_validates_trigger_kinds(self):
         with pytest.raises(ValueError, match="trigger kind"):
@@ -170,34 +174,41 @@ class TestPromptFace:
     def test_validates_motif(self):
         with pytest.raises(ValueError, match="motif"):
             PromptFace(
-                id="x", trigger_kinds=frozenset({"distress"}),
-                template="x", motif="weird",
+                id="x",
+                trigger_kinds=frozenset({"distress"}),
+                template="x",
+                motif="weird",
             )
 
     def test_validates_situation_match(self):
         with pytest.raises(ValueError, match="situation_match"):
             PromptFace(
-                id="x", trigger_kinds=frozenset({"distress"}),
-                template="x", situation_match="some",
+                id="x",
+                trigger_kinds=frozenset({"distress"}),
+                template="x",
+                situation_match="some",
             )
 
     def test_validates_template_nonempty(self):
         with pytest.raises(ValueError, match="template"):
-            PromptFace(id="x", trigger_kinds=frozenset({"distress"}),
-                       template="")
+            PromptFace(id="x", trigger_kinds=frozenset({"distress"}), template="")
 
     def test_validates_cooldown_nonnegative(self):
         with pytest.raises(ValueError, match="cooldown"):
             PromptFace(
-                id="x", trigger_kinds=frozenset({"distress"}),
-                template="x", cooldown_seconds=-1,
+                id="x",
+                trigger_kinds=frozenset({"distress"}),
+                template="x",
+                cooldown_seconds=-1,
             )
 
     def test_validates_base_weight_nonnegative(self):
         with pytest.raises(ValueError, match="base_weight"):
             PromptFace(
-                id="x", trigger_kinds=frozenset({"distress"}),
-                template="x", base_weight=-0.1,
+                id="x",
+                trigger_kinds=frozenset({"distress"}),
+                template="x",
+                base_weight=-0.1,
             )
 
     def test_situation_eligible_empty_is_universal(self):
@@ -206,15 +217,13 @@ class TestPromptFace:
         assert f.situation_eligible(frozenset({"random_tag"})) is True
 
     def test_situation_eligible_any_match(self):
-        f = _face("x", situation_tags=frozenset({"a", "b"}),
-                  situation_match="any")
+        f = _face("x", situation_tags=frozenset({"a", "b"}), situation_match="any")
         assert f.situation_eligible(frozenset({"a"})) is True
         assert f.situation_eligible(frozenset({"c"})) is False
         assert f.situation_eligible(frozenset({"b", "c"})) is True
 
     def test_situation_eligible_all_match(self):
-        f = _face("x", situation_tags=frozenset({"a", "b"}),
-                  situation_match="all")
+        f = _face("x", situation_tags=frozenset({"a", "b"}), situation_match="all")
         assert f.situation_eligible(frozenset({"a"})) is False
         assert f.situation_eligible(frozenset({"a", "b"})) is True
         assert f.situation_eligible(frozenset({"a", "b", "c"})) is True
@@ -286,7 +295,9 @@ class TestVadugwiAffinity:
         p_extreme = VadugwiPredicate("V", "<=", 145)  # mood V=145, margin 0
         # Both at boundary → 1.0
         result = vadugwi_affinity(
-            (p_boundary, p_extreme), MOOD_NEUTRAL, SOUL_DEFAULT,
+            (p_boundary, p_extreme),
+            MOOD_NEUTRAL,
+            SOUL_DEFAULT,
         )
         assert result == pytest.approx(1.0)
 
@@ -294,7 +305,9 @@ class TestVadugwiAffinity:
         mood = list(MOOD_NEUTRAL)
         mood[0] = 0
         result = vadugwi_affinity(
-            (p_boundary, p_extreme), mood, SOUL_DEFAULT,
+            (p_boundary, p_extreme),
+            mood,
+            SOUL_DEFAULT,
         )
         assert result == pytest.approx(1.5)
 
@@ -420,9 +433,15 @@ class TestPromptCorpus:
         c = PromptCorpus((f,))
         trig = _trigger("distress", MOOD_DISTRESS)
         assert c.faces_for(trig, frozenset()) == []
-        assert len(c.faces_for(
-            trig, frozenset({"incoming_public_stimulus"}),
-        )) == 1
+        assert (
+            len(
+                c.faces_for(
+                    trig,
+                    frozenset({"incoming_public_stimulus"}),
+                )
+            )
+            == 1
+        )
 
     def test_filters_by_cooldown(self):
         f = _face("x", cooldown_seconds=60)

@@ -5,6 +5,7 @@ sortable / filterable / paginated. Pure read-only — runs the same
 queries the host's :py:class:`SqliteEventLog` would, but with the
 filters and sorts the UI cares about.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -23,8 +24,8 @@ DEFAULT_PAGE_SIZE = 50
 @dataclass(frozen=True)
 class EventQueryResult:
     rows: list[IngestRecord]
-    total: int           # total matching the filter, ignoring pagination
-    page: int            # 1-indexed
+    total: int  # total matching the filter, ignoring pagination
+    page: int  # 1-indexed
     page_size: int
     has_prev: bool
     has_next: bool
@@ -78,22 +79,42 @@ def _row_to_record(row) -> IngestRecord:
     """Decode a SELECT row into an IngestRecord. Column order must
     match :py:func:`query_events`'s SELECT clause."""
     import json as _json
-    (ts, agent_id, raw_score, primed_score,
-     mood_before, mood_after, soul_before, soul_after,
-     weight_raw, armor, weight_effective,
-     breached, breach_delta, patterns, classification, why) = row
+
+    (
+        ts,
+        agent_id,
+        raw_score,
+        primed_score,
+        mood_before,
+        mood_after,
+        soul_before,
+        soul_after,
+        weight_raw,
+        armor,
+        weight_effective,
+        breached,
+        breach_delta,
+        patterns,
+        classification,
+        why,
+    ) = row
     return IngestRecord(
-        ts=ts, agent_id=agent_id,
+        ts=ts,
+        agent_id=agent_id,
         raw=_score_from_json(raw_score),  # type: ignore[arg-type]
         primed=_score_from_json(primed_score),
         mood_before=_score_from_json(mood_before),
         mood_after=_score_from_json(mood_after),  # type: ignore[arg-type]
         soul_before=_soul_from_json(soul_before),
         soul_after=_soul_from_json(soul_after),
-        weight_raw=weight_raw, armor=armor, weight_effective=weight_effective,
-        breached=bool(breached), breach_delta=breach_delta,
+        weight_raw=weight_raw,
+        armor=armor,
+        weight_effective=weight_effective,
+        breached=bool(breached),
+        breach_delta=breach_delta,
         patterns=tuple(_json.loads(patterns)),
-        classification=classification, why=why,
+        classification=classification,
+        why=why,
     )
 
 
@@ -121,8 +142,11 @@ def query_events(
 
     where_sql, where_params = _build_where(
         agent_id,
-        classification=classification, breach=breach,
-        pattern_q=pattern_q, ts_after=ts_after, ts_before=ts_before,
+        classification=classification,
+        breach=breach,
+        pattern_q=pattern_q,
+        ts_after=ts_after,
+        ts_before=ts_before,
     )
     order_sql = _build_order(sort)
     offset = (page - 1) * page_size
@@ -149,7 +173,10 @@ def query_events(
 
     records = [_row_to_record(r) for r in rows]
     return EventQueryResult(
-        rows=records, total=total, page=page, page_size=page_size,
+        rows=records,
+        total=total,
+        page=page,
+        page_size=page_size,
         has_prev=page > 1,
         has_next=(page * page_size) < total,
     )

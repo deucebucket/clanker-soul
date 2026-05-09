@@ -4,6 +4,7 @@ Backward-compatibility constraint: every existing test in tests/ must
 keep passing without modification. New behavior is opt-in via the
 ``event_log`` + ``agent_id`` constructor params.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -62,11 +63,12 @@ class RaisingEventLog:
 def test_physics_logs_ingest_when_event_log_provided() -> None:
     sink = CapturingEventLog()
     physics = EmotionalPhysics(
-        soul=SoulState(), config=PhysicsConfig(),
-        event_log=sink, agent_id="agent-1",
+        soul=SoulState(),
+        config=PhysicsConfig(),
+        event_log=sink,
+        agent_id="agent-1",
     )
-    physics.ingest(Score(v=80, a=160, d=70, u=180, g=80, w=50, i=110,
-                         patterns=("ABANDONMENT",)))
+    physics.ingest(Score(v=80, a=160, d=70, u=180, g=80, w=50, i=110, patterns=("ABANDONMENT",)))
     assert len(sink.ingests) == 1
     rec = sink.ingests[0]
     assert rec.agent_id == "agent-1"
@@ -82,7 +84,9 @@ def test_physics_logs_ingest_when_event_log_provided() -> None:
 def test_physics_records_mood_before_on_subsequent_ingest() -> None:
     sink = CapturingEventLog()
     physics = EmotionalPhysics(
-        soul=SoulState(), event_log=sink, agent_id="x",
+        soul=SoulState(),
+        event_log=sink,
+        agent_id="x",
     )
     physics.ingest(Score(v=200, w=200, patterns=("AFFIRMATION",)))
     physics.ingest(Score(v=80, w=50, patterns=("ABANDONMENT",)))
@@ -100,17 +104,15 @@ def test_physics_records_soul_movement_across_breach_sequence() -> None:
     sink = CapturingEventLog()
     physics = EmotionalPhysics(
         soul=SoulState(v=160, w=180, d=160),
-        event_log=sink, agent_id="x",
+        event_log=sink,
+        agent_id="x",
     )
     for _ in range(8):
-        physics.ingest(Score(v=10, w=10, d=20,
-                             patterns=("EXISTENTIAL_NEGATION",)))
+        physics.ingest(Score(v=10, w=10, d=20, patterns=("EXISTENTIAL_NEGATION",)))
     assert any(r.breached for r in sink.ingests), "expected breach to fire"
     first_soul = sink.ingests[0].soul_before
     last_soul = sink.ingests[-1].soul_after
-    assert (first_soul.v != last_soul.v
-            or first_soul.w != last_soul.w
-            or first_soul.g != last_soul.g)
+    assert first_soul.v != last_soul.v or first_soul.w != last_soul.w or first_soul.g != last_soul.g
 
 
 def test_physics_with_no_event_log_does_not_log() -> None:
@@ -153,7 +155,9 @@ def test_physics_log_failure_does_not_crash_ingest() -> None:
 def test_why_text_references_patterns_and_weight() -> None:
     sink = CapturingEventLog()
     physics = EmotionalPhysics(
-        soul=SoulState(), event_log=sink, agent_id="x",
+        soul=SoulState(),
+        event_log=sink,
+        agent_id="x",
     )
     physics.ingest(Score(v=40, w=40, u=200, patterns=("ABANDONMENT",)))
     why = sink.ingests[0].why
@@ -166,11 +170,11 @@ def test_why_text_marks_breach_when_breach_fired() -> None:
     sink = CapturingEventLog()
     physics = EmotionalPhysics(
         soul=SoulState(v=160, w=180, d=160),
-        event_log=sink, agent_id="x",
+        event_log=sink,
+        agent_id="x",
     )
     for _ in range(8):
-        physics.ingest(Score(v=10, w=10, d=20,
-                             patterns=("EXISTENTIAL_NEGATION",)))
+        physics.ingest(Score(v=10, w=10, d=20, patterns=("EXISTENTIAL_NEGATION",)))
     breach_whys = [r.why for r in sink.ingests if r.breached]
     assert breach_whys
     assert any("BREACH" in w for w in breach_whys)
@@ -186,7 +190,9 @@ def test_physics_logs_primed_when_raw_kwarg_provided() -> None:
     pre-prime score via the ``raw=`` kwarg, and the log will record both."""
     sink = CapturingEventLog()
     physics = EmotionalPhysics(
-        soul=SoulState(), event_log=sink, agent_id="x",
+        soul=SoulState(),
+        event_log=sink,
+        agent_id="x",
     )
     raw = Score(v=128, w=128, patterns=("AMBIGUOUS",))
     primed = Score(v=140, w=135, patterns=("AMBIGUOUS",))
@@ -199,7 +205,9 @@ def test_physics_logs_primed_when_raw_kwarg_provided() -> None:
 def test_physics_primed_is_none_when_no_raw_kwarg() -> None:
     sink = CapturingEventLog()
     physics = EmotionalPhysics(
-        soul=SoulState(), event_log=sink, agent_id="x",
+        soul=SoulState(),
+        event_log=sink,
+        agent_id="x",
     )
     physics.ingest(Score(v=128, w=128))
     assert sink.ingests[0].primed is None
@@ -277,9 +285,12 @@ async def test_pulse_logs_no_trigger_at_baseline() -> None:
 @pytest.mark.asyncio
 async def test_pulse_logs_distress_dispatch() -> None:
     sink = CapturingEventLog()
-    host = FakeHost(snap=_baseline_snap(
-        mood=[80, 110, 160, 80, 130, 100, 135], soul_distance=80.0,
-    ))
+    host = FakeHost(
+        snap=_baseline_snap(
+            mood=[80, 110, 160, 80, 130, 100, 135],
+            soul_distance=80.0,
+        )
+    )
     engine = PulseEngine(host, event_log=sink, agent_id="x")
     _seed_clock_past_cooldown(engine)
     await engine.tick()
@@ -295,13 +306,17 @@ async def test_pulse_logs_distress_dispatch() -> None:
 @pytest.mark.asyncio
 async def test_pulse_logs_cooldown_suppression() -> None:
     sink = CapturingEventLog()
-    host = FakeHost(snap=_baseline_snap(
-        mood=[80, 110, 160, 80, 130, 100, 135], soul_distance=80.0,
-    ))
+    host = FakeHost(
+        snap=_baseline_snap(
+            mood=[80, 110, 160, 80, 130, 100, 135],
+            soul_distance=80.0,
+        )
+    )
     engine = PulseEngine(
         host,
         config=PulseConfig(min_quiet_seconds=999_999.0, max_quiet_seconds=10**12),
-        event_log=sink, agent_id="x",
+        event_log=sink,
+        agent_id="x",
     )
     _seed_clock_past_cooldown(engine, gap=999_999.0 + 60.0)
     await engine.tick()  # fires
@@ -321,7 +336,8 @@ async def test_pulse_logs_no_target_suppression() -> None:
     sink = CapturingEventLog()
     host = FakeHost(
         snap=_baseline_snap(
-            mood=[80, 110, 160, 80, 130, 100, 135], soul_distance=80.0,
+            mood=[80, 110, 160, 80, 130, 100, 135],
+            soul_distance=80.0,
         ),
         target=None,
     )
@@ -340,9 +356,12 @@ async def test_pulse_logs_no_target_suppression() -> None:
 async def test_pulse_log_failure_does_not_crash_tick() -> None:
     """A faulty event log must not propagate into the engine — tick
     must still return its normal result."""
-    host = FakeHost(snap=_baseline_snap(
-        mood=[80, 110, 160, 80, 130, 100, 135], soul_distance=80.0,
-    ))
+    host = FakeHost(
+        snap=_baseline_snap(
+            mood=[80, 110, 160, 80, 130, 100, 135],
+            soul_distance=80.0,
+        )
+    )
     engine = PulseEngine(host, event_log=RaisingEventLog(), agent_id="x")
     _seed_clock_past_cooldown(engine)
     result = await engine.tick()

@@ -1,4 +1,5 @@
 """Soul, reservoirs, and durable storage."""
+
 from __future__ import annotations
 
 import time
@@ -23,8 +24,9 @@ def test_soul_defaults_lean_positive_not_neutral() -> None:
 
 
 def test_soul_state_round_trips_through_dict() -> None:
-    s = SoulState(v=140, a=110, d=160, u=80, g=130, w=175, i=135,
-                  last_drift_ts=12345.6, last_save_ts=12350.0)
+    s = SoulState(
+        v=140, a=110, d=160, u=80, g=130, w=175, i=135, last_drift_ts=12345.6, last_save_ts=12350.0
+    )
     s2 = SoulState.from_dict(s.to_dict())
     assert s2.v == 140 and s2.w == 175 and s2.last_drift_ts == 12345.6
 

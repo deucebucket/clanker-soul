@@ -10,6 +10,7 @@ Covers:
 - Tool-name gating for tool_invocation
 - Engine wires gate into _fire_pulse: gated actions are not dispatched
 """
+
 from __future__ import annotations
 
 from dataclasses import replace
@@ -38,8 +39,12 @@ def test_default_profiles_are_permissive_at_every_level() -> None:
     The agent gets to act; consequences feed back into the soul; that
     IS the learning loop."""
     expected_kinds = {
-        "direct_message", "post_public", "comment_reply",
-        "browse_topic", "withdraw", "tool_invocation",
+        "direct_message",
+        "post_public",
+        "comment_reply",
+        "browse_topic",
+        "withdraw",
+        "tool_invocation",
     }
     for level in CapabilityLevel:
         profile = DEFAULT_CAPABILITY_PROFILES[level]
@@ -112,8 +117,14 @@ def test_governor_config_accepts_custom_profiles() -> None:
 
 def test_gate_permissive_default_allows_everything() -> None:
     gate = CapabilityGate(GovernorConfig())
-    for kind in ["direct_message", "post_public", "comment_reply",
-                 "browse_topic", "withdraw", "tool_invocation"]:
+    for kind in [
+        "direct_message",
+        "post_public",
+        "comment_reply",
+        "browse_topic",
+        "withdraw",
+        "tool_invocation",
+    ]:
         for level in CapabilityLevel:
             d = gate.evaluate(kind, level)
             assert d.permitted, f"default gate denied {kind} at {level}"
@@ -131,7 +142,8 @@ def test_strict_gate_blocks_user_message_at_crisis() -> None:
     cfg = GovernorConfig(capability_profiles=STRICT_CAPABILITY_PROFILES)
     gate = CapabilityGate(cfg)
     d = gate.evaluate(
-        "direct_message", CapabilityLevel.CRISIS_LOCKOUT,
+        "direct_message",
+        CapabilityLevel.CRISIS_LOCKOUT,
         is_user_message=True,
     )
     assert d.permitted is False
@@ -143,9 +155,13 @@ def test_tool_name_gating() -> None:
     custom = {
         **DEFAULT_CAPABILITY_PROFILES,
         CapabilityLevel.UNRESTRICTED: CapabilityProfile(
-            allowed_action_kinds=frozenset({
-                "direct_message", "tool_invocation", "withdraw",
-            }),
+            allowed_action_kinds=frozenset(
+                {
+                    "direct_message",
+                    "tool_invocation",
+                    "withdraw",
+                }
+            ),
             allowed_tool_names=frozenset({"safe_tool"}),
         ),
     }
@@ -256,14 +272,14 @@ class _GateTestHost:
 
     def dispatch_action(self, action):
         from clanker_soul import ActionOutcome
+
         self.dispatched.append(action)
         return ActionOutcome(delivered=True)
 
 
 def _snap_for_distress() -> dict:
     return {
-        "soul": {"v": 145, "a": 110, "d": 160, "u": 80,
-                 "g": 130, "w": 175, "i": 135},
+        "soul": {"v": 145, "a": 110, "d": 160, "u": 80, "g": 130, "w": 175, "i": 135},
         "mood": [40, 110, 100, 200, 130, 30, 100],  # crashed
         "soul_distance": 80.0,
         "trauma_load": 5.0,
@@ -275,7 +291,9 @@ async def test_engine_dispatches_when_gate_permits() -> None:
     host = _GateTestHost(_snap_for_distress())
     gate = CapabilityGate(GovernorConfig())  # default permissive
     engine = PulseEngine(
-        host, config=PulseConfig(min_quiet_seconds=0.0), gate=gate,
+        host,
+        config=PulseConfig(min_quiet_seconds=0.0),
+        gate=gate,
     )
     engine.note_outbound()
     trigger = await engine.tick()
@@ -297,7 +315,9 @@ async def test_engine_suppresses_when_gate_blocks() -> None:
 
     host = _GateTestHost(_snap_for_distress())
     engine = PulseEngine(
-        host, config=PulseConfig(min_quiet_seconds=0.0), gate=gate,
+        host,
+        config=PulseConfig(min_quiet_seconds=0.0),
+        gate=gate,
     )
     engine.note_outbound()
     trigger = await engine.tick()

@@ -19,6 +19,7 @@ emergency.
 Hosts that don't populate ``direction`` get a low-confidence
 "spike or unclear" signal — better than a false emergency, but lossy.
 """
+
 from __future__ import annotations
 
 from collections import Counter
@@ -68,27 +69,27 @@ def crisis_signal(
     Empty list = no signal."""
     if not recent_events:
         return CrisisDiagnosis(
-            is_emergency=False, summary="no recent significant events",
-            confidence=1.0, reasons=("no events in inspection window",),
-            directed_count=0, external_count=0,
-            atmospheric_count=0, unspecified_count=0,
+            is_emergency=False,
+            summary="no recent significant events",
+            confidence=1.0,
+            reasons=("no events in inspection window",),
+            directed_count=0,
+            external_count=0,
+            atmospheric_count=0,
+            unspecified_count=0,
             distinct_sources=0,
         )
 
     window = recent_events[: config.crisis_window_events]
 
-    direction_counts: Counter[str | None] = Counter(
-        e.raw.direction for e in window
-    )
+    direction_counts: Counter[str | None] = Counter(e.raw.direction for e in window)
     directed = direction_counts.get("SELF_DIRECTED", 0)
     external = direction_counts.get("EXTERNAL_REPORT", 0)
     atmospheric = direction_counts.get("ATMOSPHERIC", 0)
     unspecified = direction_counts.get(None, 0)
     total_directional = directed + external + atmospheric
 
-    distinct_sources = len({
-        e.raw.source for e in window if e.raw.source
-    })
+    distinct_sources = len({e.raw.source for e in window if e.raw.source})
 
     # No direction info on any event → fall back to "spike, unclear"
     if total_directional == 0:
@@ -100,8 +101,10 @@ def crisis_signal(
                 f"no Score.direction populated on {len(window)} recent events",
                 "host is not providing crisis-vs-spike attribution",
             ),
-            directed_count=directed, external_count=external,
-            atmospheric_count=atmospheric, unspecified_count=unspecified,
+            directed_count=directed,
+            external_count=external,
+            atmospheric_count=atmospheric,
+            unspecified_count=unspecified,
             distinct_sources=distinct_sources,
         )
 
@@ -123,8 +126,10 @@ def crisis_signal(
                 f"{distinct_sources} distinct sources in window",
                 "majority external → likely real-world event, not personal",
             ),
-            directed_count=directed, external_count=external,
-            atmospheric_count=atmospheric, unspecified_count=unspecified,
+            directed_count=directed,
+            external_count=external,
+            atmospheric_count=atmospheric,
+            unspecified_count=unspecified,
             distinct_sources=distinct_sources,
         )
 
@@ -133,16 +138,17 @@ def crisis_signal(
         return CrisisDiagnosis(
             is_emergency=False,
             summary=(
-                f"emotional spike from {directed} directed event"
-                + ("s" if directed != 1 else "")
+                f"emotional spike from {directed} directed event" + ("s" if directed != 1 else "")
             ),
             confidence=self_pct,
             reasons=(
                 f"{directed}/{total_directional} recent events directed at agent",
                 "personal interaction pattern, not external emergency",
             ),
-            directed_count=directed, external_count=external,
-            atmospheric_count=atmospheric, unspecified_count=unspecified,
+            directed_count=directed,
+            external_count=external,
+            atmospheric_count=atmospheric,
+            unspecified_count=unspecified,
             distinct_sources=distinct_sources,
         )
 
@@ -152,11 +158,12 @@ def crisis_signal(
         summary="ambient pressure (mixed-direction signal)",
         confidence=0.5,
         reasons=(
-            f"directions split: {directed} self / {external} external / "
-            f"{atmospheric} atmospheric",
+            f"directions split: {directed} self / {external} external / {atmospheric} atmospheric",
         ),
-        directed_count=directed, external_count=external,
-        atmospheric_count=atmospheric, unspecified_count=unspecified,
+        directed_count=directed,
+        external_count=external,
+        atmospheric_count=atmospheric,
+        unspecified_count=unspecified,
         distinct_sources=distinct_sources,
     )
 

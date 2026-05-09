@@ -7,6 +7,7 @@ suite covers:
   - SqliteEventLog writes records that round-trip through the DB
   - logging failures DO NOT raise into the caller — physics must keep running
 """
+
 from __future__ import annotations
 
 import time
@@ -34,11 +35,22 @@ from clanker_soul.eventlog import (
 
 def test_ingest_record_is_frozen() -> None:
     rec = IngestRecord(
-        ts=0.0, agent_id="x", raw=Score(), primed=None,
-        mood_before=None, mood_after=Score(), soul_before=SoulState(),
-        soul_after=SoulState(), weight_raw=0.1, armor=0.5,
-        weight_effective=0.05, breached=False, breach_delta=0.0,
-        patterns=(), classification=None, why="trivial event",
+        ts=0.0,
+        agent_id="x",
+        raw=Score(),
+        primed=None,
+        mood_before=None,
+        mood_after=Score(),
+        soul_before=SoulState(),
+        soul_after=SoulState(),
+        weight_raw=0.1,
+        armor=0.5,
+        weight_effective=0.05,
+        breached=False,
+        breach_delta=0.0,
+        patterns=(),
+        classification=None,
+        why="trivial event",
     )
     with pytest.raises(Exception):
         rec.ts = 1.0  # type: ignore[misc]
@@ -46,9 +58,14 @@ def test_ingest_record_is_frozen() -> None:
 
 def test_pulse_record_is_frozen() -> None:
     rec = PulseRecord(
-        ts=0.0, agent_id="x", snap={}, trigger_kind=None,
-        suppressed_reason="cooldown", target_present=False,
-        dispatched=False, prompt=None,
+        ts=0.0,
+        agent_id="x",
+        snap={},
+        trigger_kind=None,
+        suppressed_reason="cooldown",
+        target_present=False,
+        dispatched=False,
+        prompt=None,
     )
     with pytest.raises(Exception):
         rec.trigger_kind = "distress"  # type: ignore[misc]
@@ -69,18 +86,38 @@ def test_null_event_log_does_nothing() -> None:
     """Default sink for hosts that don't want logging — must accept any
     record without side effects."""
     log = NullEventLog()
-    log.log_ingest(IngestRecord(
-        ts=0.0, agent_id="x", raw=Score(), primed=None,
-        mood_before=None, mood_after=Score(), soul_before=SoulState(),
-        soul_after=SoulState(), weight_raw=0.1, armor=0.5,
-        weight_effective=0.05, breached=False, breach_delta=0.0,
-        patterns=(), classification=None, why="ok",
-    ))
-    log.log_pulse(PulseRecord(
-        ts=0.0, agent_id="x", snap={}, trigger_kind=None,
-        suppressed_reason="no_trigger", target_present=False,
-        dispatched=False, prompt=None,
-    ))
+    log.log_ingest(
+        IngestRecord(
+            ts=0.0,
+            agent_id="x",
+            raw=Score(),
+            primed=None,
+            mood_before=None,
+            mood_after=Score(),
+            soul_before=SoulState(),
+            soul_after=SoulState(),
+            weight_raw=0.1,
+            armor=0.5,
+            weight_effective=0.05,
+            breached=False,
+            breach_delta=0.0,
+            patterns=(),
+            classification=None,
+            why="ok",
+        )
+    )
+    log.log_pulse(
+        PulseRecord(
+            ts=0.0,
+            agent_id="x",
+            snap={},
+            trigger_kind=None,
+            suppressed_reason="no_trigger",
+            target_present=False,
+            dispatched=False,
+            prompt=None,
+        )
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -90,18 +127,21 @@ def test_null_event_log_does_nothing() -> None:
 
 def _ingest_rec(ts: float, agent_id: str = "agent-1", **overrides) -> IngestRecord:
     base = dict(
-        ts=ts, agent_id=agent_id,
-        raw=Score(v=80, a=160, d=70, u=180, g=80, w=50, i=110,
-                  patterns=("ABANDONMENT",)),
-        primed=Score(v=82, a=160, d=70, u=180, g=80, w=52, i=110,
-                     patterns=("ABANDONMENT",)),
+        ts=ts,
+        agent_id=agent_id,
+        raw=Score(v=80, a=160, d=70, u=180, g=80, w=50, i=110, patterns=("ABANDONMENT",)),
+        primed=Score(v=82, a=160, d=70, u=180, g=80, w=52, i=110, patterns=("ABANDONMENT",)),
         mood_before=Score(v=145, w=175),
         mood_after=Score(v=120, w=140),
         soul_before=SoulState(v=145, w=175),
         soul_after=SoulState(v=145, w=175),
-        weight_raw=0.78, armor=0.55, weight_effective=0.42,
-        breached=True, breach_delta=0.071,
-        patterns=("ABANDONMENT",), classification="negative",
+        weight_raw=0.78,
+        armor=0.55,
+        weight_effective=0.42,
+        breached=True,
+        breach_delta=0.071,
+        patterns=("ABANDONMENT",),
+        classification="negative",
         why="Heavy ABANDONMENT (weight=0.78) hit through armor=0.55",
     )
     base.update(overrides)
@@ -136,12 +176,14 @@ def test_sqlite_event_log_handles_null_optional_fields(tmp_path) -> None:
     """primed=None, mood_before=None, classification=None must round-trip."""
     store = SoulStore(tmp_path / "null.db")
     log = SqliteEventLog(store)
-    log.log_ingest(_ingest_rec(
-        ts=time.time(),
-        primed=None,
-        mood_before=None,
-        classification=None,
-    ))
+    log.log_ingest(
+        _ingest_rec(
+            ts=time.time(),
+            primed=None,
+            mood_before=None,
+            classification=None,
+        )
+    )
     records = log.read_ingest(agent_id="agent-1")
     assert len(records) == 1
     r = records[0]
@@ -155,19 +197,30 @@ def test_sqlite_event_log_round_trips_pulse_records(tmp_path) -> None:
     log = SqliteEventLog(store)
 
     base = time.time()
-    log.log_pulse(PulseRecord(
-        ts=base, agent_id="agent-1",
-        snap={"soul": {"v": 145}, "mood": [80, 110, 160, 80, 130, 100, 135]},
-        trigger_kind="distress", suppressed_reason=None,
-        target_present=True, dispatched=True,
-        prompt="[INTERNAL PULSE — distress]\nYou feel notably worse...",
-    ))
-    log.log_pulse(PulseRecord(
-        ts=base + 1, agent_id="agent-1",
-        snap={"soul": {"v": 145}, "mood": [145, 110, 160, 80, 130, 175, 135]},
-        trigger_kind=None, suppressed_reason="no_trigger",
-        target_present=True, dispatched=False, prompt=None,
-    ))
+    log.log_pulse(
+        PulseRecord(
+            ts=base,
+            agent_id="agent-1",
+            snap={"soul": {"v": 145}, "mood": [80, 110, 160, 80, 130, 100, 135]},
+            trigger_kind="distress",
+            suppressed_reason=None,
+            target_present=True,
+            dispatched=True,
+            prompt="[INTERNAL PULSE — distress]\nYou feel notably worse...",
+        )
+    )
+    log.log_pulse(
+        PulseRecord(
+            ts=base + 1,
+            agent_id="agent-1",
+            snap={"soul": {"v": 145}, "mood": [145, 110, 160, 80, 130, 175, 135]},
+            trigger_kind=None,
+            suppressed_reason="no_trigger",
+            target_present=True,
+            dispatched=False,
+            prompt=None,
+        )
+    )
 
     records = log.read_pulse(agent_id="agent-1")
     assert len(records) == 2
@@ -229,11 +282,18 @@ def test_log_failure_does_not_raise(tmp_path, caplog) -> None:
 
     # Should not raise.
     log.log_ingest(_ingest_rec(ts=time.time()))
-    log.log_pulse(PulseRecord(
-        ts=time.time(), agent_id="agent-1", snap={},
-        trigger_kind=None, suppressed_reason="no_trigger",
-        target_present=False, dispatched=False, prompt=None,
-    ))
+    log.log_pulse(
+        PulseRecord(
+            ts=time.time(),
+            agent_id="agent-1",
+            snap={},
+            trigger_kind=None,
+            suppressed_reason="no_trigger",
+            target_present=False,
+            dispatched=False,
+            prompt=None,
+        )
+    )
 
     # And the failure must have been logged at WARNING level.
     warnings = [r for r in caplog.records if r.levelname == "WARNING"]

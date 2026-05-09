@@ -5,6 +5,7 @@ require exit code 0. If an example breaks (API drift, removed kwarg,
 forgotten import), CI catches it here before it reaches a confused
 adopter trying to copy from the docs.
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -26,7 +27,9 @@ def test_example_runs(script: Path) -> None:
     pytest.importorskip("fastapi")  # examples don't need it but [ui] tests imply it
     result = subprocess.run(
         [sys.executable, str(script)],
-        capture_output=True, text=True, timeout=30,
+        capture_output=True,
+        text=True,
+        timeout=30,
     )
     assert result.returncode == 0, (
         f"{script.name} exited {result.returncode}\n"

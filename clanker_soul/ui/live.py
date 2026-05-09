@@ -16,6 +16,7 @@ If the agent process saves infrequently, the dashboard's view of
 reservoirs will lag. Mood is always fresh because event-log writes
 are synchronous per ingest.
 """
+
 from __future__ import annotations
 
 import math
@@ -52,6 +53,7 @@ class RadarPoint:
 @dataclass(frozen=True)
 class RadarPolygon:
     """An SVG polygon for one VADUGWI vector."""
+
     points: tuple[RadarPoint, ...]
     points_attr: str  # space-separated "x,y x,y..." for <polygon>
 
@@ -59,6 +61,7 @@ class RadarPolygon:
 @dataclass(frozen=True)
 class RadarRing:
     """A concentric reference ring."""
+
     radius: float
     label: str  # e.g. "128", "192"
 
@@ -66,6 +69,7 @@ class RadarRing:
 @dataclass(frozen=True)
 class LiveView:
     """Everything the live panel template needs."""
+
     agent_id: str
     has_state: bool
     mood: list[int] | None
@@ -117,10 +121,7 @@ def _build_radar_axes(center: float, radius: float) -> tuple[RadarPoint, ...]:
 
 def _build_radar_rings(center: float, radius: float) -> tuple[RadarRing, ...]:
     """Reference rings at value=64, 128, 192 (relative)."""
-    return tuple(
-        RadarRing(radius=(v / 255.0) * radius, label=str(v))
-        for v in (64, 128, 192)
-    )
+    return tuple(RadarRing(radius=(v / 255.0) * radius, label=str(v)) for v in (64, 128, 192))
 
 
 def _latest_event_mood(log: SqliteEventLog, agent_id: str) -> list[int] | None:
@@ -139,11 +140,14 @@ def _latest_pulse(log: SqliteEventLog, agent_id: str) -> PulseRecord | None:
 
 
 def _significant_recent(
-    log: SqliteEventLog, agent_id: str, limit: int = 50,
+    log: SqliteEventLog,
+    agent_id: str,
+    limit: int = 50,
 ) -> list[IngestRecord]:
     """Recent events for the governor's crisis-signal window."""
     return [
-        ev for ev in log.read_ingest(agent_id, limit=limit)
+        ev
+        for ev in log.read_ingest(agent_id, limit=limit)
         if ev.classification == "negative" or ev.breached
     ]
 
@@ -173,9 +177,17 @@ def build_live_view(
 
     mood_list = _latest_event_mood(log, agent_id) if has_any_event else None
     mood_score = (
-        Score(v=mood_list[0], a=mood_list[1], d=mood_list[2], u=mood_list[3],
-              g=mood_list[4], w=mood_list[5], i=mood_list[6])
-        if mood_list else None
+        Score(
+            v=mood_list[0],
+            a=mood_list[1],
+            d=mood_list[2],
+            u=mood_list[3],
+            g=mood_list[4],
+            w=mood_list[5],
+            i=mood_list[6],
+        )
+        if mood_list
+        else None
     )
     distance = soul_distance(mood_score, soul) if mood_score else None
     trauma_load = trauma.load()
@@ -195,7 +207,11 @@ def build_live_view(
     level = assess_capability(snap, cfg)
     crisis = crisis_signal(significant, cfg)
     state_ctx = compose_state_context(
-        level, snap, cfg, recent_events=significant, crisis=crisis,
+        level,
+        snap,
+        cfg,
+        recent_events=significant,
+        crisis=crisis,
     )
 
     # Recent events for the "what's landing" panel — broader than crisis window
@@ -207,9 +223,7 @@ def build_live_view(
     rings = _build_radar_rings(center, radius)
     axes = _build_radar_axes(center, radius)
     soul_polygon = _make_polygon(soul.as_tuple(), center, radius)
-    mood_polygon = (
-        _make_polygon(tuple(mood_list), center, radius) if mood_list else None
-    )
+    mood_polygon = _make_polygon(tuple(mood_list), center, radius) if mood_list else None
 
     return LiveView(
         agent_id=agent_id,
@@ -239,7 +253,8 @@ def build_live_view(
 def _agent_in_soul_state(store: SoulStore, agent_id: str) -> bool:
     with store.lock:
         row = store.connection.execute(
-            "SELECT 1 FROM soul_state WHERE agent_id = ?", (agent_id,),
+            "SELECT 1 FROM soul_state WHERE agent_id = ?",
+            (agent_id,),
         ).fetchone()
     return row is not None
 
