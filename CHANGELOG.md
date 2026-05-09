@@ -18,6 +18,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   v0.1 databases (which only had `soul_state`) in place without data loss.
 - `SoulStore.connection` and `SoulStore.lock` properties so sibling modules can share the
   same SQLite connection and write lock (avoids second-handle contention).
+- **EventLog wiring** (#3): `EmotionalPhysics` and `PulseEngine` now accept optional
+  `event_log` + `agent_id` constructor kwargs. When provided, every `ingest()` call emits
+  one `IngestRecord` (with `mood_before`/`mood_after`, `soul_before`/`soul_after`,
+  weight/armor/breach math, and a pre-baked human-readable `why` string), and every
+  `tick()` evaluation emits one `PulseRecord` (fired, suppressed by `cooldown`,
+  `no_target`, `dispatch_failed`, or `no_trigger`). Defaults preserve existing behavior:
+  `event_log=None` means no logging, no agent_id required, and no API change observable
+  to existing callers. Defense-in-depth: physics catches sink exceptions even though
+  `SqliteEventLog` already does — custom sinks must not be able to crash physics.
+- `EmotionalPhysics.ingest(event, *, raw=...)` keyword arg lets hosts that apply
+  `mood_prime_score` themselves record both the pre-prime `raw` and the primed `event`
+  in the log. Omitting `raw` records the score as raw with `primed=None`.
 - **`clanker_soul.eventlog` module** (#2): durable per-event sink for the UI to read.
   Frozen `IngestRecord` and `PulseRecord` dataclasses, an `EventLog` runtime-checkable
   Protocol, a `NullEventLog` noop default, and a `SqliteEventLog` impl that writes via
