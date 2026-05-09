@@ -29,6 +29,10 @@ from clanker_soul.pulse.corpus_store import (
     CorpusStore,
     PersistentRecencyLog,
 )
+from clanker_soul.pulse.dispatcher import (
+    ActionHandler,
+    PulseDispatcher,
+)
 from clanker_soul.pulse.engine import PulseEngine
 from clanker_soul.pulse.host import PulseHost
 from clanker_soul.pulse.prompt import (
@@ -66,4 +70,7 @@ __all__ = [
     # Corpus persistence (M3.3)
     "CorpusStore",
     "PersistentRecencyLog",
+    # PulseDispatcher (#53)
+    "PulseDispatcher",
+    "ActionHandler",
 ]

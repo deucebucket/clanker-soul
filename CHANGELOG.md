@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`PulseDispatcher` — generic host-agnostic action router (#53).**
+  New `clanker_soul.pulse.dispatcher.PulseDispatcher` turns any
+  :py:class:`PulseAction` into a real-world effect via constructor-
+  injected handler callables and returns an :py:class:`ActionOutcome`
+  for the soul to learn from. Routes by `action.kind` to the right
+  subsystem: `signal_sender` for `direct_message`, `tool_executor` for
+  `tool_invocation`, `browse_handler` for `browse_topic`,
+  `post_handlers[platform]` for `post_public`,
+  `reply_handlers[platform]` for `comment_reply`, `withdraw_handler`
+  for `withdraw`. Soft-fail by default — handler exceptions become
+  `delivered=False, note="dispatch_exception:..."` rather than
+  propagating up. Sync/async bridging via `_maybe_await`. Anything left
+  None falls through to a not-wired stub so a fresh integration can
+  run the engine end-to-end on day one with observable-but-no-op
+  enactment, then turn each subsystem on independently. New types
+  exported from `clanker_soul`: `PulseDispatcher`, `ActionHandler`.
+  22 hermetic unit tests.
+
 - **M3.4 — branch trees + memory anchors.** New
   `clanker_soul.pulse.corpus.branch_bias` returns a 1.5× multiplier
   when a face's `branch_keys` contains the immediately previous
