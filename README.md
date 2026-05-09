@@ -162,8 +162,7 @@ clanker-soul ui --db ./soul.db
 Read-only against the same `soul.db` your agent writes to. No coupling between agent process and dashboard process — share a file.
 
 Routes shipping incrementally:
-- `/` — agent picker + landing page (✓ scaffold)
-- `/` live panel — mood/soul radar, current trauma + nourishment, last pulse decision (#26)
+- `/` — live panel: SVG mood/soul radar, capability badge, crisis emergency badge, trauma + nourishment by pattern, last pulse decision with prompt, recent events with source attribution, full state-context block. Auto-refreshes every 2s via HTMX polling. (✓ #26)
 - `/events` — sortable, filterable event log with per-row drill-down (#27)
 - `/config` — live sliders for every `PhysicsConfig` field + `SoulState` dim, presets dropdown (#28)
 - `/simulate` — replay last N events with hypothetical config, side-by-side (#29)
