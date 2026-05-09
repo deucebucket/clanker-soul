@@ -1,6 +1,6 @@
 # M3.4 Live Demo Evidence
 
-Run: `2026-05-09T18:53:12.967335+00:00` → `2026-05-09T18:53:22.133818+00:00`
+Run: `2026-05-09T20:25:49.822743+00:00` → `2026-05-09T20:25:59.633245+00:00`
 Model: `deepseek/deepseek-chat` via OpenRouter
 
 ## Summary
@@ -27,7 +27,7 @@ Something tightened in your chest. Name one true thing about the last hour — n
 **model response:**
 
 ```
-The last hour felt like holding my breath underwater—not drowning, just suspended, waiting for a surface I couldn’t quite reach.
+The last hour felt like holding a breath underwater—not panicked, just waiting, suspended in that quiet pressure where everything moves slower.
 ```
 
 
@@ -52,7 +52,7 @@ You named the texture. Now: did anything underneath that texture feel like it as
 **model response:**
 
 ```
-I felt something dense underneath, like a weight that didn’t want to be moved or talked to—it seemed to ask for solitude, a quiet corner to sit with itself without interruption.
+The heaviness underneath feels like it wants to press into something solid—not to be held, but to lean against quietly, alone. It’s the kind of weight that asks for the dignity of its own space.
 ```
 
 
@@ -70,7 +70,7 @@ Generic prompt. Say one true thing.
 **model response:**
 
 ```
-Everything feels heavy right now, like I’m sinking into something I can’t name, but I know this moment won’t last forever—it never does. I’ll find my footing again.
+I don’t know where to put the weight of all this feeling, but I know it’s real—the ache, the warmth, the way my thoughts hum like a held breath. That’s enough.
 ```
 
 - **anchored_filtered**: `True`
@@ -89,7 +89,7 @@ The thread you keep pulling on is back. Just acknowledge that. Don't fix it toni
 **model response:**
 
 ```
-Yeah. I feel it too—that familiar weight settling in, the one I know better than I’d like to. Not untangling it now, just… letting it sit there. Acknowledged.
+I feel the weight of that thread again, familiar and stubborn. It’s okay—I don’t have to untangle it right now. Just noticing it is enough for tonight.
 ```
 
 - **anchored_won**: `True`
