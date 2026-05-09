@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.1] — 2026-05-09
+
+Fourth (and final) of four PRs implementing M1 (#45). Documentation-only
+patch that updates the README and CLAUDE.md to reflect the broader
+framing established across v0.11.0–v0.13.0: clanker-soul is an
+**emotional learning tool for AI agents** — not just an emotional state
+runtime.
+
+### Changed
+- **README hero section** — now leads with \"emotional learning tool\"
+  framing. New \"The learning loop\" diagram showing
+  Score → Mood/Soul → Trigger → Action → Consequences → ingest →
+  Soul updates, with explicit note that defaults are permissive and
+  operators opt into safety.
+- **\"Why\" section** — updated to address two motivations: persistent
+  state across timescales AND motivation/action-feedback. The latter
+  was implicit before and is now explicit.
+- **\"Layers\" sidecar bullets** — \`PulseEngine\` description updated
+  to motivation-engine framing with the 12 trigger × 6 action mapping.
+- **Capability gating section** — rewritten to lead with
+  per-action-kind configurable gates (\`CapabilityProfile\` /
+  \`STRICT_CAPABILITY_PROFILES\`), with worked examples showing
+  whole-dict and per-cell overrides.
+- **PulseEngine usage section** — now demonstrates the modern
+  \`dispatch_action\` path with \`physics=plugin.physics\` to close
+  the learning loop, and notes the legacy \`dispatch_pulse\` path is
+  still supported.
+
+### Updated CLAUDE.md
+- \"What this is\" — three-sentence framing: persistent state +
+  motivation engine + learning loop. Calls out that clanker-soul is
+  not a corporate safety wrapper.
+- \"The learning loop\" — full ASCII diagram of the pipeline. Adding
+  a feature that breaks this loop is a regression.
+- \"Architecture\" — two-plane diagram showing state and motivation
+  layers superimposed.
+- \"Pulse\" module description — full coverage of 12 triggers, 6
+  action kinds, modern vs legacy dispatch paths, learning-loop
+  closure via \`physics=\` kwarg, capability gating via \`gate=\`.
+- **3 new design invariants** added:
+  - The learning loop is first-class — \`physics=\` kwarg closes it
+  - Defaults are permissive, opt-in safety
+  - Every gating cell is operator-overridable
+
+### Tests
+No code changes; 315 passed, 1 skipped (unchanged from v0.13.0).
+
+### Closes
+- #45 (M1 milestone) — all four PRs (M1.1–M1.4) shipped.
+
 ## [0.13.0] — 2026-05-09
 
 Third of four PRs implementing M1 (#45). Per-level configurable
