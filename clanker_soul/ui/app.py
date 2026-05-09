@@ -27,7 +27,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from clanker_soul import __version__
+from clanker_soul.governor import GovernorConfig
 from clanker_soul.soul import SoulStore
+from clanker_soul.ui.live import build_live_view
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
 _STATIC_DIR = Path(__file__).parent / "static"
@@ -50,17 +52,21 @@ def create_app(
     db_path: Path | str,
     *,
     default_agent_id: str | None = None,
+    governor_config: GovernorConfig | None = None,
 ) -> FastAPI:
     """Build the dashboard FastAPI app for the soul.db at ``db_path``.
 
     ``default_agent_id`` — if multiple agents exist in the DB, pick
     this one as the default selection on the landing page. None
-    means "first agent alphabetically."""
+    means "first agent alphabetically."
+    ``governor_config`` — capability/crisis thresholds. Defaults to
+    standard."""
     db_path = Path(db_path)
     if not db_path.exists():
         raise FileNotFoundError(f"soul.db not found at {db_path}")
 
     store = SoulStore.get(db_path)
+    cfg = governor_config or GovernorConfig()
     templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 
     app = FastAPI(
@@ -73,12 +79,17 @@ def create_app(
     if _STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
-    @app.get("/", response_class=HTMLResponse)
-    async def index(request: Request, agent_id: str | None = None) -> HTMLResponse:
+    def _resolve_agent(agent_id: str | None) -> tuple[list[str], str | None]:
         agents = _list_agents(store)
         selected = agent_id or default_agent_id
         if selected is None and agents:
             selected = agents[0]
+        return agents, selected
+
+    @app.get("/", response_class=HTMLResponse)
+    async def index(request: Request, agent_id: str | None = None) -> HTMLResponse:
+        agents, selected = _resolve_agent(agent_id)
+        view = build_live_view(store, selected, governor_config=cfg) if selected else None
         return templates.TemplateResponse(
             request,
             "index.html",
@@ -87,7 +98,18 @@ def create_app(
                 "version": __version__,
                 "agents": agents,
                 "selected_agent": selected,
+                "view": view,
             },
+        )
+
+    @app.get("/snapshot", response_class=HTMLResponse)
+    async def snapshot(request: Request, agent_id: str) -> HTMLResponse:
+        """HTML fragment for HTMX polling. Returns just the live-panel
+        body so HTMX can swap it into the page without a full reload."""
+        view = build_live_view(store, agent_id, governor_config=cfg)
+        return templates.TemplateResponse(
+            request, "_live_panel.html",
+            {"selected_agent": agent_id, "view": view},
         )
 
     @app.get("/health")

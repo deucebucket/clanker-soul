@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-05-09
+
+The live panel release. Dashboard now shows the agent's actual current state:
+SVG mood/soul radar, capability badge, crisis-emergency badge, trauma + nourishment
+bars, last pulse decision (with prompt expansion), recent events with source
+attribution, and the state-context string the agent reads each turn. Auto-refreshes
+every 2s via HTMX polling.
+
+### Added
+- **`clanker_soul.ui.live`** module (#26): `build_live_view(store, agent_id)` reads
+  on-disk state and assembles a `LiveView` dataclass with everything the template
+  needs — including precomputed SVG radar geometry (`RadarPoint` / `RadarPolygon`
+  / `RadarRing`).
+- **`GET /snapshot?agent_id=X`** route — returns the live-panel HTML fragment.
+  HTMX polls this every 2s with `hx-trigger="every 2s"` and swaps it into a div.
+  Page chrome stays static; only the data-bearing region re-renders.
+- **`templates/_live_panel.html`** — Jinja2 partial rendering: governor capability
+  badge (color-coded by level), emergency badge if crisis_signal flags it,
+  mood/soul SVG radar (cyan over violet polygons), 7-dim numeric breakdown,
+  trauma/nourishment top-10-by-pattern bars, last pulse card with collapsible
+  prompt, recent events list with source + direction tags + the `why` string,
+  and the full state-context block the agent reads.
+- **`create_app(governor_config=...)`** kwarg — dashboard reads under custom
+  governor thresholds if the host wants stricter or laxer gating in the UI than
+  the agent uses.
+
+### Changed
+- `templates/index.html` rewritten: agent picker stays at top, live panel polls
+  via HTMX into a stable div. Initial server render embeds the snapshot inline
+  so there's no flash-of-empty-content while HTMX warms up.
+
 ## [0.4.0] — 2026-05-09
 
 The dashboard scaffold release. `pip install 'clanker-soul[ui]'` and
@@ -172,7 +203,8 @@ live-tunable knobs, and personality presets.
 - Host-agnostic `PulseEngine` driven by a `PulseHost` protocol.
 - Test suite covering physics, soul, score, and pulse triggers.
 
-[Unreleased]: https://github.com/deucebucket/clanker-soul/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/deucebucket/clanker-soul/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/deucebucket/clanker-soul/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/deucebucket/clanker-soul/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/deucebucket/clanker-soul/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/deucebucket/clanker-soul/compare/v0.1.0...v0.2.0

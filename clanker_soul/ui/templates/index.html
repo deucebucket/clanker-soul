@@ -1,42 +1,38 @@
 {% extends "base.html" %}
 
-{% block title %}clanker-soul · live{% endblock %}
+{% block title %}clanker-soul · {{ selected_agent or 'pick agent' }}{% endblock %}
 
 {% block content %}
 <section class="space-y-6">
-    <div>
-        <h1 class="text-2xl font-semibold text-neutral-100 mb-1">live panel</h1>
-        <p class="text-neutral-400 text-sm">mood / soul / trauma · arriving in <a href="https://github.com/deucebucket/clanker-soul/issues/26" class="underline">#26</a></p>
-    </div>
 
+    {# === AGENT PICKER === #}
     <div class="rounded border border-neutral-800 p-4 bg-neutral-950">
         <div class="text-xs text-neutral-500 uppercase tracking-wide mb-2">agent</div>
         {% if agents %}
             <form method="get" action="/" class="flex items-center gap-3">
-                <select name="agent_id" class="bg-neutral-900 border border-neutral-700 rounded px-3 py-2 text-neutral-100 font-mono">
+                <select name="agent_id" class="bg-neutral-900 border border-neutral-700 rounded px-3 py-2 text-neutral-100 font-mono"
+                        onchange="this.form.submit()">
                     {% for aid in agents %}
                     <option value="{{ aid }}" {% if aid == selected_agent %}selected{% endif %}>{{ aid }}</option>
                     {% endfor %}
                 </select>
                 <button type="submit" class="bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded px-3 py-2 text-sm">switch</button>
+                <span class="text-xs text-neutral-500 ml-auto">live · auto-refresh every 2s</span>
             </form>
         {% else %}
             <p class="text-neutral-500 text-sm">no agents found in this database. run an agent against this <code class="text-neutral-300">soul.db</code> to populate it.</p>
         {% endif %}
     </div>
 
+    {# === LIVE PANEL — polled every 2s via HTMX === #}
     {% if selected_agent %}
-    <div class="rounded border border-neutral-800 p-4 bg-neutral-950">
-        <div class="text-xs text-neutral-500 uppercase tracking-wide mb-2">selected</div>
-        <code class="text-neutral-100">{{ selected_agent }}</code>
-        <p class="text-neutral-500 text-sm mt-3">live mood/soul radar, trauma + nourishment by pattern, last pulse decision, and recent events with the <code>why</code> string will land here in <a href="https://github.com/deucebucket/clanker-soul/issues/26" class="underline">#26</a>.</p>
-    </div>
+        <div id="live-panel"
+             hx-get="/snapshot?agent_id={{ selected_agent }}"
+             hx-trigger="every 2s"
+             hx-swap="innerHTML">
+            {% include "_live_panel.html" %}
+        </div>
     {% endif %}
 
-    <div class="rounded border border-neutral-800 p-4 bg-neutral-950 text-xs text-neutral-500 space-y-1">
-        <div><span class="text-neutral-400">db:</span> <code class="text-neutral-300">{{ db_path }}</code></div>
-        <div><span class="text-neutral-400">agents:</span> {{ agents|length }}</div>
-        <div><span class="text-neutral-400">scaffold:</span> #25 — landing page only</div>
-    </div>
 </section>
 {% endblock %}

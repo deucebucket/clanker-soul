@@ -1,0 +1,203 @@
+{# Live panel content. Rendered as a fragment by /snapshot for HTMX
+   polling, and embedded inside index.html for the initial page load. #}
+{% if not view or not view.has_state %}
+    <div class="rounded border border-neutral-800 p-4 bg-neutral-950">
+        <p class="text-neutral-500 text-sm">no state yet for <code class="text-neutral-300">{{ selected_agent }}</code>. ingest some events to populate.</p>
+    </div>
+{% else %}
+
+{# === GOVERNOR BADGES === #}
+<div class="flex flex-wrap items-center gap-3 mb-6">
+    {% set lvl = view.capability_level %}
+    <span class="inline-flex items-center gap-2 rounded px-3 py-1 text-xs font-mono
+        {% if lvl == 0 %}bg-emerald-950 text-emerald-300 border border-emerald-900
+        {% elif lvl == 1 %}bg-amber-950 text-amber-300 border border-amber-900
+        {% elif lvl == 2 %}bg-orange-950 text-orange-300 border border-orange-900
+        {% elif lvl == 3 %}bg-red-950 text-red-300 border border-red-900
+        {% else %}bg-rose-950 text-rose-200 border border-rose-800{% endif %}">
+        capability: <span class="font-semibold">{{ lvl.name.lower() }}</span>
+    </span>
+    {% if view.crisis.is_emergency %}
+        <span class="inline-flex items-center gap-2 rounded px-3 py-1 text-xs font-mono bg-rose-950 text-rose-200 border border-rose-800">
+            ⚠ emergency · {{ "%.0f"|format(view.crisis.confidence * 100) }}% conf
+        </span>
+    {% endif %}
+    <span class="text-xs text-neutral-500 font-mono">|mood-soul| =
+        {% if view.soul_distance is none %}—{% else %}{{ "%.1f"|format(view.soul_distance) }}{% endif %}
+    </span>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+
+    {# === RADAR === #}
+    <div class="rounded border border-neutral-800 p-4 bg-neutral-950">
+        <div class="text-xs text-neutral-500 uppercase tracking-wide mb-3">vadugwi · mood (cyan) over soul (violet)</div>
+        <svg viewBox="0 0 {{ view.radar_size }} {{ view.radar_size }}" class="w-full h-auto" xmlns="http://www.w3.org/2000/svg">
+            {# rings #}
+            {% for ring in view.radar_rings %}
+                <circle cx="{{ view.radar_center }}" cy="{{ view.radar_center }}"
+                        r="{{ ring.radius }}"
+                        fill="none" stroke="#262626" stroke-width="1"/>
+            {% endfor %}
+            {# axes #}
+            {% for axis in view.radar_axes %}
+                <line x1="{{ view.radar_center }}" y1="{{ view.radar_center }}"
+                      x2="{{ axis.x }}" y2="{{ axis.y }}"
+                      stroke="#262626" stroke-width="1"/>
+                <text x="{{ axis.x }}" y="{{ axis.y }}"
+                      dx="{% if axis.x > view.radar_center %}6{% elif axis.x < view.radar_center %}-6{% else %}0{% endif %}"
+                      dy="{% if axis.y > view.radar_center %}14{% elif axis.y < view.radar_center %}-6{% else %}4{% endif %}"
+                      text-anchor="{% if axis.x > view.radar_center %}start{% elif axis.x < view.radar_center %}end{% else %}middle{% endif %}"
+                      class="text-xs fill-neutral-500 font-mono">{{ axis.label }}</text>
+            {% endfor %}
+            {# soul polygon (violet) #}
+            <polygon points="{{ view.radar_soul.points_attr }}"
+                     fill="rgb(139 92 246 / 0.15)" stroke="rgb(139 92 246)" stroke-width="1.5"/>
+            {# mood polygon (cyan) — only if mood exists #}
+            {% if view.radar_mood %}
+                <polygon points="{{ view.radar_mood.points_attr }}"
+                         fill="rgb(34 211 238 / 0.20)" stroke="rgb(34 211 238)" stroke-width="1.5"/>
+            {% endif %}
+        </svg>
+    </div>
+
+    {# === NUMBERS === #}
+    <div class="rounded border border-neutral-800 p-4 bg-neutral-950 space-y-4">
+        <div>
+            <div class="text-xs text-neutral-500 uppercase tracking-wide mb-2">mood</div>
+            {% if view.mood %}
+                <div class="grid grid-cols-7 gap-1 text-center font-mono text-xs">
+                    {% for label in ["V","A","D","U","G","W","I"] %}
+                        {% set val = view.mood[loop.index0] %}
+                        <div>
+                            <div class="text-neutral-500">{{ label }}</div>
+                            <div class="text-cyan-300 text-base">{{ val }}</div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="text-neutral-500 text-sm">no mood yet — agent hasn't ingested any events.</p>
+            {% endif %}
+        </div>
+        <div>
+            <div class="text-xs text-neutral-500 uppercase tracking-wide mb-2">soul</div>
+            <div class="grid grid-cols-7 gap-1 text-center font-mono text-xs">
+                {% for label in ["v","a","d","u","g","w","i"] %}
+                    <div>
+                        <div class="text-neutral-500">{{ label|upper }}</div>
+                        <div class="text-violet-300 text-base">{{ view.soul[label] }}</div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3 text-xs font-mono pt-2 border-t border-neutral-800">
+            <div>
+                <span class="text-neutral-500">trauma load:</span>
+                <span class="text-rose-300">{{ "%.1f"|format(view.trauma_load) }}</span>
+            </div>
+            <div>
+                <span class="text-neutral-500">nourishment:</span>
+                <span class="text-emerald-300">{{ "%.1f"|format(view.nourishment_load) }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# === RESERVOIRS BY PATTERN === #}
+{% if view.trauma_by_pattern or view.nourishment_by_pattern %}
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+    <div class="rounded border border-neutral-800 p-4 bg-neutral-950">
+        <div class="text-xs text-rose-400 uppercase tracking-wide mb-3">trauma by pattern</div>
+        {% if view.trauma_by_pattern %}
+            <ul class="space-y-1 text-xs font-mono">
+            {% for pat, weight in view.trauma_by_pattern %}
+                <li class="flex items-center gap-2">
+                    <span class="text-neutral-300 min-w-0 truncate flex-1">{{ pat }}</span>
+                    <span class="text-rose-300 tabular-nums">{{ "%.1f"|format(weight) }}</span>
+                </li>
+            {% endfor %}
+            </ul>
+        {% else %}
+            <p class="text-neutral-600 text-xs">none decayed</p>
+        {% endif %}
+    </div>
+    <div class="rounded border border-neutral-800 p-4 bg-neutral-950">
+        <div class="text-xs text-emerald-400 uppercase tracking-wide mb-3">nourishment by pattern</div>
+        {% if view.nourishment_by_pattern %}
+            <ul class="space-y-1 text-xs font-mono">
+            {% for pat, weight in view.nourishment_by_pattern %}
+                <li class="flex items-center gap-2">
+                    <span class="text-neutral-300 min-w-0 truncate flex-1">{{ pat }}</span>
+                    <span class="text-emerald-300 tabular-nums">{{ "%.1f"|format(weight) }}</span>
+                </li>
+            {% endfor %}
+            </ul>
+        {% else %}
+            <p class="text-neutral-600 text-xs">none decayed</p>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{# === LAST PULSE === #}
+{% if view.last_pulse %}
+<div class="rounded border border-neutral-800 p-4 bg-neutral-950 mb-6">
+    <div class="text-xs text-neutral-500 uppercase tracking-wide mb-2">last pulse decision</div>
+    <div class="flex items-center gap-3 text-sm font-mono">
+        {% if view.last_pulse.dispatched %}
+            <span class="rounded px-2 py-0.5 text-xs bg-cyan-950 text-cyan-300 border border-cyan-900">{{ view.last_pulse.trigger_kind }}</span>
+            <span class="text-emerald-400 text-xs">DISPATCHED</span>
+        {% elif view.last_pulse.suppressed_reason %}
+            {% if view.last_pulse.trigger_kind %}
+                <span class="rounded px-2 py-0.5 text-xs bg-neutral-900 text-neutral-400 border border-neutral-800">{{ view.last_pulse.trigger_kind }}</span>
+            {% endif %}
+            <span class="text-amber-400 text-xs">suppressed: {{ view.last_pulse.suppressed_reason }}</span>
+        {% endif %}
+    </div>
+    {% if view.last_pulse.prompt %}
+        <details class="mt-2 text-xs text-neutral-400">
+            <summary class="cursor-pointer hover:text-neutral-200">prompt</summary>
+            <pre class="mt-2 whitespace-pre-wrap text-neutral-300 bg-neutral-900 p-2 rounded">{{ view.last_pulse.prompt }}</pre>
+        </details>
+    {% endif %}
+</div>
+{% endif %}
+
+{# === RECENT EVENTS === #}
+{% if view.recent_events %}
+<div class="rounded border border-neutral-800 p-4 bg-neutral-950 mb-6">
+    <div class="text-xs text-neutral-500 uppercase tracking-wide mb-3">recent events</div>
+    <ul class="space-y-2 text-xs font-mono">
+        {% for ev in view.recent_events %}
+            <li class="border-l-2 pl-3 py-1
+                {% if ev.classification == 'negative' %}border-rose-700
+                {% elif ev.classification == 'positive' %}border-emerald-700
+                {% else %}border-neutral-700{% endif %}">
+                <div class="flex items-center gap-2 mb-1">
+                    {% if ev.breached %}
+                        <span class="rounded px-1.5 py-0.5 text-[10px] bg-rose-950 text-rose-300 border border-rose-900">BREACH</span>
+                    {% endif %}
+                    <span class="text-neutral-400">w={{ "%.2f"|format(ev.weight_raw) }}</span>
+                    {% if ev.raw.source %}
+                        <span class="text-neutral-500">· {{ ev.raw.source }}</span>
+                    {% endif %}
+                    {% if ev.raw.direction %}
+                        <span class="text-neutral-600 text-[10px] uppercase">{{ ev.raw.direction }}</span>
+                    {% endif %}
+                </div>
+                <div class="text-neutral-300">{{ ev.why }}</div>
+            </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+{# === STATE CONTEXT (what the agent reads) === #}
+{% if view.state_context %}
+<div class="rounded border border-neutral-800 p-4 bg-neutral-950 mb-6">
+    <div class="text-xs text-neutral-500 uppercase tracking-wide mb-2">state context (injected into agent prompt)</div>
+    <pre class="whitespace-pre-wrap text-xs text-neutral-300 font-mono">{{ view.state_context }}</pre>
+</div>
+{% endif %}
+
+{% endif %}
