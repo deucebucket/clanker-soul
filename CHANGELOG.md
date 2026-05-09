@@ -7,6 +7,85 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] — 2026-05-09
+
+The autonomous-outreach release. Hermes plugin now wires the
+\`PulseEngine\` motivation engine landed in M1 to the agent's actual
+channel layer, so the agent can proactively reach out when bored,
+elated, in distress, or any of the other 12 trigger states. Closes
+**#44** (M2).
+
+### Added
+
+- **\`integrations/hermes/pulse_runner.py\`** — \`PulseRunner\` runs a
+  \`PulseEngine\` in a daemon thread with its own asyncio event loop.
+  Bridges hermes's synchronous \`MemoryProvider\` lifecycle with the
+  engine's asyncio-native design. Lifecycle is idempotent.
+- **\`PulseRunner.note_outbound()\`** — thread-safe forward to the
+  engine's \`note_outbound\` so cooldown covers reactive replies.
+- **Built-in \`_PulseHostAdapter\`** — implements the \`PulseHost\`
+  Protocol by proxying to a SoulPlugin. Operator-supplied dispatcher
+  receives \`PulseAction\` and returns \`ActionOutcome\` (sync or
+  async); engine auto-ingests \`outcome.consequences\` back into the
+  soul. Closes the learning loop.
+- **\`CLANKER_SOUL_PULSE_OUTBOUND\`** env var — activates the runner
+  when set to \`1\` / \`true\` / \`yes\` / \`on\`. Off by default;
+  preserves v0.13.1 passive behavior for users who haven't opted in.
+- **\`CLANKER_SOUL_PULSE_DISPATCH\`** env var —
+  \`module.path:callable\` pointer to the dispatcher. Resolved lazily
+  on runner init. Bad values warn-and-fall-back to a no-op dispatcher
+  rather than crashing the agent.
+- **\`provider.set_pulse_dispatcher(callback)\`** — programmatic
+  registration alternative for deployments that wrap the plugin
+  loader.
+- **\`sync_turn\` now calls \`runner.note_outbound\`** when the
+  pulse-outbound path is active. Reactive replies count toward the
+  pulse-cooldown timer, preventing a pulse from firing seconds after
+  a normal reply ships.
+
+### Changed
+- \`integrations/hermes/plugin.yaml\` — version bumped, hooks list now
+  includes \`sync_turn\`, description reframed as \"emotional learning
+  tool\".
+- \`integrations/hermes/README.md\` — new \"Pulse outbound\" section
+  with worked dispatcher example showing the consequences-as-learning
+  pattern.
+
+### Backwards compatibility
+- The pulse-outbound path is opt-in via env var or programmatic
+  setter. Without either, runner never starts; provider behaves
+  identically to v0.13.1.
+- Existing dispatcher-callback signature \`(PulseAction) ->
+  ActionOutcome\` matches the M1 protocol; nothing extra needed.
+- Existing 26 hermes integration tests continue to pass alongside
+  24 new outbound tests.
+
+### Tests
+24 new tests in \`tests/test_hermes_pulse_outbound.py\`. Coverage:
+- Default-disabled (no thread, no env var)
+- Env-var truthy/falsy values (5 truthy + 5 falsy parameterized)
+- Programmatic activation via \`set_pulse_dispatcher\`
+- \`CLANKER_SOUL_PULSE_DISPATCH\` resolution (good / unset / bad
+  format / unimportable)
+- Runner lifecycle (start/stop, idempotent start, safe-stop-without-
+  start, default no-op dispatcher)
+- End-to-end: synthetic distress state → engine ticks → dispatcher
+  invoked with correct \`PulseAction\` (kind, trigger, target)
+- End-to-end learning: dispatcher returns \`ActionOutcome\` with
+  consequences → engine auto-ingests → physics' \`last_tick.patterns\`
+  shows the consequence pattern (closes the loop, asserts the
+  outcome)
+- \`sync_turn\` advances the engine's \`_last_outbound_ts\` (cooldown
+  works for reactive replies)
+
+Full suite: 339 passed, 1 skipped (was 315 + 24 new).
+
+### Bug found and fixed during M2
+- \`PulseRunner.stop\` was awaiting \`engine.stop()\` but failing to
+  call \`loop.stop()\`, leaving \`run_forever()\` running and
+  blocking thread join until the 5s timeout. Tests went from 60s
+  to 0.13s after the fix.
+
 ## [0.13.1] — 2026-05-09
 
 Fourth (and final) of four PRs implementing M1 (#45). Documentation-only

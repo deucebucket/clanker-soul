@@ -36,9 +36,11 @@ except ImportError:  # pragma: no cover — only hits in test/dev tooling
 try:
     # When loaded as a hermes plugin, we're a package and relative imports work.
     from .scorer import KeywordScorer
+    from .pulse_runner import PulseRunner
 except ImportError:
     # When the dir is on sys.path directly (test rigs), fall back.
     from scorer import KeywordScorer  # type: ignore[no-redef]
+    from pulse_runner import PulseRunner  # type: ignore[no-redef]
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +59,10 @@ class ClankerSoulMemoryProvider(MemoryProvider):  # type: ignore[misc,valid-type
         self._db_path: Path = Path(_DEFAULT_DB_PATH).expanduser()
         self._enabled = True
         self._turn_count = 0
+        # Pulse outbound — optional. Off by default.
+        self._pulse_runner: Optional[PulseRunner] = None
+        self._pulse_dispatcher: Optional[Any] = None  # set programmatically
+        self._pulse_target_factory: Optional[Any] = None
 
     # ---- identity / availability --------------------------------------------
 
@@ -97,8 +103,71 @@ class ClankerSoulMemoryProvider(MemoryProvider):  # type: ignore[misc,valid-type
             logger.exception("clanker-soul: failed to open SoulPlugin — disabling provider")
             self._plugin = None
             self._enabled = False
+            return
+
+        # Pulse-outbound: optionally spin up the motivation engine in a
+        # background thread. Off by default. Enabled via env var or by
+        # the operator calling set_pulse_dispatcher() before initialize.
+        if self._should_run_pulse_outbound():
+            try:
+                self._pulse_runner = PulseRunner(
+                    plugin=self._plugin,
+                    dispatcher=self._pulse_dispatcher,
+                    target_factory=self._pulse_target_factory,
+                )
+                self._pulse_runner.start()
+                logger.info(
+                    "clanker-soul: pulse-outbound runner started "
+                    "(dispatcher=%s)",
+                    "configured" if self._pulse_dispatcher else "from-env-or-noop",
+                )
+            except Exception:
+                logger.exception(
+                    "clanker-soul: pulse-outbound runner failed to start — "
+                    "passive provider behavior preserved"
+                )
+                self._pulse_runner = None
+
+    def _should_run_pulse_outbound(self) -> bool:
+        """Pulse outbound is opt-in. Activated when:
+        - the operator called set_pulse_dispatcher() before initialize,
+          OR
+        - the env var CLANKER_SOUL_PULSE_OUTBOUND is set to a truthy value
+          ('1', 'true', 'yes', case-insensitive)
+        """
+        if self._pulse_dispatcher is not None:
+            return True
+        flag = os.environ.get("CLANKER_SOUL_PULSE_OUTBOUND", "").strip().lower()
+        return flag in {"1", "true", "yes", "on"}
+
+    def set_pulse_dispatcher(
+        self, dispatcher: Any, *,
+        target_factory: Optional[Any] = None,
+    ) -> None:
+        """Programmatically register the pulse dispatcher BEFORE the
+        provider's initialize() runs. ``dispatcher`` receives a
+        :py:class:`PulseAction` and returns an :py:class:`ActionOutcome`
+        (sync or async). ``target_factory`` is an optional callable
+        returning a :py:class:`PulseTarget` for the engine to use as
+        the most-recent recipient — useful for actions that need a
+        target (DM, comment_reply).
+
+        Hosts that prefer config-file activation set
+        ``CLANKER_SOUL_PULSE_DISPATCH=mymodule:func`` in the environment
+        instead and skip this method.
+        """
+        self._pulse_dispatcher = dispatcher
+        self._pulse_target_factory = target_factory
 
     def shutdown(self) -> None:
+        # Stop the pulse runner first — it depends on the plugin's
+        # SoulPlugin still being open.
+        if self._pulse_runner is not None:
+            try:
+                self._pulse_runner.stop()
+            except Exception:
+                logger.exception("clanker-soul: pulse runner stop error")
+            self._pulse_runner = None
         if self._plugin is not None:
             try:
                 self._plugin.close()  # auto-saves
@@ -153,7 +222,13 @@ class ClankerSoulMemoryProvider(MemoryProvider):  # type: ignore[misc,valid-type
         # NOT score the assistant's own response — letting the agent's
         # output drive its own mood is a recursive feedback loop best
         # left to the operator to opt into.
-        pass
+        #
+        # We DO note the outbound on the pulse runner so the cooldown
+        # timer covers reactive replies, not just pulses. Without this,
+        # the engine would happily fire a pulse seconds after a reply
+        # ships, doubling up on the user.
+        if self._pulse_runner is not None:
+            self._pulse_runner.note_outbound()
 
     # ---- tool exposure ------------------------------------------------------
 
