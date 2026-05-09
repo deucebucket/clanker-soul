@@ -21,9 +21,16 @@ from clanker_soul.pulse.corpus import (
     VadugwiPredicate,
     default_tags_from_metrics,
 )
+from clanker_soul.pulse.corpus_defaults import (
+    DEFAULT_FACES,
+    build_default_corpus,
+)
 from clanker_soul.pulse.engine import PulseEngine
 from clanker_soul.pulse.host import PulseHost
-from clanker_soul.pulse.prompt import compose_self_prompt
+from clanker_soul.pulse.prompt import (
+    compose_self_prompt,
+    compose_self_prompt_with_face,
+)
 from clanker_soul.pulse.triggers import (
     ACTION_KINDS,
     ActionOutcome,
@@ -42,10 +49,14 @@ __all__ = [
     "ActionOutcome",
     "ACTION_KINDS",
     "compose_self_prompt",
+    "compose_self_prompt_with_face",
     # Corpus / sampler (M3.1)
     "PromptCorpus",
     "PromptFace",
     "VadugwiPredicate",
     "RecencyLog",
     "default_tags_from_metrics",
+    # Default baseline corpus (M3.2)
+    "DEFAULT_FACES",
+    "build_default_corpus",
 ]

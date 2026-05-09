@@ -67,6 +67,7 @@ from clanker_soul.physics import (
 from clanker_soul.pulse import (
     ACTION_KINDS,
     ActionOutcome,
+    DEFAULT_FACES,
     PromptCorpus,
     PromptFace,
     PulseAction,
@@ -77,6 +78,7 @@ from clanker_soul.pulse import (
     RecencyLog,
     Trigger,
     VadugwiPredicate,
+    build_default_corpus,
     default_tags_from_metrics,
 )
 from clanker_soul.score import Score
@@ -127,6 +129,9 @@ __all__ = [
     "VadugwiPredicate",
     "RecencyLog",
     "default_tags_from_metrics",
+    # Default baseline corpus (M3.2)
+    "DEFAULT_FACES",
+    "build_default_corpus",
     # Event log
     "EventLog",
     "IngestRecord",

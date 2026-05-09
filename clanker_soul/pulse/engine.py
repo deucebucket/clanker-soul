@@ -24,8 +24,9 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from clanker_soul.pulse.config import PulseConfig
+from clanker_soul.pulse.corpus import PromptCorpus, RecencyLog
 from clanker_soul.pulse.host import PulseHost
-from clanker_soul.pulse.prompt import compose_self_prompt
+from clanker_soul.pulse.prompt import compose_self_prompt_with_face
 from clanker_soul.pulse.triggers import (
     ActionOutcome,
     PulseAction,
@@ -97,6 +98,7 @@ class PulseEngine:
         agent_id: str | None = None,
         physics: "EmotionalPhysics | None" = None,
         gate: "CapabilityGate | None" = None,
+        corpus: PromptCorpus | None = None,
     ) -> None:
         if event_log is not None and not agent_id:
             raise ValueError(
@@ -121,6 +123,13 @@ class PulseEngine:
         # through gate.evaluate before dispatch. Default permissive
         # gates accept everything. See CapabilityGate / GovernorConfig.
         self._gate = gate
+        # Optional prompt corpus (M3.2). When provided, _fire_pulse
+        # samples a PromptFace via compose_self_prompt_with_face and
+        # records the firing in the recency log. When None, falls back
+        # to the legacy deterministic prompt — every pre-M3.2 host keeps
+        # working unchanged.
+        self._corpus = corpus
+        self._recency: RecencyLog = RecencyLog()
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -443,6 +452,52 @@ class PulseEngine:
             logger.exception("peer_distress_signals failed — treating as empty")
             return []
 
+    def _situation_tags_for(self, trigger: Trigger) -> frozenset[str]:
+        """Resolve the situation_tags for a trigger.
+
+        Strict-host: when the host implements an optional
+        ``situation_tags(trigger) -> Iterable[str]`` hook (runtime-detected
+        via ``getattr`` — no Protocol method, so existing PulseHost
+        implementations are unaffected) the engine uses what it returns.
+
+        Otherwise — and only when a corpus is configured, since legacy
+        prompts ignore tags — the engine falls back to
+        :py:func:`default_tags_from_metrics` so the corpus has *something*
+        to filter on. Hosts that prefer empty tags can implement the hook
+        and return ``frozenset()``.
+        """
+        hook = getattr(self._host, "situation_tags", None)
+        if callable(hook):
+            try:
+                tags = hook(trigger)
+                if tags is None:
+                    return frozenset()
+                return frozenset(tags)
+            except Exception:
+                logger.exception(
+                    "situation_tags(%s) failed — falling back to empty",
+                    trigger.kind,
+                )
+                return frozenset()
+        if self._corpus is None:
+            return frozenset()
+        # Lazy import to keep cyclic-import surface small. The helper
+        # lives in the corpus module and is intentionally cheap.
+        from clanker_soul.pulse.corpus import default_tags_from_metrics
+        return default_tags_from_metrics(trigger)
+
+    def _memory_topics_callback(self):
+        """Optional ``memory_topics_present(topic) -> bool`` host hook.
+
+        M3.4 wires anchor-aware faces; M3.2 just plumbs the callable so
+        a host that's already implemented it (e.g. a CARL/hermes
+        memory-aware build) starts working without further changes.
+        """
+        hook = getattr(self._host, "memory_topics_present", None)
+        if callable(hook):
+            return hook
+        return None
+
     # ------------------------------------------------------------------
     # Execution
     # ------------------------------------------------------------------
@@ -481,12 +536,23 @@ class PulseEngine:
             )
             return False, None, False
 
-        prompt = compose_self_prompt(trigger)
+        situation_tags = self._situation_tags_for(trigger)
+        memory_topics = self._memory_topics_callback()
+        now_ts = datetime.now(timezone.utc).timestamp()
+        prompt, face = compose_self_prompt_with_face(
+            trigger,
+            corpus=self._corpus,
+            situation_tags=situation_tags,
+            memory_topics_present=memory_topics,
+            recency=self._recency,
+            now=now_ts,
+        )
         action = PulseAction(
             kind=action_kind,
             trigger=trigger,
             target=target,
             prompt=prompt,
+            extra={"face_id": face.id} if face is not None else {},
         )
 
         # Capability gate. When a gate is configured, every action
@@ -509,7 +575,17 @@ class PulseEngine:
         if outcome.delivered:
             self._last_pulse_ts = datetime.now(timezone.utc).timestamp()
             self._last_outbound_ts = self._last_pulse_ts
-            logger.info("Pulse fired (%s)", trigger.kind)
+            # Record the corpus face firing for recency tracking. We
+            # only note delivered fires — suppressed/undelivered
+            # attempts shouldn't bump cooldowns or the agent gets
+            # silenced by failed attempts.
+            if face is not None:
+                self._recency.note_fired(face.id, self._last_pulse_ts)
+            logger.info(
+                "Pulse fired (%s)%s",
+                trigger.kind,
+                f" face={face.id}" if face is not None else "",
+            )
         return outcome.delivered, prompt, True
 
     async def _dispatch_action_via_host(
