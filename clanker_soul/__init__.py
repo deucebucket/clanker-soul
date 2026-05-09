@@ -29,8 +29,13 @@ from clanker_soul.eventlog import (
     SqliteEventLog,
 )
 from clanker_soul.governor import (
+    DEFAULT_CAPABILITY_PROFILES,
+    STRICT_CAPABILITY_PROFILES,
+    CapabilityGate,
     CapabilityLevel,
+    CapabilityProfile,
     CrisisDiagnosis,
+    GateDecision,
     GovernorConfig,
 )
 from clanker_soul.overrides import (
@@ -79,7 +84,7 @@ from clanker_soul.soul import (
     TraumaReservoir,
 )
 
-__version__ = "0.12.0"
+__version__ = "0.13.0"
 
 __all__ = [
     # Conversational layer
@@ -132,6 +137,11 @@ __all__ = [
     "SoulPlugin",
     # Safety governor
     "CapabilityLevel",
+    "CapabilityProfile",
+    "CapabilityGate",
+    "GateDecision",
+    "DEFAULT_CAPABILITY_PROFILES",
+    "STRICT_CAPABILITY_PROFILES",
     "CrisisDiagnosis",
     "GovernorConfig",
     # Meta

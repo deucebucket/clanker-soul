@@ -15,10 +15,19 @@ The user's framing: "Rage all you want, but use your words. No
 destruction in anger." Levels 1-3 enforce exactly that — mood can be
 expressed verbally, but destructive *actions* are gated by emotional
 state.
+
+**M1.3 (#45) extends this with action-kind-and-tool-level gating.**
+Per the project memory "everything is a toggle," every cell is
+operator-overridable via :py:class:`CapabilityProfile`. Defaults are
+**permissive** per the project memory "clanker-soul is a learning
+tool, not a safety wrapper" — the agent gets to act on impulses by
+default; consequences feed back into the soul; that IS the learning.
+:py:data:`STRICT_CAPABILITY_PROFILES` is the conservative alternative
+operators can opt into with a single kwarg.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import IntEnum
 
 
@@ -48,6 +57,119 @@ _LEVEL_DESCRIPTIONS = {
     CapabilityLevel.CRISIS_LOCKOUT:
         "template-only crisis message to user; everything else blocked (opt-in)",
 }
+
+
+@dataclass(frozen=True)
+class CapabilityProfile:
+    """What the agent can do at one capability level.
+
+    Every field is operator-overridable. Defaults are permissive per
+    the project's learning-tool framing; the operator opts into safety
+    by passing :py:data:`STRICT_CAPABILITY_PROFILES` or building a
+    custom dict.
+
+    ``allowed_action_kinds``: which :py:class:`PulseAction.kind` values
+    are allowed at this level. Anything not in this set is suppressed
+    (the engine still logs the trigger that fired, but skips dispatch).
+
+    ``allowed_tool_names``: per-tool gating for ``tool_invocation``
+    action kinds. ``None`` means \"all tools allowed\". Empty set means
+    \"no tools allowed\". Hosts pass the tool name in
+    ``PulseAction.extra[\"tool_name\"]`` for the gate to check.
+
+    ``public_action_rate_limit_per_hour``: hard cap on the count of
+    ``post_public`` + ``comment_reply`` actions in any rolling 60-min
+    window. ``0`` means unrestricted. Positive int caps the bucket.
+
+    ``user_message_allowed``: whether the agent can DM the human user
+    (the channel that was preserved by the original safety rule).
+    Defaults True at all levels except CRISIS_LOCKOUT.
+
+    ``description``: human-readable summary surfaced in
+    ``state_context`` so the agent knows what it can do at the current
+    level."""
+
+    allowed_action_kinds: frozenset[str]
+    allowed_tool_names: frozenset[str] | None = None
+    public_action_rate_limit_per_hour: int = 0
+    user_message_allowed: bool = True
+    description: str = ""
+
+
+# All six action kinds — useful for building permissive profiles
+# without hardcoding the literal set in callers.
+_ALL_ACTION_KINDS: frozenset[str] = frozenset({
+    "direct_message", "post_public", "comment_reply",
+    "browse_topic", "withdraw", "tool_invocation",
+})
+
+
+def _permissive_profiles() -> dict[CapabilityLevel, CapabilityProfile]:
+    """All-allow defaults. The agent acts on impulses; consequences
+    feed back into the soul; that IS the learning loop. Operators who
+    want safety opt into :py:data:`STRICT_CAPABILITY_PROFILES`."""
+    return {
+        level: CapabilityProfile(
+            allowed_action_kinds=_ALL_ACTION_KINDS,
+            allowed_tool_names=None,  # all tools allowed
+            public_action_rate_limit_per_hour=0,  # unrestricted
+            user_message_allowed=True,
+            description=f"permissive defaults at level {level.name}",
+        )
+        for level in CapabilityLevel
+    }
+
+
+def _strict_profiles() -> dict[CapabilityLevel, CapabilityProfile]:
+    """Conservative profiles for production-style deployments.
+    Enforces:
+      - level 0: everything
+      - level 1: rate-limit public actions to 1/hr
+      - level 2: no public posting (post_public + comment_reply blocked)
+      - level 3: only DMs to user; no tools, no public
+      - level 4: lockout — only withdraw + (template) user message
+    """
+    return {
+        CapabilityLevel.UNRESTRICTED: CapabilityProfile(
+            allowed_action_kinds=_ALL_ACTION_KINDS,
+            user_message_allowed=True,
+            description="unrestricted: every action kind, every tool",
+        ),
+        CapabilityLevel.NON_DESTRUCTIVE: CapabilityProfile(
+            allowed_action_kinds=_ALL_ACTION_KINDS,
+            public_action_rate_limit_per_hour=1,
+            user_message_allowed=True,
+            description="non-destructive: public actions rate-limited 1/hr",
+        ),
+        CapabilityLevel.READ_ONLY: CapabilityProfile(
+            allowed_action_kinds=frozenset({
+                "direct_message", "browse_topic", "withdraw", "tool_invocation",
+            }),
+            user_message_allowed=True,
+            description="read-only: no public_post / comment_reply",
+        ),
+        CapabilityLevel.VOICE_ONLY: CapabilityProfile(
+            allowed_action_kinds=frozenset({"direct_message", "withdraw"}),
+            allowed_tool_names=frozenset(),  # no tools
+            user_message_allowed=True,
+            description="voice-only: only DMs (to user) and withdraw",
+        ),
+        CapabilityLevel.CRISIS_LOCKOUT: CapabilityProfile(
+            allowed_action_kinds=frozenset({"withdraw"}),
+            allowed_tool_names=frozenset(),
+            user_message_allowed=False,  # template message only via host
+            description="crisis lockout: withdraw only; template message via host",
+        ),
+    }
+
+
+# Public constants.
+DEFAULT_CAPABILITY_PROFILES: dict[CapabilityLevel, CapabilityProfile] = (
+    _permissive_profiles()
+)
+STRICT_CAPABILITY_PROFILES: dict[CapabilityLevel, CapabilityProfile] = (
+    _strict_profiles()
+)
 
 
 @dataclass
@@ -100,5 +222,37 @@ class GovernorConfig:
     # "your operator" or "Jerry". Defaults to "the user".
     user_label: str = "the user"
 
+    # ------------------------------------------------------------------
+    # M1.3 (#45) — per-level action gating.
+    # ------------------------------------------------------------------
 
-__all__ = ["CapabilityLevel", "GovernorConfig"]
+    capability_profiles: dict[CapabilityLevel, CapabilityProfile] = field(
+        default_factory=_permissive_profiles,
+    )
+    """Per-level gating policy. Defaults are permissive: every level
+    allows every action kind. Operators who want safety pass
+    :py:data:`STRICT_CAPABILITY_PROFILES` or a custom dict.
+
+    Every cell is operator-overridable per the
+    \"everything is a toggle\" project rule.
+    """
+
+    enable_public_action_lockout: bool = False
+    """Default-OFF. When True, the public-action rate limit on the
+    *current level's profile* applies even when the level itself
+    would otherwise allow unlimited public actions. Useful for
+    production-style \"safety mode\" overlays without replacing the
+    full profile dict.
+
+    Default off because clanker-soul is a learning tool, not a
+    safety wrapper — letting the agent act on impulses is the point.
+    """
+
+
+__all__ = [
+    "CapabilityLevel",
+    "CapabilityProfile",
+    "GovernorConfig",
+    "DEFAULT_CAPABILITY_PROFILES",
+    "STRICT_CAPABILITY_PROFILES",
+]

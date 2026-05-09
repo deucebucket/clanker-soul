@@ -35,6 +35,7 @@ from clanker_soul.pulse.triggers import (
 
 if TYPE_CHECKING:
     from clanker_soul.eventlog import EventLog
+    from clanker_soul.governor import CapabilityGate
     from clanker_soul.physics import EmotionalPhysics
 
 logger = logging.getLogger(__name__)
@@ -95,6 +96,7 @@ class PulseEngine:
         event_log: "EventLog | None" = None,
         agent_id: str | None = None,
         physics: "EmotionalPhysics | None" = None,
+        gate: "CapabilityGate | None" = None,
     ) -> None:
         if event_log is not None and not agent_id:
             raise ValueError(
@@ -115,6 +117,10 @@ class PulseEngine:
         # dropped — the engine still works but the loop is open.
         self._physics = physics
         self._consequences_warned: bool = False
+        # Optional capability gate. When provided, every action passes
+        # through gate.evaluate before dispatch. Default permissive
+        # gates accept everything. See CapabilityGate / GovernorConfig.
+        self._gate = gate
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -483,6 +489,17 @@ class PulseEngine:
             prompt=prompt,
         )
 
+        # Capability gate. When a gate is configured, every action
+        # passes through evaluate() before dispatch. Gated actions
+        # are logged but not delivered. The default gate (no
+        # GovernorConfig override) is permissive.
+        if not self._action_permitted(action):
+            logger.info(
+                "Pulse trigger=%s action=%s suppressed by capability gate",
+                trigger.kind, action.kind,
+            )
+            return False, prompt, True
+
         outcome = await self._dispatch_action_via_host(action)
         if outcome is None:
             return False, prompt, True
@@ -552,6 +569,41 @@ class PulseEngine:
         except Exception:
             logger.exception("dispatch_pulse failed")
             return None
+
+    def _action_permitted(self, action: PulseAction) -> bool:
+        """Run the action through the configured capability gate, if
+        any. Returns True when no gate is set (default permissive)."""
+        gate = self._gate
+        if gate is None:
+            return True
+        try:
+            level = self._current_capability_level()
+        except Exception:
+            logger.exception("capability assessment failed — allowing action")
+            return True
+        decision = gate.evaluate(
+            action.kind, level,
+            tool_name=action.extra.get("tool_name") if action.extra else None,
+            is_user_message=bool(action.extra.get("is_user_message", False))
+            if action.extra else False,
+        )
+        return decision.permitted
+
+    def _current_capability_level(self):
+        """Compute the current capability level from the host's
+        snapshot + the gate's governor config. Lazy import to avoid
+        circular dependency. Falls back to UNRESTRICTED if anything
+        misses (defensive — better to allow than crash gating)."""
+        from clanker_soul.governor import CapabilityLevel
+        if self._gate is None:
+            return CapabilityLevel.UNRESTRICTED
+        try:
+            from clanker_soul.governor import assess_capability
+            snap = self._host.snapshot() or {}
+            return assess_capability(snap, self._gate.config)
+        except Exception:
+            logger.exception("snapshot/assess_capability failed in gate path")
+            return CapabilityLevel.UNRESTRICTED
 
     def _absorb_consequences(self, outcome: ActionOutcome) -> None:
         """Feed :py:attr:`ActionOutcome.consequences` back into physics.
