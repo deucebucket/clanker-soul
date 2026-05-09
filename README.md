@@ -31,25 +31,95 @@ pip install -e ".[dev]"
 
 Python 3.10+. Zero runtime dependencies (stdlib only).
 
-## Quick start
+## Quick start (recommended)
+
+`SoulPlugin` is the documented entry point. It wires physics + persistence + event log + live-tunable overrides into one class so you don't have to.
+
+```python
+from clanker_soul import Score, SoulPlugin
+
+with SoulPlugin(agent_id="my-agent", db_path="./soul.db") as plugin:
+    plugin.ingest(Score(v=80, w=50, patterns=("ABANDONMENT",)))
+    plugin.tick()                     # reload UI overrides + drift soul
+    print(plugin.snapshot())          # PulseHost-compatible dict
+# auto-saves on context exit
+```
+
+Every `ingest()` is logged to SQLite with full mood-before/mood-after, soul-before/soul-after, weight/armor/breach math, and a human-readable `why` string. Every `tick()` evaluation by a `PulseEngine` (when wired up) is logged similarly. The UI in Phase 2 will read this log.
+
+### Personality presets
+
+Soul can start anywhere. The package ships four bundles you can apply with one call:
+
+```python
+from clanker_soul import CHILD, BRITTLE, STOIC, SoulPlugin
+
+with SoulPlugin(agent_id="kid", db_path="./soul.db",
+                default_soul=CHILD.soul) as plugin:
+    CHILD.apply(plugin.overrides, "kid")
+    plugin.tick()  # picks up the preset
+    # plugin is now child-shaped: low W/D, high A/I, fast soul drift
+```
+
+| Preset    | Personality |
+|-----------|-------------|
+| `CHILD`   | Easily influenced, eager, ungrounded. Low W/D, high A/I, fast soul drift. |
+| `ADULT`   | Package defaults. Competent, settled. |
+| `BRITTLE` | Feels every event. Armor cap and dim-resilience low. |
+| `STOIC`   | Slow to move. High armor cap, low blend, fast mood decay. |
+
+Build your own — `Preset` is a tiny `(name, description, soul, config)` dataclass.
+
+### What gets logged
+
+When `event_log=True` (default), every ingest writes one row to the `events` table with these fields: `ts`, `agent_id`, `raw_score`, `primed_score` (nullable), `mood_before` (nullable for first event), `mood_after`, `soul_before`, `soul_after`, `weight_raw`, `armor`, `weight_effective`, `breached`, `breach_delta`, `patterns`, `classification`, `why`. The `why` field is a one-line human string like:
+
+```
+ABANDONMENT (weight=0.78); armor=0.55 → w_eff=0.42; mood was 52pt from soul → BREACH (Δ=0.071 to soul.v/w/g)
+```
+
+`PulseEngine` evaluations land in `pulse_log` with the snap, trigger kind (or `None`), suppressed reason (`cooldown` / `no_target` / `dispatch_failed` / `no_trigger`), target presence, dispatch outcome, and the synthetic prompt that was generated.
+
+### Live-tunable knobs
+
+The UI (Phase 2) writes to `config_overrides` rows; `plugin.tick()` calls `reload_overrides()` to pick them up without restart. Removing an override field reverts that field to the constructor value. Soul fields that were never overridden (and may have drifted) are left alone.
+
+```python
+from clanker_soul import ConfigOverrides
+
+plugin.overrides.set("my-agent",
+                     physics={"blend_alpha": 0.8},
+                     soul={"w": 200})
+plugin.tick()  # changes are now live
+```
+
+### CLI
+
+`pip install` registers a `clanker-soul` binary:
+
+```bash
+clanker-soul info  --db ./soul.db
+clanker-soul prune --db ./soul.db --before 2026-01-01 -y
+clanker-soul prune --db ./soul.db --before 2026-01-01 --agent-id alice -y
+clanker-soul ui    --db ./soul.db   # Phase 2 stub today
+```
+
+## Advanced usage
+
+If you need to bypass persistence or compose your own event log, use `EmotionalPhysics` directly:
 
 ```python
 from clanker_soul import EmotionalPhysics, PhysicsConfig, Score, SoulState
 
-# Soul defaults are mildly positive — neutral input shouldn't read as depressed.
 physics = EmotionalPhysics(soul=SoulState(), config=PhysicsConfig())
-
-# Feed a scored event. Whatever produced this `Score` is the host's concern.
 physics.ingest(Score(v=80, a=160, d=70, u=180, g=90, w=85, i=120,
                      patterns=("ABANDONMENT",)))
-
-# Read back where mood landed and how that compares to soul.
 print(physics.mood)            # working state, post-blend, post-resilience
 print(physics.soul)            # baseline (mostly unchanged unless a breach hit)
 print(physics.trauma.load())   # decayed sum across all patterns
 ```
 
-### Persistence
+### Persistence (low-level)
 
 ```python
 from pathlib import Path
