@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "clanker-soul"
-version = "0.8.0"
+version = "0.8.1"
 description = "The 3-layer VADUGWI runtime: Soul / Mood / Conversational. Persistent emotional state for LLM agents."
 readme = "README.md"
 license = { text = "AGPL-3.0" }
@@ -44,6 +44,11 @@ clanker-soul = "clanker_soul.__main__:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["clanker_soul*"]
+
+[tool.setuptools.package-data]
+# PEP 561 — ship the marker so downstream type checkers (mypy, pyright)
+# pick up our annotations instead of treating them as Any.
+clanker_soul = ["py.typed", "ui/templates/*.html", "ui/static/**/*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

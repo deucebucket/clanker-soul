@@ -1,5 +1,7 @@
 # clanker-soul
 
+[![CI](https://github.com/deucebucket/clanker-soul/actions/workflows/ci.yml/badge.svg)](https://github.com/deucebucket/clanker-soul/actions/workflows/ci.yml)
+
 The 3-layer VADUGWI runtime. Persistent emotional state for LLM agents — extracted from [CARL](https://github.com/deucebucket/carl) so any agent runtime can carry mood across actions instead of restarting from neutral every event.
 
 > **VADUGWI** = Valence, Arousal, Dominance, Urgency, Gravity, self-Worth, Intent. Seven dimensions, each `0-255`, scored per event by whatever upstream system you trust (LLM, [clanker-lang](https://github.com/deucebucket/clanker), hand-written rules). clanker-soul is what *happens* to those scores after they arrive.
