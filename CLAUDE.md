@@ -79,6 +79,27 @@ These are deliberate and easy to break by accident:
 - **`SoulPlugin` is the recommended entry point but not the only one.** Direct `EmotionalPhysics(...)` construction works exactly as it did in v0.1 — opt-in `event_log=` and `overrides=` kwargs are the only additions. Don't deprecate the low-level path; advanced hosts (test rigs, custom persistence) need it.
 - **Presets are tuples, not subclasses.** `Preset(name, description, soul, config)` is a frozen dataclass. Custom presets are constructed, not inherited from. `Preset.apply` excludes `last_drift_ts` and `last_save_ts` because those are runtime state — overriding them would reset drift cadence on every preset switch.
 
+## Release process
+
+The repo follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) + [SemVer](https://semver.org/).
+
+**Per-PR contract:** every PR MUST update `CHANGELOG.md` `[Unreleased]` with a bullet describing the user-visible change (under `### Added`/`### Changed`/`### Fixed`/`### Removed` as appropriate). PR template enforces a checkbox. Skip only for purely internal changes (CI tweaks, comment-only edits) — and even then, prefer adding a line.
+
+**Cutting a release:**
+1. Branch `release/X.Y.Z`
+2. Bump `version` in `pyproject.toml` AND `__version__` in `clanker_soul/__init__.py` (both must match)
+3. In `CHANGELOG.md`: rename `[Unreleased]` heading to `[X.Y.Z] — YYYY-MM-DD`, add a fresh empty `[Unreleased]` section above it
+4. Update the link footer: bump the `[Unreleased]` compare to `vX.Y.Z...HEAD`, add a `[X.Y.Z]` entry comparing to the previous tag
+5. Open PR, merge, then `git tag vX.Y.Z` on the merge commit and push the tag
+6. `gh release create vX.Y.Z` with the changelog section as the body
+
+**Versioning rules** (pre-1.0 these are looser but still SemVer-shaped):
+- MAJOR (X) — breaking public API change. Reserved for 1.0.
+- MINOR (Y) — new feature, backward-compatible. Most Phase 2/3 PRs land as a minor bump (or accumulate under `[Unreleased]` until a milestone, depending on size).
+- PATCH (Z) — bug fixes only.
+
+Don't bump the version on every PR mechanically — bump when you cut a release and the changes warrant publishing. Most PRs just update `[Unreleased]`.
+
 ## Hosts
 
 CARL (https://github.com/deucebucket/carl) is the reference host and the source this was extracted from. The module here is canonical; CARL's bundled copy may temporarily diverge while changes are upstreamed.
