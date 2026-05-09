@@ -33,6 +33,14 @@ from clanker_soul.overrides import (
     OverrideBundle,
     apply_overrides,
 )
+from clanker_soul.presets import (
+    ADULT,
+    ALL as PRESETS,
+    BRITTLE,
+    CHILD,
+    Preset,
+    STOIC,
+)
 from clanker_soul.physics import (
     EmotionalPhysics,
     HEAVY_PATTERNS,
@@ -101,6 +109,13 @@ __all__ = [
     "ConfigOverrides",
     "OverrideBundle",
     "apply_overrides",
+    # Presets
+    "Preset",
+    "CHILD",
+    "ADULT",
+    "BRITTLE",
+    "STOIC",
+    "PRESETS",
     # Meta
     "__version__",
 ]
