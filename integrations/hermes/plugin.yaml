@@ -1,7 +1,8 @@
 name: clanker-soul
-version: 0.9.0
-description: "Persistent VADUGWI emotional state — give the agent mood that survives restarts and accumulates across events."
+version: 0.14.0
+description: "Emotional learning tool for AI agents. Persistent VADUGWI state, motivation-driven proactive messaging, action-consequence feedback loop."
 pip_dependencies:
-  - clanker-soul>=0.9.0
+  - clanker-soul>=0.14.0
 hooks:
   - on_turn_start
+  - sync_turn

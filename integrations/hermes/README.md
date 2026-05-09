@@ -55,6 +55,44 @@ Optional environment overrides:
 | `CLANKER_SOUL_DB_PATH` | `~/.hermes/clanker-soul.db` | where to store the soul |
 | `CLANKER_SOUL_AGENT_ID` | (per-session) | share one soul across all hermes sessions |
 | `CLANKER_SOUL_UI_PORT` | `7900` | port for the dashboard URL the agent reports |
+| `CLANKER_SOUL_PULSE_OUTBOUND` | unset | set to `1` / `true` / `yes` to enable autonomous outreach (see below) |
+| `CLANKER_SOUL_PULSE_DISPATCH` | unset | `module.path:callable` — operator-supplied dispatcher invoked when triggers fire |
+
+## Pulse outbound — autonomous outreach (M2)
+
+By default the plugin is *passive* — it scores user messages and injects state into the system prompt, but never initiates contact. Setting `CLANKER_SOUL_PULSE_OUTBOUND=1` activates a background `PulseEngine` that fires triggers based on the agent's emotional state and dispatches actions through an operator-supplied callback.
+
+```bash
+# Enable outbound mode
+export CLANKER_SOUL_PULSE_OUTBOUND=1
+
+# Point at your dispatcher
+export CLANKER_SOUL_PULSE_DISPATCH=mybot.channels:send_to_telegram
+```
+
+The dispatcher receives a `PulseAction` and returns an `ActionOutcome`:
+
+```python
+# mybot/channels.py
+from clanker_soul import ActionOutcome, PulseAction, Score
+
+def send_to_telegram(action: PulseAction) -> ActionOutcome:
+    # 1. Run action.prompt through your model
+    response_text = my_model.complete(action.prompt)
+    # 2. Send it via your channel
+    msg = my_telegram_bot.send_message(chat_id=..., text=response_text)
+    # 3. Score the consequence — this is the LEARNING SIGNAL
+    consequence = score_engagement(msg)  # e.g. Score(...) from reactions
+    return ActionOutcome(
+        delivered=True,
+        consequences=(consequence,) if consequence else (),
+        note=f"telegram:{msg.message_id}",
+    )
+```
+
+The engine auto-ingests every Score in `outcome.consequences` back into the soul, closing the impulse → action → consequence → soul-update loop. Without consequences, the agent acts but doesn't learn.
+
+For programmatic activation (skip the env vars), call `provider.set_pulse_dispatcher(callback)` BEFORE `provider.initialize` runs. The plugin loader doesn't surface the provider instance — this path is for deployments wrapping the plugin with their own loader.
 
 ## Inspect the soul live
 
