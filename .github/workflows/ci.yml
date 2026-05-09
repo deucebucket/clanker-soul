@@ -41,9 +41,8 @@ jobs:
   lint:
     name: ruff
     runs-on: ubuntu-latest
-    # Non-blocking: ruff is configured but not yet enforced on commits.
-    # Surface issues without failing the workflow until we adopt it fully.
-    continue-on-error: true
+    # Blocking. Run `ruff check . && ruff format --check .` locally
+    # before pushing — both must pass.
     steps:
       - uses: actions/checkout@v4
 
