@@ -21,14 +21,21 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from clanker_soul import __version__
 from clanker_soul.governor import GovernorConfig
+from clanker_soul.overrides import ConfigOverrides
+from clanker_soul.presets import ALL as PRESETS
 from clanker_soul.soul import SoulStore
+from clanker_soul.ui.config import (
+    apply_field_override,
+    build_config_view,
+    clear_field_override,
+)
 from clanker_soul.ui.events import (
     DEFAULT_PAGE_SIZE,
     DEFAULT_SORT,
@@ -165,6 +172,82 @@ def create_app(
         }
         template = "_events_table.html" if partial else "events.html"
         return templates.TemplateResponse(request, template, ctx)
+
+    @app.get("/config", response_class=HTMLResponse)
+    async def config_page(
+        request: Request,
+        agent_id: str | None = None,
+        partial: int = 0,
+    ) -> HTMLResponse:
+        agents, selected = _resolve_agent(agent_id)
+        overrides = ConfigOverrides(store)
+        view = build_config_view(overrides, selected) if selected else None
+        ctx = {
+            "db_path": str(db_path),
+            "version": __version__,
+            "agents": agents,
+            "selected_agent": selected,
+            "view": view,
+            "presets": PRESETS,
+        }
+        template = "_config_panel.html" if partial else "config.html"
+        return templates.TemplateResponse(request, template, ctx)
+
+    @app.post("/config/override", response_class=HTMLResponse)
+    async def config_override(
+        request: Request,
+        agent_id: str = Form(...),
+        section: str = Form(...),
+        field: str = Form(...),
+        value: str = Form(...),
+    ) -> HTMLResponse:
+        overrides = ConfigOverrides(store)
+        try:
+            apply_field_override(overrides, agent_id, section, field, value)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        view = build_config_view(overrides, agent_id)
+        return templates.TemplateResponse(
+            request, "_config_panel.html",
+            {"selected_agent": agent_id, "view": view, "presets": PRESETS},
+        )
+
+    @app.post("/config/clear", response_class=HTMLResponse)
+    async def config_clear(
+        request: Request,
+        agent_id: str = Form(...),
+        section: str | None = Form(None),
+        field: str | None = Form(None),
+    ) -> HTMLResponse:
+        overrides = ConfigOverrides(store)
+        if section and field:
+            try:
+                clear_field_override(overrides, agent_id, section, field)
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e))
+        else:
+            overrides.set(agent_id, physics={}, soul={})
+        view = build_config_view(overrides, agent_id)
+        return templates.TemplateResponse(
+            request, "_config_panel.html",
+            {"selected_agent": agent_id, "view": view, "presets": PRESETS},
+        )
+
+    @app.post("/config/preset", response_class=HTMLResponse)
+    async def config_preset(
+        request: Request,
+        agent_id: str = Form(...),
+        preset: str = Form(...),
+    ) -> HTMLResponse:
+        if preset not in PRESETS:
+            raise HTTPException(status_code=400, detail=f"unknown preset: {preset}")
+        overrides = ConfigOverrides(store)
+        PRESETS[preset].apply(overrides, agent_id)
+        view = build_config_view(overrides, agent_id)
+        return templates.TemplateResponse(
+            request, "_config_panel.html",
+            {"selected_agent": agent_id, "view": view, "presets": PRESETS},
+        )
 
     @app.get("/health")
     async def health() -> JSONResponse:

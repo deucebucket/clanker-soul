@@ -1,0 +1,106 @@
+{# Config panel partial. Rendered by /config and by the POST endpoints
+   so HTMX can swap it in after each mutation. #}
+{% macro slider(section, row) %}
+<div class="grid grid-cols-12 items-center gap-3 py-2 border-b border-neutral-900 text-xs font-mono">
+    <div class="col-span-3 flex items-center gap-2">
+        <span class="text-neutral-300">{{ row.meta.name }}</span>
+        {% if row.is_overridden %}
+            <span class="rounded px-1.5 py-0.5 text-[10px] bg-amber-950 text-amber-300 border border-amber-900">override</span>
+        {% endif %}
+    </div>
+    <div class="col-span-7 flex items-center gap-3">
+        <form
+            hx-post="/config/override"
+            hx-target="#config-panel"
+            hx-swap="innerHTML"
+            hx-trigger="change"
+            class="flex items-center gap-3 flex-1">
+            <input type="hidden" name="agent_id" value="{{ view.agent_id }}">
+            <input type="hidden" name="section" value="{{ section }}">
+            <input type="hidden" name="field" value="{{ row.meta.name }}">
+            <input
+                type="range"
+                name="value"
+                min="{{ row.meta.min }}"
+                max="{{ row.meta.max }}"
+                step="{{ row.meta.step }}"
+                value="{{ row.current }}"
+                oninput="this.nextElementSibling.textContent = this.value"
+                class="flex-1 accent-cyan-400">
+            <span class="w-20 text-right text-neutral-100 tabular-nums">{% if row.meta.is_int %}{{ row.current | int }}{% else %}{{ row.current }}{% endif %}</span>
+        </form>
+        {% if row.is_overridden %}
+            <form
+                hx-post="/config/clear"
+                hx-target="#config-panel"
+                hx-swap="innerHTML">
+                <input type="hidden" name="agent_id" value="{{ view.agent_id }}">
+                <input type="hidden" name="section" value="{{ section }}">
+                <input type="hidden" name="field" value="{{ row.meta.name }}">
+                <button type="submit" class="text-neutral-500 hover:text-neutral-100 text-xs" title="reset to default ({{ row.default }})">↺</button>
+            </form>
+        {% endif %}
+    </div>
+    <div class="col-span-2 text-right text-neutral-600 text-[11px]" title="{{ row.meta.description }}">
+        default: {% if row.meta.is_int %}{{ row.default | int }}{% else %}{{ row.default }}{% endif %}
+    </div>
+</div>
+{% endmacro %}
+
+<div class="space-y-6">
+
+    {# === PRESETS === #}
+    <div class="rounded border border-neutral-800 p-4 bg-neutral-950">
+        <div class="text-xs text-neutral-500 uppercase tracking-wide mb-3">presets</div>
+        <div class="flex items-center gap-2 flex-wrap">
+            {% for name, p in presets.items() %}
+                <form
+                    hx-post="/config/preset"
+                    hx-target="#config-panel"
+                    hx-swap="innerHTML">
+                    <input type="hidden" name="agent_id" value="{{ view.agent_id }}">
+                    <input type="hidden" name="preset" value="{{ name }}">
+                    <button type="submit"
+                            title="{{ p.description }}"
+                            class="bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 rounded px-3 py-1.5 text-xs text-neutral-100 font-mono">
+                        {{ name }}
+                    </button>
+                </form>
+            {% endfor %}
+            <form
+                hx-post="/config/clear"
+                hx-target="#config-panel"
+                hx-swap="innerHTML"
+                hx-confirm="clear all overrides for {{ view.agent_id }}?"
+                class="ml-auto">
+                <input type="hidden" name="agent_id" value="{{ view.agent_id }}">
+                <button type="submit"
+                        class="bg-rose-950 hover:bg-rose-900 border border-rose-900 rounded px-3 py-1.5 text-xs text-rose-200 font-mono">
+                    reset all
+                </button>
+            </form>
+        </div>
+    </div>
+
+    {# === PHYSICS === #}
+    <div class="rounded border border-neutral-800 p-4 bg-neutral-950">
+        <div class="text-xs text-neutral-500 uppercase tracking-wide mb-3">physics config</div>
+        <div>
+            {% for row in view.physics_rows %}
+                {{ slider("physics", row) }}
+            {% endfor %}
+        </div>
+    </div>
+
+    {# === SOUL === #}
+    <div class="rounded border border-neutral-800 p-4 bg-neutral-950">
+        <div class="text-xs text-neutral-500 uppercase tracking-wide mb-3">soul personality (V/A/D/U/G/W/I)</div>
+        <div>
+            {% for row in view.soul_rows %}
+                {{ slider("soul", row) }}
+            {% endfor %}
+        </div>
+        <p class="text-neutral-600 text-[11px] mt-3">bookkeeping fields (last_drift_ts, last_save_ts) are runtime state; they're intentionally not exposed here.</p>
+    </div>
+
+</div>

@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}clanker-soul · config · {{ selected_agent or 'pick agent' }}{% endblock %}
+
+{% block content %}
+<section class="space-y-6">
+
+    {# === AGENT PICKER === #}
+    <div class="rounded border border-neutral-800 p-4 bg-neutral-950">
+        <div class="text-xs text-neutral-500 uppercase tracking-wide mb-2">agent</div>
+        {% if agents %}
+            <form method="get" action="/config" class="flex items-center gap-3">
+                <select name="agent_id" class="bg-neutral-900 border border-neutral-700 rounded px-3 py-2 text-neutral-100 font-mono"
+                        onchange="this.form.submit()">
+                    {% for aid in agents %}
+                    <option value="{{ aid }}" {% if aid == selected_agent %}selected{% endif %}>{{ aid }}</option>
+                    {% endfor %}
+                </select>
+                <span class="text-xs text-neutral-500 ml-auto">live config — every slider writes immediately</span>
+            </form>
+        {% else %}
+            <p class="text-neutral-500 text-sm">no agents in this database.</p>
+        {% endif %}
+    </div>
+
+    {% if selected_agent and view %}
+        <div id="config-panel">
+            {% include "_config_panel.html" %}
+        </div>
+    {% endif %}
+</section>
+{% endblock %}
