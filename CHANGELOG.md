@@ -18,6 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   v0.1 databases (which only had `soul_state`) in place without data loss.
 - `SoulStore.connection` and `SoulStore.lock` properties so sibling modules can share the
   same SQLite connection and write lock (avoids second-handle contention).
+- **Phase 1 integration test suite** (#7): `tests/test_phase1_integration.py` exercises
+  the full drop-in promise end-to-end — full lifecycle (construct, preset apply, ingest
+  warm and harsh events, verify event log, switch personality at runtime, persist,
+  reopen, verify state and log survive); multi-agent isolation against a shared DB;
+  PulseEngine driven by a SoulPlugin's snapshot with shared event log captures pulse
+  decisions; package-level imports cover all Phase 1 names. If this file fails, Phase 1
+  is broken.
 - **`SoulPlugin` — the documented one-call drop-in entry point** (#6). Wraps physics +
   storage + event log + overrides into a single class. `pip install clanker-soul` and
   six lines of code now gets a host a fully-loaded VADUGWI runtime: construct, ingest,
