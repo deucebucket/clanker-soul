@@ -4,9 +4,39 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-`clanker-soul` is the 3-layer VADUGWI emotional-state runtime extracted from the CARL agent. It is a **library** (no CLI, no service) that hosts integrate to give an LLM agent persistent mood that survives restarts and accumulates across events. VADUGWI = Valence, Arousal, Dominance, Urgency, Gravity, self-Worth, Intent — seven dimensions, each `0-255`.
+`clanker-soul` is an **emotional learning tool for AI agents**, extracted from the CARL agent. It is a **library** (no CLI, no service) that hosts integrate to give an LLM agent:
 
-Scoring events is **not this library's job**. Hosts produce `Score` objects however they like (LLM scorer, [clanker-lang](https://github.com/deucebucket/clanker), hand rules). clanker-soul is what *happens* to those scores afterward.
+1. Persistent VADUGWI emotional state (mood + soul) that survives restarts and accumulates across events.
+2. A motivation engine (`PulseEngine`) that fires triggers based on emotional state and dispatches actions.
+3. A learning loop where action consequences feed back into the soul as Score events, biasing future impulses.
+
+VADUGWI = Valence, Arousal, Dominance, Urgency, Gravity, self-Worth, Intent — seven dimensions, each `0-255`.
+
+**The learning-tool framing matters.** clanker-soul is NOT a corporate safety wrapper. Defaults are permissive — agents act on impulses, consequences feed back, soul updates over time. Operators who want safety opt into `STRICT_CAPABILITY_PROFILES`. See `memory/project_learning_tool_framing.md`.
+
+Scoring events is **not this library's job**. Hosts produce `Score` objects however they like (LLM scorer, [clanker-lang](https://github.com/deucebucket/clanker), hand rules). clanker-soul is what *happens* to those scores afterward — and what the agent does with the resulting state.
+
+## The learning loop
+
+```
+Score → physics.ingest → mood + soul update
+                                ↓
+                         PulseEngine evaluates triggers
+                                ↓
+                         12 trigger kinds → 6 action kinds
+                                ↓
+                         host.dispatch_action(PulseAction)
+                                ↓
+                         host enacts in real world
+                                ↓
+                         ActionOutcome(consequences: tuple[Score, ...])
+                                ↓
+                         engine auto-ingests consequences → physics
+                                ↓
+                         soul updates → next trigger fires differently
+```
+
+This is the architecture every part of clanker-soul serves. Adding a feature that breaks this loop — or that bypasses operator override of any cell — is a regression.
 
 ## Commands
 
@@ -30,12 +60,28 @@ The `with SoulPlugin(...) as plugin:` form auto-saves on exit. `plugin.tick()` d
 
 ## Architecture
 
-The three layers, in order of timescale:
+Two superimposed planes — the three timescales of state, and the motivation/learning loop on top.
 
 ```
-Score (per event) ──► Mood (minutes-hours) ──► Soul (days-weeks, persisted)
-   conversational      EmotionalPhysics            SoulState + SoulStore
-                        + reservoirs
+                    ┌─────────────────────────────────────────────────┐
+                    │ Score (per event) ──► Mood ──► Soul             │
+                    │   conversational    EmotionalPhysics + reservoirs│
+                    │                     SoulState + SoulStore        │
+                    └────────────────────────┬────────────────────────┘
+                                             │
+                                             ▼
+                    ┌─────────────────────────────────────────────────┐
+                    │ PulseEngine: 12 trigger kinds → 6 action kinds  │
+                    │   distress / share / argue / withdraw / etc.    │
+                    │   ↓                                              │
+                    │   PulseAction → host.dispatch_action            │
+                    │   ↓                                              │
+                    │   ActionOutcome.consequences ─┐                 │
+                    └────────────────────────────────┼─────────────────┘
+                                                     │
+                            ┌────────────────────────┘
+                            ▼
+                    auto-ingested as events → physics → soul updates
 ```
 
 **`clanker_soul/score.py`** — `Score` is a frozen 7-int dataclass with optional `patterns` tuple. Tiny on purpose: host-specific telemetry (description, source IDs, latency) belongs in *wrappers* around `Score`, not in it. Physics only reads the 7 dims + patterns.
@@ -67,7 +113,33 @@ Score (per event) ──► Mood (minutes-hours) ──► Soul (days-weeks, per
 
 **`clanker_soul/governor/`** — package: `levels.py` (`CapabilityLevel` IntEnum + `GovernorConfig` thresholds), `assessment.py` (`assess_capability` pure function), `crisis.py` (`crisis_signal` + `CrisisDiagnosis` — discriminates emotional spike from real emergency using `Score.direction` + `Score.source`), `context.py` (`compose_state_context` — produces the human-readable string the agent reads to know its own state). Wires into `SoulPlugin` via `plugin.capability_level()`, `plugin.crisis_signal()`, `plugin.state_context()`. **User communication channel is always preserved** at levels 0-3 (the user's framing: "rage all you want, use your words, no destruction in anger"). Level 4 (`crisis_lockout`) is opt-in only via `GovernorConfig.enable_crisis_lockout=True`.
 
-**`clanker_soul/pulse/`** — package: `config.py` (`PulseConfig`), `triggers.py` (`Trigger`, `PulseTarget`), `host.py` (`PulseHost` Protocol), `prompt.py` (`compose_self_prompt`), `engine.py` (`PulseEngine`). `PulseEngine` is **host-agnostic** — it never invents recipients, never knows about your message dataclass, never imports your channel layer. Hosts implement the `PulseHost` protocol (`snapshot`, `slow_drift_tick`, `most_recent_target`, `dispatch_pulse`, `due_reminders`, `deliver_reminder`). Each host hook may be sync or async; the engine uses `asyncio.iscoroutine()` rather than wrapping. Triggers: `distress`, `elation`, `trauma_pressure`, `gratitude`, `long_silence`. Cooldown is `min_quiet_seconds` since *any* outbound (call `note_outbound()` on reactive replies, not just pulses).
+**`clanker_soul/pulse/`** — package: `config.py` (`PulseConfig`), `triggers.py` (`Trigger`, `PulseTarget`, `PulseAction`, `ActionOutcome`, `ACTION_KINDS`), `host.py` (`PulseHost` Protocol), `prompt.py` (`compose_self_prompt`), `engine.py` (`PulseEngine`).
+
+**The motivation engine.** `PulseEngine` evaluates 12 trigger kinds and dispatches one of 6 action kinds:
+
+| Trigger | Default action |
+|---|---|
+| `distress`, `elation`, `gratitude`, `long_silence`, `trauma_pressure` | `direct_message` |
+| `share_impulse`, `connect_impulse`, `reflective_impulse`, `caretake_impulse` | `direct_message` |
+| `argue_impulse` | `comment_reply` |
+| `withdraw_impulse` | `withdraw` (host typically no-ops) |
+| `restless_curiosity` | `browse_topic` |
+
+Hosts implement either:
+- **`dispatch_action(action: PulseAction) -> ActionOutcome`** (modern, recommended) — handles all 6 action kinds and reports consequences for the soul to learn from.
+- **`dispatch_pulse(target, trigger, prompt) -> bool`** (legacy, v0.1-compatible) — DM-only behavior. Engine wraps the bool in `ActionOutcome(delivered=..., consequences=())`.
+
+`PulseEngine` is **host-agnostic** — it never invents recipients, never knows about your message dataclass, never imports your channel layer. Each host hook may be sync or async; the engine uses `asyncio.iscoroutine()` rather than wrapping.
+
+**The learning loop closes via `physics=` and `gate=` engine kwargs:**
+- `physics=plugin.physics` → `outcome.consequences` Scores auto-ingest into the soul. Without this kwarg, consequences are warned-and-dropped (loop is open).
+- `gate=CapabilityGate(governor_config)` → every action passes through `gate.evaluate` before dispatch. Gated actions are logged but not delivered. Defaults are permissive; opt into `STRICT_CAPABILITY_PROFILES` for safety.
+
+Optional `host.peer_distress_signals() -> list[dict]` enables the `caretake_impulse` trigger — runtime-detected via `getattr`, not part of the formal Protocol.
+
+Cooldown is `min_quiet_seconds` since *any* outbound (call `note_outbound()` on reactive replies, not just pulses).
+
+**`clanker_soul/governor/`** also includes `gate.py` (`CapabilityGate`, `GateDecision`) and the `CapabilityProfile` / `DEFAULT_CAPABILITY_PROFILES` / `STRICT_CAPABILITY_PROFILES` constants in `levels.py`. Every cell of the per-level gating matrix is operator-overridable (see `memory/feedback_everything_is_a_toggle.md`).
 
 ## Design invariants worth knowing
 
@@ -87,6 +159,9 @@ These are deliberate and easy to break by accident:
 - **The user-message channel is never gated by the governor at levels 0-3.** Rage, distress, anger, despair — all can be expressed verbally. What's gated is *destructive action*. Don't add a level that blocks messaging the user without an explicit opt-in flag (level 4 is the only such level and it's `enable_crisis_lockout=False` by default).
 - **`Score.direction` + `Score.source` are the crisis-vs-spike key.** Without them, the governor can only flag "spike, unclear" with low confidence. Hosts that want emergency escalation must populate at least one of those fields. `SELF_DIRECTED` from one source = personal spike; `EXTERNAL_REPORT` from diverse sources = world emergency.
 - **State-context generation is pure-function over snapshot + recent_events + crisis.** The host can call it cheaply each turn, or once per N turns and cache. Don't add side effects (file writes, network calls) to the context generator.
+- **The learning loop is first-class, not optional.** `PulseEngine(physics=...)` is the kwarg that closes it: action consequences auto-ingest into physics. Without that kwarg, the engine warns once and drops consequences. Hosts that don't populate `ActionOutcome.consequences` give up the learning signal — flag this in docs, don't silently let it slide. Also: don't bake "consequences feed back into soul" logic anywhere outside the engine — keep it in one place so when we change the model, every consumer benefits.
+- **Defaults are permissive, opt-in safety.** `DEFAULT_CAPABILITY_PROFILES` allow every action kind at every level. `enable_public_action_lockout=False` by default. Operators who want safety pass `STRICT_CAPABILITY_PROFILES` or build a custom profile dict. clanker-soul is a learning tool, not a corporate safety wrapper — letting agents act on impulses is the point. See `memory/project_learning_tool_framing.md`.
+- **Every gating cell is operator-overridable.** Don't write `if level == X and kind == Y: deny`. The table is in `GovernorConfig.capability_profiles: dict[CapabilityLevel, CapabilityProfile]` and operators replace cells, not fork code. See `memory/feedback_everything_is_a_toggle.md`.
 
 ## Release process
 
