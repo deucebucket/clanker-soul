@@ -30,8 +30,9 @@ from __future__ import annotations
 import logging
 import math
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 
 from clanker_soul.score import Score
 from clanker_soul.soul import (
@@ -39,6 +40,9 @@ from clanker_soul.soul import (
     SoulState,
     TraumaReservoir,
 )
+
+if TYPE_CHECKING:
+    from clanker_soul.eventlog import EventLog, IngestRecord
 
 logger = logging.getLogger(__name__)
 
@@ -222,6 +226,31 @@ def soul_distance(mood: Score, soul: SoulState) -> float:
     return math.sqrt(sum(d * d for d in diffs) / len(diffs))
 
 
+def _why(tick: "PhysicsTick", event: Score) -> str:
+    """One-line human-readable reason for what just happened.
+
+    Pre-baked so ``sqlite3 soul.db "SELECT ts, why FROM events"`` is
+    immediately readable in the terminal. The UI can also synthesize its
+    own narrative from the structured fields if it wants — this is for
+    fast forensic scanning."""
+    pat_str = ",".join(event.patterns) if event.patterns else "no-pattern"
+    parts = [f"{pat_str} (weight={tick.weight_raw:.2f})"]
+    if tick.armor > 0.05:
+        parts.append(
+            f"armor={tick.armor:.2f} → w_eff={tick.weight_effective:.2f}"
+        )
+    else:
+        parts.append(f"w_eff={tick.weight_effective:.2f}")
+    if tick.breached:
+        parts.append(
+            f"mood was {tick.soul_distance_before:.0f}pt from soul → "
+            f"BREACH (Δ={tick.breach_delta_applied:.3f} to soul.v/w/g)"
+        )
+    elif tick.soul_distance_before > 30:
+        parts.append(f"mood was {tick.soul_distance_before:.0f}pt from soul")
+    return "; ".join(parts)
+
+
 def _decay_half_life(soul: SoulState, base: float) -> float:
     """Soul.W modulates how fast mood returns to baseline. Strong W = fast
     recovery; wounded W = slow ruminating recovery."""
@@ -258,7 +287,15 @@ class EmotionalPhysics:
         trauma: TraumaReservoir | None = None,
         nourishment: NourishmentReservoir | None = None,
         config: PhysicsConfig | None = None,
+        *,
+        event_log: "EventLog | None" = None,
+        agent_id: str | None = None,
     ) -> None:
+        if event_log is not None and not agent_id:
+            raise ValueError(
+                "agent_id is required when event_log is provided "
+                "(log rows are scoped per-agent)"
+            )
         self.soul = soul
         self.trauma = trauma if trauma is not None else TraumaReservoir()
         self.nourishment = nourishment if nourishment is not None else NourishmentReservoir()
@@ -266,6 +303,8 @@ class EmotionalPhysics:
         self._mood: Score | None = None
         self._mood_time: float = 0.0  # perf_counter
         self._last_tick: PhysicsTick | None = None
+        self._event_log = event_log
+        self._agent_id = agent_id
 
     @property
     def mood(self) -> Score | None:
@@ -299,9 +338,19 @@ class EmotionalPhysics:
         self._mood = self._apply_dim_resilience(blended)
         self._mood_time = time.perf_counter()
 
-    def ingest(self, event: Score) -> PhysicsTick:
-        """Update mood, soul, and reservoirs from a scored event."""
+    def ingest(self, event: Score, *, raw: Score | None = None) -> PhysicsTick:
+        """Update mood, soul, and reservoirs from a scored event.
+
+        ``raw``: optional pre-mood-prime version of the score. If a host
+        applied :func:`mood_prime_score` before ingest, pass the
+        pre-prime score here so the event log records both. If omitted,
+        ``event`` is logged as both raw and primed=None (no priming
+        recorded)."""
         cfg = self.config
+        # Snapshot for the event log (only if we'll actually log).
+        soul_before = replace(self.soul) if self._event_log is not None else None
+        mood_before = self.mood if self._event_log is not None else None
+
         decayed_mood = (
             self._apply_mood_decay(self._mood, self._mood_time)
             if self._mood is not None
@@ -345,7 +394,58 @@ class EmotionalPhysics:
             patterns=list(event.patterns or ()),
         )
         self._last_tick = tick
+
+        if self._event_log is not None:
+            self._emit_ingest_log(
+                event=event, raw=raw,
+                soul_before=soul_before,  # type: ignore[arg-type]
+                mood_before=mood_before,
+                tick=tick,
+            )
         return tick
+
+    def _emit_ingest_log(
+        self, *, event: Score, raw: Score | None,
+        soul_before: SoulState, mood_before: Score | None,
+        tick: PhysicsTick,
+    ) -> None:
+        """Build an IngestRecord and ship it to the configured sink.
+
+        Soft-fail: if the sink raises, log a warning and continue. The
+        SqliteEventLog impl already catches its own exceptions, but
+        custom impls might not, and physics must remain robust either
+        way."""
+        from clanker_soul.eventlog import IngestRecord
+
+        if raw is not None and raw != event:
+            primed_for_log: Score | None = event
+            raw_for_log = raw
+        else:
+            primed_for_log = None
+            raw_for_log = event
+
+        try:
+            rec = IngestRecord(
+                ts=datetime.now(timezone.utc).timestamp(),
+                agent_id=self._agent_id or "",
+                raw=raw_for_log,
+                primed=primed_for_log,
+                mood_before=mood_before,
+                mood_after=self.mood or self._mood_anchor(),
+                soul_before=soul_before,
+                soul_after=replace(self.soul),
+                weight_raw=tick.weight_raw,
+                armor=tick.armor,
+                weight_effective=tick.weight_effective,
+                breached=tick.breached,
+                breach_delta=tick.breach_delta_applied,
+                patterns=tuple(event.patterns or ()),
+                classification=self._classify(event),
+                why=_why(tick, event),
+            )
+            self._event_log.log_ingest(rec)
+        except Exception:
+            logger.exception("event_log.log_ingest raised — physics continuing")
 
     def soul_drift(self, *, now_ts: float | None = None) -> dict:
         """Slowly nudge Soul based on time-elapsed × current mood +

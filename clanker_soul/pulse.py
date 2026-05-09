@@ -35,7 +35,10 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Awaitable, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Awaitable, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from clanker_soul.eventlog import EventLog
 
 logger = logging.getLogger(__name__)
 
@@ -193,13 +196,25 @@ class PulseEngine:
     cooldown timer covers reactive replies, not just pulses.
     """
 
-    def __init__(self, host: PulseHost, config: PulseConfig | None = None) -> None:
+    def __init__(
+        self, host: PulseHost, config: PulseConfig | None = None,
+        *,
+        event_log: "EventLog | None" = None,
+        agent_id: str | None = None,
+    ) -> None:
+        if event_log is not None and not agent_id:
+            raise ValueError(
+                "agent_id is required when event_log is provided "
+                "(log rows are scoped per-agent)"
+            )
         self._host = host
         self._cfg = config or PulseConfig()
         self._task: asyncio.Task | None = None
         self._running = False
         self._last_pulse_ts: float = 0.0
         self._last_outbound_ts: float = 0.0
+        self._event_log = event_log
+        self._agent_id = agent_id
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -235,7 +250,11 @@ class PulseEngine:
     async def tick(self) -> Trigger | None:
         """Run one full tick — drift bookkeeping, reminders, and a pulse
         if warranted. Returns the fired trigger or None. Useful for tests
-        and for hosts that don't want the built-in asyncio loop."""
+        and for hosts that don't want the built-in asyncio loop.
+
+        When an ``event_log`` was provided at construction, every
+        evaluation produces one ``PulseRecord`` (fired, suppressed by
+        cooldown, suppressed by missing target, or no trigger at all)."""
         try:
             self._host.slow_drift_tick()
         except Exception:
@@ -243,18 +262,45 @@ class PulseEngine:
 
         await self._fire_due_reminders()
 
-        trigger = self._evaluate_trigger()
+        snap = self._take_snapshot()
+        trigger = self._evaluate_trigger(snap) if snap is not None else None
+        log_snap = snap or {}
+
         if trigger is None:
+            self._log_pulse_outcome(
+                snap=log_snap, trigger_kind=None,
+                suppressed_reason="no_trigger",
+                target_present=False, dispatched=False, prompt=None,
+            )
             return None
 
         now = datetime.now(timezone.utc).timestamp()
         last_activity = max(self._last_pulse_ts, self._last_outbound_ts)
         if now - last_activity < self._cfg.min_quiet_seconds:
             logger.debug("Pulse suppressed (cooldown): trigger=%s", trigger.kind)
+            self._log_pulse_outcome(
+                snap=log_snap, trigger_kind=trigger.kind,
+                suppressed_reason="cooldown",
+                target_present=False, dispatched=False, prompt=None,
+            )
             return None
 
-        fired = await self._fire_pulse(trigger)
-        return trigger if fired else None
+        fired, prompt, target_present = await self._fire_pulse(trigger)
+        if not fired:
+            reason = "no_target" if not target_present else "dispatch_failed"
+            self._log_pulse_outcome(
+                snap=log_snap, trigger_kind=trigger.kind,
+                suppressed_reason=reason,
+                target_present=target_present, dispatched=False, prompt=prompt,
+            )
+            return None
+
+        self._log_pulse_outcome(
+            snap=log_snap, trigger_kind=trigger.kind,
+            suppressed_reason=None,
+            target_present=True, dispatched=True, prompt=prompt,
+        )
+        return trigger
 
     # ------------------------------------------------------------------
     # Loop
@@ -275,13 +321,17 @@ class PulseEngine:
     # Decision
     # ------------------------------------------------------------------
 
-    def _evaluate_trigger(self) -> Trigger | None:
+    def _take_snapshot(self) -> dict | None:
+        """Pull a fresh snapshot from the host. Returns None on failure
+        so the caller can log a 'snapshot_failed' outcome instead of
+        silently returning."""
         try:
-            snap = self._host.snapshot() or {}
+            return self._host.snapshot() or {}
         except Exception:
             logger.exception("snapshot failed")
             return None
 
+    def _evaluate_trigger(self, snap: dict) -> Trigger | None:
         soul: dict = snap.get("soul") or {}
         mood: list[int] | None = snap.get("mood")
         distance: float = snap.get("soul_distance") or 0.0
@@ -343,18 +393,22 @@ class PulseEngine:
     # Execution
     # ------------------------------------------------------------------
 
-    async def _fire_pulse(self, trigger: Trigger) -> bool:
+    async def _fire_pulse(
+        self, trigger: Trigger,
+    ) -> tuple[bool, str | None, bool]:
+        """Returns ``(fired, prompt, target_present)`` so the caller can
+        log a complete outcome regardless of which path we took."""
         try:
             target = self._host.most_recent_target()
         except Exception:
             logger.exception("most_recent_target failed")
-            return False
+            return False, None, False
         if target is None:
             logger.debug(
                 "Pulse trigger=%s but no recent target — staying quiet",
                 trigger.kind,
             )
-            return False
+            return False, None, False
 
         prompt = compose_self_prompt(trigger)
 
@@ -366,13 +420,41 @@ class PulseEngine:
                 fired = bool(result)
         except Exception:
             logger.exception("dispatch_pulse failed")
-            return False
+            return False, prompt, True
 
         if fired:
             self._last_pulse_ts = datetime.now(timezone.utc).timestamp()
             self._last_outbound_ts = self._last_pulse_ts
             logger.info("Pulse fired (%s)", trigger.kind)
-        return fired
+        return fired, prompt, True
+
+    def _log_pulse_outcome(
+        self, *, snap: dict, trigger_kind: str | None,
+        suppressed_reason: str | None,
+        target_present: bool, dispatched: bool, prompt: str | None,
+    ) -> None:
+        """Build a PulseRecord and ship it to the configured sink.
+
+        Soft-fail: a logger that raises must not propagate into the
+        engine. The SqliteEventLog impl already catches; this is defense
+        in depth for custom sinks."""
+        if self._event_log is None:
+            return
+        try:
+            from clanker_soul.eventlog import PulseRecord
+            rec = PulseRecord(
+                ts=datetime.now(timezone.utc).timestamp(),
+                agent_id=self._agent_id or "",
+                snap=snap,
+                trigger_kind=trigger_kind,
+                suppressed_reason=suppressed_reason,
+                target_present=target_present,
+                dispatched=dispatched,
+                prompt=prompt,
+            )
+            self._event_log.log_pulse(rec)
+        except Exception:
+            logger.exception("event_log.log_pulse raised — engine continuing")
 
     async def _fire_due_reminders(self) -> None:
         try:
