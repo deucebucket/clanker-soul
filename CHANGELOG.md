@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.2] — 2026-05-09
+
+CI hotfix release. The `[ui]` extra was silently relying on a transitive
+`python-multipart` install — local dev environments had it pulled in by
+some other dep, but a clean `pip install clanker-soul[ui]` on a fresh
+machine would fail at runtime as soon as any `Form(...)`-using route
+(every config + simulate POST) was hit. Caught by the new CI workflow's
+first run on a clean Ubuntu image. Fixed by adding `python-multipart`
+to the `[ui]` extra explicitly.
+
+### Fixed
+- `[ui]` extra now declares `python-multipart>=0.0.7` so FastAPI's
+  `Form(...)` parsing works on a clean install. Without this, every
+  POST handler under `/config/*` and `/simulate/*` would 500 with
+  `RuntimeError: Form data requires "python-multipart" to be installed`.
+
 ## [0.8.1] — 2026-05-09
 
 Infrastructure patch. CI now runs on every push and PR, the package
