@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   v0.1 databases (which only had `soul_state`) in place without data loss.
 - `SoulStore.connection` and `SoulStore.lock` properties so sibling modules can share the
   same SQLite connection and write lock (avoids second-handle contention).
+- **`clanker_soul.eventlog` module** (#2): durable per-event sink for the UI to read.
+  Frozen `IngestRecord` and `PulseRecord` dataclasses, an `EventLog` runtime-checkable
+  Protocol, a `NullEventLog` noop default, and a `SqliteEventLog` impl that writes via
+  the shared `SoulStore` connection + lock. **Soft-fail invariant:** logging errors warn
+  and continue, never raise into physics. Read helpers (`read_ingest`, `read_pulse`,
+  `count_ingest`, `count_pulse`) return records most-recent-first with optional limit.
 
 ## [0.1.0] — 2026-05-08
 
