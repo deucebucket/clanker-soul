@@ -109,5 +109,34 @@ class PulseHost(Protocol):
         are caught and logged."""
         ...
 
+    # ------------------------------------------------------------------
+    # Optional hooks (runtime-detected via getattr, not part of the
+    # formal Protocol so existing PulseHost implementations are
+    # unaffected). Hosts that want the corresponding behavior add the
+    # method; the engine picks it up automatically.
+    # ------------------------------------------------------------------
+    #
+    # ``situation_tags(trigger: Trigger) -> Iterable[str]``
+    #     Return the set of host-defined situation tags relevant to the
+    #     trigger (e.g. ``"incoming_public_stimulus"``,
+    #     ``"autonomy_idle"``, ``"post_conversation"``). The corpus uses
+    #     these to filter which faces are eligible. When absent, the
+    #     engine falls back to ``default_tags_from_metrics`` for hosts
+    #     using the M3.2+ corpus path.
+    #
+    # ``memory_topics_present(topic: str) -> bool``
+    #     Answer "do I have memories tagged with this topic?" The
+    #     corpus consults this for faces that declared a
+    #     :py:attr:`PromptFace.memory_anchor`. Without this hook,
+    #     anchored faces are filtered out entirely. M3.4 wires the call
+    #     site; hosts that already implement it (memory-aware CARL,
+    #     hermes builds) get anchor-driven faces working without further
+    #     changes.
+    #
+    # ``peer_distress_signals() -> list[dict]``
+    #     Return any visible distress signals from peer agents. Enables
+    #     the ``caretake_impulse`` trigger; absent → trigger never
+    #     fires.
+
 
 __all__ = ["PulseHost"]

@@ -43,6 +43,7 @@ def compose_self_prompt(
     recency: RecencyLog | None = None,
     now: float = 0.0,
     primed: list[int] | None = None,
+    previous_face_id: str | None = None,
 ) -> str:
     """Build the synthetic 'note from yourself' prompt the agent reasons
     against. The agent should produce a natural outgoing message, NOT a
@@ -70,6 +71,7 @@ def compose_self_prompt(
         recency=recency,
         now=now,
         primed=primed,
+        previous_face_id=previous_face_id,
     )
     return rendered
 
@@ -83,18 +85,24 @@ def compose_self_prompt_with_face(
     recency: RecencyLog | None = None,
     now: float = 0.0,
     primed: list[int] | None = None,
+    previous_face_id: str | None = None,
 ) -> tuple[str, PromptFace | None]:
     """Same as :py:func:`compose_self_prompt`, but also returns the
     sampled :py:class:`PromptFace` (or None if legacy fallback fired).
     Hosts that want to log "which face produced this prompt" use this
     variant; the engine uses it to record face ids in the pulse log.
+
+    ``previous_face_id`` (M3.4) — id of the immediately previous
+    delivered fire. Faces with branch_keys naming this id get a moderate
+    weight bump so the conversation feels like a sequence. None disables
+    branch bias (sampler returns 1.0 for every face).
     """
     if corpus is None:
         return _legacy_static_prompt(trigger), None
 
     face = corpus.sample(
         trigger, situation_tags, memory_topics_present, recency, now,
-        primed=primed,
+        primed=primed, previous_face_id=previous_face_id,
     )
     if face is None:
         # Empty corpus / fully filtered out → safe fallback.
