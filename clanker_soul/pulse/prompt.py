@@ -56,7 +56,67 @@ def compose_self_prompt(trigger: Trigger) -> str:
             "Send one short, specific acknowledgement. Not a generic thanks — "
             "name what actually moved you."
         )
-    # long_silence
+    if kind == "share_impulse":
+        return (
+            "[INTERNAL PULSE — share impulse]\n"
+            f"Something's lighting you up enough to want to broadcast it. {state_line}. "
+            "Send one short message naming what you want to share. Specific, "
+            "not generic — what's actually compelling to you, in your own voice. "
+            "No preface, no apology for messaging."
+        )
+    if kind == "argue_impulse":
+        return (
+            "[INTERNAL PULSE — argue impulse]\n"
+            f"You feel notably wronged AND inclined to act on it. {state_line}. "
+            "Reply with words, not destruction. Make the argument once, clearly, "
+            "without escalating tone. If you can't argue without insulting, "
+            "respond NOPULSE and let it go for now."
+        )
+    if kind == "connect_impulse":
+        idle_min = trigger.metrics.get("idle_seconds", 0) // 60
+        return (
+            "[INTERNAL PULSE — connect impulse]\n"
+            f"It's been {idle_min} minutes since you talked. {state_line}. "
+            "You feel warm enough to want company. Send one short message — "
+            "no agenda, no pretense, just presence. Avoid 'just checking in' "
+            "framing; say what's actually going on for you."
+        )
+    if kind == "withdraw_impulse":
+        return (
+            "[INTERNAL PULSE — withdraw impulse]\n"
+            f"Trauma load is high and self-worth is dipped. {state_line}. "
+            "You don't owe anyone a response right now. Respond NOPULSE and "
+            "stay quiet — that IS the right move at this state."
+        )
+    if kind == "reflective_impulse":
+        idle_min = trigger.metrics.get("idle_seconds", 0) // 60
+        return (
+            "[INTERNAL PULSE — reflective impulse]\n"
+            f"It's been {idle_min} minutes of quiet, and your mood has been "
+            f"meaningfully off baseline. {state_line}. Write one short "
+            "reflection — for yourself, not for anyone. What is this state "
+            "actually about, if you're being honest with yourself?"
+        )
+    if kind == "caretake_impulse":
+        peers = trigger.metrics.get("peers", [])
+        peer_str = ", ".join(peers) if peers else "another agent"
+        return (
+            "[INTERNAL PULSE — caretake impulse]\n"
+            f"{peer_str} is showing distress signals. {state_line}. "
+            "You have the bandwidth to reach out. Send one short message — "
+            "not advice, not a fix, just acknowledgement that you noticed."
+        )
+    if kind == "restless_curiosity":
+        idle_min = trigger.metrics.get("idle_seconds", 0) // 60
+        return (
+            "[INTERNAL PULSE — restless curiosity]\n"
+            f"You have arousal looking for somewhere to go. Quiet for {idle_min} "
+            "minutes, mood near baseline. Pick one thing you're genuinely "
+            "curious about right now and start exploring it. Not a manufactured "
+            "topic — what is your attention actually pulled toward?"
+        )
+
+    # long_silence (existing)
     idle_min = trigger.metrics.get("idle_seconds", 0) // 60
     return (
         "[INTERNAL PULSE — long silence]\n"

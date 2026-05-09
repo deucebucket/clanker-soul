@@ -7,6 +7,96 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-05-09
+
+Second of four PRs implementing M1 (#45). The motivation engine grows
+from 5 trigger kinds to 12, mapped to the 6-action-kind vocabulary
+landed in v0.11.0.
+
+### Added — 7 new trigger kinds
+
+- **\`share_impulse\`** — V/I lift + arousal + nourishment → \"I have to
+  tell someone.\" Distinct from elation: lower V threshold, paired
+  with positive accumulation rather than peak.
+- **\`argue_impulse\`** — V drop + arousal + intent → \"someone's
+  wrong.\" Maps to \`comment_reply\` action. Distinct from distress:
+  V drop is smaller (irritation, not crash) and intent is what makes
+  the agent want to act, not just stew.
+- **\`connect_impulse\`** — warmth + extended quiet + low trauma →
+  \"I miss them.\" Suppressed when trauma is high (don't seek
+  company while wounded — that's distress's job).
+- **\`withdraw_impulse\`** — high trauma + low W → \"I need to be
+  alone.\" Maps to \`withdraw\` action — host typically does nothing,
+  but can choose to set status, dim UI, etc. Pre-empts engagement
+  triggers so the agent can actually withdraw.
+- **\`reflective_impulse\`** — extended quiet + sustained mood off
+  baseline + low trauma → \"write this down.\" Slower-burn than
+  trauma_pressure; about reflection, not venting.
+- **\`caretake_impulse\`** — perceived distress in another agent (via
+  optional \`host.peer_distress_signals\` hook) + high self-W →
+  \"check in on them.\" Hosts that don't implement the peer hook
+  never see this fire.
+- **\`restless_curiosity\`** — high arousal + close to baseline + idle
+  → \"I'm bored, want to learn.\" Maps to \`browse_topic\` action.
+  Lowest priority — only fires when nothing heavier has anything to
+  say.
+
+### Added — config + mapping
+
+- 18 new tunable thresholds on \`PulseConfig\` for the 7 new triggers
+  (share_v_lift / share_arousal_min / share_nourishment_floor /
+  curiosity_arousal_min / curiosity_distance_max /
+  curiosity_idle_min_seconds / argue_v_drop / argue_arousal_min /
+  argue_intent_min / connect_v_min / connect_idle_min_seconds /
+  connect_max_trauma / withdraw_trauma_min / withdraw_w_max /
+  reflective_idle_min_seconds / reflective_distance_min /
+  reflective_max_trauma / caretake_self_w_min). All overridable
+  per the \"everything is a toggle\" principle.
+- \`_DEFAULT_TRIGGER_TO_ACTION\` mapping (12 entries). Most triggers
+  default to \`direct_message\` (preserves v0.11.0 backwards-compat
+  behavior); \`argue_impulse\` → \`comment_reply\`, \`withdraw_impulse\`
+  → \`withdraw\`, \`restless_curiosity\` → \`browse_topic\`.
+- \`_action_kind_for_trigger(kind)\` public helper for hosts that
+  want to introspect the mapping.
+- \`_TARGET_REQUIRED_ACTIONS\` set — only \`direct_message\` and
+  \`comment_reply\` require a recipient. The other action kinds can
+  dispatch with \`target=None\` (e.g. \`browse_topic\` doesn't need a
+  recipient; \`withdraw\` is a do-nothing).
+- Optional \`PulseHost.peer_distress_signals() -> list[dict]\` hook.
+  Returns peer distress info (typically read from a shared SoulStore).
+  Not part of the formal Protocol — runtime-detected via
+  \`getattr(host, \"peer_distress_signals\", None)\`. When absent or
+  raises, caretake_impulse never fires (graceful degradation).
+
+### Added — synthetic prompts
+
+\`compose_self_prompt\` extended with 7 new prompt templates. Each
+new trigger kind produces a distinct \"[INTERNAL PULSE — KIND]\"
+header so the agent can tell what state fired. The \`withdraw_impulse\`
+prompt explicitly directs the agent to respond \`NOPULSE\` —
+withdrawal is a first-class outcome, not an absence.
+
+### Tests
+
+23 new tests in \`tests/pulse/test_motivation_triggers.py\`. Each new
+trigger has a fires-under-right-conditions test and (where useful) a
+quiet-under-wrong-conditions test. Coverage includes:
+- Action-kind mappings for all 12 triggers
+- Priority ordering (distress pre-empts argue, withdraw pre-empts
+  connect)
+- Optional peer_distress_signals hook behavior
+- Distinct synthetic prompts for all 7 new kinds
+- The withdraw prompt directing NOPULSE
+
+Full suite: 299 passed, 1 skipped (was 276 + 23 new).
+
+### Backwards compatibility
+
+All existing trigger kinds continue to fire under exactly the same
+conditions. The 5 v0.10.0 triggers map to the same \`direct_message\`
+action kind as before. New triggers strictly add new firing
+conditions; nothing existing was tightened or relaxed.
+
 ## [0.11.0] — 2026-05-09
 
 The motivation-engine foundation release. First of four PRs implementing
