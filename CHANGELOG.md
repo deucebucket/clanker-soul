@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`PendingDeltaConfig.delta_scale` is now operator-tunable (#67).**
+  Promotes the previously-hardcoded ``delta_scale = 10`` multiplier
+  in ``PendingCoordinator._apply_delta`` to a field on
+  ``PendingDeltaConfig`` (default 10.0). Hosts with different physics
+  curves than the project default can now tune mood-delta intensity
+  without forking ``pending.py``. ``_to_score_dim`` accepts a float
+  scale and rounds when computing the integer Score dim. 4 new unit
+  tests cover the default value, custom scaling, [0, 255] clamp under
+  extreme scales, and fractional-scale rounding.
+
 - **`LLMOutcomeClassifier` — first-class LLM-backed classifier (#64).**
   Promotes the inline LLM classifier from the #57 live demo into a
   shipped `clanker_soul.pending.LLMOutcomeClassifier`. Generic

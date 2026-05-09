@@ -435,6 +435,89 @@ class TestCoordinator:
         c.record(p)
         assert c.store.get(p.id) is not None
 
+    def test_delta_scale_default_is_ten(self):
+        cfg = PendingDeltaConfig()
+        assert cfg.delta_scale == 10.0
+
+    def test_delta_scale_custom_value_amplifies_score(self):
+        # acknowledged_fast default is V=+6. With delta_scale=10
+        # Score.v = 128 + 6*10 = 188. With delta_scale=20, 128 + 6*20 = 248.
+        cfg_default = PendingDeltaConfig()
+        cfg_doubled = PendingDeltaConfig(delta_scale=20.0)
+        c1 = self._coord(cfg=cfg_default)
+        c2 = self._coord(cfg=cfg_doubled)
+        for c, label in ((c1, "p1"), (c2, "p2")):
+            p = PendingAction.new(
+                action_id=label,
+                kind="direct_message",
+                surface_key=("ch",),
+                body="hi",
+                soul_snapshot={},
+                expected_response="ack:hi",
+                fired_at=_now(0),
+            )
+            c.record(p)
+            results = c.observe(("ch",), {"text": "hi"}, now=_now(60))
+            assert results[0].score is not None
+        # The doubled-scale Score should land further from neutral.
+        # We can't read the raw Score directly off the second coord
+        # without re-fetching, so use the returned ResolutionResult.
+        # Re-run with deterministic capture.
+        c_default = self._coord(cfg=cfg_default)
+        c_doubled = self._coord(cfg=cfg_doubled)
+        for c in (c_default, c_doubled):
+            p = PendingAction.new(
+                kind="direct_message",
+                surface_key=("ch",),
+                body="hi",
+                soul_snapshot={},
+                expected_response="ack:hi",
+                fired_at=_now(0),
+            )
+            c.record(p)
+        r_default = c_default.observe(("ch",), {"text": "hi"}, now=_now(60))[0]
+        r_doubled = c_doubled.observe(("ch",), {"text": "hi"}, now=_now(60))[0]
+        # Both lift V; the doubled-scale Score is further from neutral.
+        assert r_default.score is not None and r_doubled.score is not None
+        assert r_default.score.v == 128 + 6 * 10  # 188
+        assert r_doubled.score.v == 128 + 6 * 20  # 248
+
+    def test_delta_scale_clamps_to_255(self):
+        # An extreme delta_scale clamps cleanly to [0, 255] without crashing.
+        cfg = PendingDeltaConfig(delta_scale=1000.0)
+        c = self._coord(cfg=cfg)
+        p = PendingAction.new(
+            kind="direct_message",
+            surface_key=("ch",),
+            body="hi",
+            soul_snapshot={},
+            expected_response="ack:hi",
+            fired_at=_now(0),
+        )
+        c.record(p)
+        r = c.observe(("ch",), {"text": "hi"}, now=_now(60))[0]
+        assert r.score is not None
+        assert r.score.v == 255  # +6 * 1000 → way past 255, clamped
+
+    def test_delta_scale_fractional_rounds_correctly(self):
+        # Default Score field type is int — fractional scale must round
+        # rather than throw a type error.
+        cfg = PendingDeltaConfig(delta_scale=2.5)
+        c = self._coord(cfg=cfg)
+        p = PendingAction.new(
+            kind="direct_message",
+            surface_key=("ch",),
+            body="hi",
+            soul_snapshot={},
+            expected_response="ack:hi",
+            fired_at=_now(0),
+        )
+        c.record(p)
+        r = c.observe(("ch",), {"text": "hi"}, now=_now(60))[0]
+        # 6 * 2.5 = 15.0 → 128 + 15 = 143
+        assert r.score is not None
+        assert r.score.v == 128 + 15
+
     def test_observe_acknowledged_applies_fast_delta(self):
         c = self._coord()
         p = PendingAction.new(

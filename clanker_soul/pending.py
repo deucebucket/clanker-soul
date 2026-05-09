@@ -168,6 +168,17 @@ class PendingDeltaConfig:
     ``fast_threshold_seconds`` distinguishes ``"acknowledged_fast"``
     from ``"acknowledged_late"`` for resolution timing — under the
     threshold a fast acknowledgement; over it, the gentler late one.
+
+    ``delta_scale`` multiplies each per-dim delta when constructing the
+    synthetic :py:class:`Score` ingested into physics. The blend
+    behavior of :py:class:`EmotionalPhysics` means a Score landing
+    only-slightly-past-neutral can fight the intended direction when
+    current mood is also past neutral; scaling the delta so the Score
+    lands meaningfully past current mood gets the spec-intended
+    movement after blending. Default 10.0 was tuned against the
+    project's default :py:class:`PhysicsConfig` and DeepSeek V3 Flash
+    in the live demo. Hosts with different physics curves may want
+    different scales.
     """
 
     acknowledged_fast: tuple[int, int, int, int, int, int, int] = (
@@ -216,6 +227,7 @@ class PendingDeltaConfig:
         0,
     )
     fast_threshold_seconds: float = 5 * 60  # 5 minutes
+    delta_scale: float = 10.0
 
 
 # ── Stores ─────────────────────────────────────────────────────────────
@@ -800,11 +812,10 @@ class PendingCoordinator:
         # DOWN toward the Score. To get the delta to read as the spec
         # intends — a real positive bump — we scale up the magnitude so
         # the synthetic Score lands meaningfully past the agent's
-        # current mood. The 10× multiplier was tuned against the live
-        # demo: at K=10 a +6 delta yields a synthetic V=188 which
-        # consistently lifts a mid-range mood by roughly the spec's
-        # intended movement after physics blending.
-        delta_scale = 10
+        # current mood. ``cfg.delta_scale`` (default 10.0) is operator-
+        # tunable for hosts with different physics curves than the
+        # default; see :py:class:`PendingDeltaConfig.delta_scale`.
+        delta_scale = cfg.delta_scale
         v, a, d, u, g, w, i = deltas
         score = Score(
             v=_to_score_dim(v, delta_scale),
@@ -829,7 +840,7 @@ class PendingCoordinator:
         return score
 
 
-def _to_score_dim(delta: int, scale: int = 1) -> int:
+def _to_score_dim(delta: int, scale: float = 1.0) -> int:
     """Map a signed delta to a Score dim in ``[0, 255]``.
 
     With ``scale=1``, ``delta`` is interpreted as a direct shift around
@@ -840,7 +851,7 @@ def _to_score_dim(delta: int, scale: int = 1) -> int:
     Score only-slightly-past-neutral tends to fight the intended
     direction when current mood is also past neutral.
     """
-    return max(0, min(255, 128 + int(delta) * int(scale)))
+    return max(0, min(255, 128 + int(round(int(delta) * float(scale)))))
 
 
 __all__ = [
