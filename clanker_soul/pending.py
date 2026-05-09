@@ -245,6 +245,8 @@ class PendingActionStore(Protocol):
 
     def pending_on(self, surface_key: tuple[str, ...]) -> list[PendingAction]: ...
 
+    def all_pending(self, agent_id: str | None = None) -> list[PendingAction]: ...
+
     def mark(self, action_id: str, status: PendingStatus) -> None: ...
 
     def prune_expired(self, now: datetime) -> list[PendingAction]: ...
@@ -268,6 +270,16 @@ class InMemoryPendingActionStore:
     def pending_on(self, surface_key: tuple[str, ...]) -> list[PendingAction]:
         key = tuple(surface_key)
         return [a for a in self._rows.values() if a.surface_key == key and a.status == "pending"]
+
+    def all_pending(self, agent_id: str | None = None) -> list[PendingAction]:
+        # In-memory stores are single-agent by construction (one process,
+        # one PendingCoordinator, one agent). ``agent_id`` is accepted
+        # for Protocol parity with multi-agent backends but ignored here.
+        del agent_id
+        return sorted(
+            (a for a in self._rows.values() if a.status == "pending"),
+            key=lambda a: a.fired_at,
+        )
 
     def mark(self, action_id: str, status: PendingStatus) -> None:
         row = self._rows.get(action_id)
@@ -378,6 +390,26 @@ class SqlitePendingActionStore:
                 "WHERE surface_key = ? AND status = 'pending' "
                 "ORDER BY fired_at ASC",
                 (key_json,),
+            ).fetchall()
+        return [_row_to_action(r) for r in rows]
+
+    def all_pending(self, agent_id: str | None = None) -> list[PendingAction]:
+        # The current schema does not carry an agent_id column —
+        # one SoulStore-backed pending_actions table is one agent's
+        # working set. ``agent_id`` is accepted for Protocol parity
+        # with multi-agent backends and is treated as advisory: the
+        # store returns every still-pending row regardless. Callers
+        # wanting strict per-agent scoping should use one SoulStore /
+        # SqlitePendingActionStore per agent.
+        del agent_id
+        with self._store.lock:
+            rows = self._store.connection.execute(
+                "SELECT id, kind, fired_at, surface_key, body, "
+                "       soul_snapshot, expected_response, status, "
+                "       expires_at, extra "
+                "FROM pending_actions "
+                "WHERE status = 'pending' "
+                "ORDER BY fired_at ASC"
             ).fetchall()
         return [_row_to_action(r) for r in rows]
 
@@ -733,6 +765,18 @@ class PendingCoordinator:
                 )
             )
         return results
+
+    def all_pending(self) -> list[PendingAction]:
+        """Return every still-pending action across every surface.
+
+        Useful for status panels, debug UIs, or governance hooks that
+        want a global view (e.g. "the agent has 7 unanswered pulses
+        out — back off the next trigger"). Ordered oldest-first by
+        ``fired_at``. Filtered by the coordinator's ``agent_id`` when
+        the underlying store supports per-agent scoping; single-agent
+        stores ignore the id.
+        """
+        return self._store.all_pending(self._agent_id)
 
     def context_bundle(
         self,

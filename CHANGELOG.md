@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`PendingActionStore.all_pending(agent_id=None)` — global view of
+  unresolved pendings (#68).** New Protocol method returning every
+  still-pending action (status="pending") across every surface,
+  ordered oldest-first by `fired_at`. Implemented on
+  `InMemoryPendingActionStore` (single-agent; `agent_id` is accepted
+  for Protocol parity but ignored) and `SqlitePendingActionStore`
+  (current schema is one table per agent — `agent_id` is advisory; a
+  future schema migration adding an `agent_id` column would let one
+  store back multiple agents). New `PendingCoordinator.all_pending()`
+  convenience that forwards the coordinator's configured `agent_id`.
+  Useful for status panels, debug UIs, and governance hooks that want
+  to back off triggers when the agent has many unanswered pulses out.
+  8 new tests covering empty store, oldest-first ordering across
+  surfaces, exclusion of resolved/expired rows, SQLite cross-restart
+  persistence, and the coordinator-level convenience.
+
 - **`PendingDeltaConfig.delta_scale` is now operator-tunable (#67).**
   Promotes the previously-hardcoded ``delta_scale = 10`` multiplier
   in ``PendingCoordinator._apply_delta`` to a field on

@@ -129,6 +129,67 @@ class TestInMemoryStore:
         out = s.pending_on(("ch",))
         assert {a.id for a in out} == {"b"}
 
+    def test_all_pending_empty(self):
+        s = self._store()
+        assert s.all_pending() == []
+
+    def test_all_pending_returns_across_surfaces_oldest_first(self):
+        s = self._store()
+        # Record three on different surfaces with distinct fired_at.
+        s.record(
+            PendingAction.new(
+                action_id="oldest",
+                kind="direct_message",
+                surface_key=("ch1",),
+                body="x",
+                soul_snapshot={},
+                expected_response="ack:x",
+                fired_at=_now(-300),
+            )
+        )
+        s.record(
+            PendingAction.new(
+                action_id="newest",
+                kind="direct_message",
+                surface_key=("ch2",),
+                body="x",
+                soul_snapshot={},
+                expected_response="ack:x",
+                fired_at=_now(-50),
+            )
+        )
+        s.record(
+            PendingAction.new(
+                action_id="middle",
+                kind="direct_message",
+                surface_key=("ch3",),
+                body="x",
+                soul_snapshot={},
+                expected_response="ack:x",
+                fired_at=_now(-150),
+            )
+        )
+        out = s.all_pending()
+        assert [a.id for a in out] == ["oldest", "middle", "newest"]
+
+    def test_all_pending_excludes_resolved_and_expired(self):
+        s = self._store()
+        s.record(self._action("a"))
+        s.record(self._action("b"))
+        s.record(self._action("c"))
+        s.mark("a", "acknowledged")
+        s.mark("b", "ignored")
+        out = s.all_pending()
+        assert {x.id for x in out} == {"c"}
+
+    def test_all_pending_ignores_agent_id_for_in_memory(self):
+        s = self._store()
+        s.record(self._action("a"))
+        # In-memory stores are single-agent; agent_id is accepted but
+        # has no scoping effect — both calls return the same set.
+        assert {x.id for x in s.all_pending(agent_id="ignored")} == {"a"}
+        assert {x.id for x in s.all_pending()} == {"a"}
+
     def test_mark_changes_status(self):
         s = self._store()
         a = self._action()
@@ -221,6 +282,57 @@ class TestSqliteStore:
         assert got.id == "a"
         # And pending_on still finds it.
         assert len(s2.pending_on(("ch", "u"))) == 1
+
+    def test_all_pending_returns_across_surfaces_excludes_resolved(self, tmp_path):
+        store = SoulStore(tmp_path / "all_p.db")
+        s = SqlitePendingActionStore(store)
+        s.record(self._action("a", surface=("c1",)))
+        s.record(self._action("b", surface=("c2",)))
+        s.record(self._action("c", surface=("c3",)))
+        s.mark("b", "acknowledged")
+        out = s.all_pending()
+        assert {x.id for x in out} == {"a", "c"}
+
+    def test_all_pending_ordered_oldest_first(self, tmp_path):
+        store = SoulStore(tmp_path / "all_p_order.db")
+        s = SqlitePendingActionStore(store)
+        s.record(
+            PendingAction.new(
+                action_id="late",
+                kind="direct_message",
+                surface_key=("c1",),
+                body="x",
+                soul_snapshot={},
+                expected_response="ack:x",
+                fired_at=_now(-30),
+            )
+        )
+        s.record(
+            PendingAction.new(
+                action_id="early",
+                kind="direct_message",
+                surface_key=("c2",),
+                body="x",
+                soul_snapshot={},
+                expected_response="ack:x",
+                fired_at=_now(-300),
+            )
+        )
+        out = s.all_pending()
+        assert [x.id for x in out] == ["early", "late"]
+
+    def test_all_pending_persists_across_reopen(self, tmp_path):
+        db = tmp_path / "all_p_reopen.db"
+        store1 = SoulStore(db)
+        s1 = SqlitePendingActionStore(store1)
+        s1.record(self._action("a", surface=("c1",)))
+        s1.record(self._action("b", surface=("c2",)))
+
+        SoulStore._instances.pop(str(db), None)
+        store2 = SoulStore(db)
+        s2 = SqlitePendingActionStore(store2)
+        out = s2.all_pending()
+        assert {x.id for x in out} == {"a", "b"}
 
 
 # ---------------------------------------------------------------------------
@@ -687,6 +799,46 @@ class TestCoordinator:
         assert bundle["pending_count"] == 2
         assert bundle["oldest_age_seconds"] == 300
         assert bundle["kinds"] == ["direct_message", "post_public"]
+
+    def test_all_pending_returns_global_view(self):
+        c = self._coord()
+        c.record(
+            PendingAction.new(
+                action_id="a",
+                kind="direct_message",
+                surface_key=("ch1",),
+                body="x",
+                soul_snapshot={},
+                expected_response="ack:x",
+                fired_at=_now(-100),
+            )
+        )
+        c.record(
+            PendingAction.new(
+                action_id="b",
+                kind="post_public",
+                surface_key=("ch2",),
+                body="x",
+                soul_snapshot={},
+                expected_response="ack:x",
+                fired_at=_now(-50),
+            )
+        )
+        c.record(
+            PendingAction.new(
+                action_id="resolved",
+                kind="direct_message",
+                surface_key=("ch3",),
+                body="x",
+                soul_snapshot={},
+                expected_response="ack:x",
+                fired_at=_now(-25),
+            )
+        )
+        c.store.mark("resolved", "acknowledged")
+        out = c.all_pending()
+        # Only still-pending, oldest-first, across all surfaces.
+        assert [a.id for a in out] == ["a", "b"]
 
     def test_observe_only_classifies_unresolved_pendings(self):
         c = self._coord(classifier=_StubClassifier({"a": "acknowledged", "b": "acknowledged"}))
