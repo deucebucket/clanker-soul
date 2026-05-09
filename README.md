@@ -151,6 +151,23 @@ Recent significant events:
 
 Agent reads this, can articulate its state, knows what's gated and how to recover.
 
+### Dashboard
+
+```bash
+pip install 'clanker-soul[ui]'
+clanker-soul ui --db ./soul.db
+# → http://127.0.0.1:7900
+```
+
+Read-only against the same `soul.db` your agent writes to. No coupling between agent process and dashboard process — share a file.
+
+Routes shipping incrementally:
+- `/` — agent picker + landing page (✓ scaffold)
+- `/` live panel — mood/soul radar, current trauma + nourishment, last pulse decision (#26)
+- `/events` — sortable, filterable event log with per-row drill-down (#27)
+- `/config` — live sliders for every `PhysicsConfig` field + `SoulState` dim, presets dropdown (#28)
+- `/simulate` — replay last N events with hypothetical config, side-by-side (#29)
+
 ### CLI
 
 `pip install` registers a `clanker-soul` binary:
@@ -159,7 +176,7 @@ Agent reads this, can articulate its state, knows what's gated and how to recove
 clanker-soul info  --db ./soul.db
 clanker-soul prune --db ./soul.db --before 2026-01-01 -y
 clanker-soul prune --db ./soul.db --before 2026-01-01 --agent-id alice -y
-clanker-soul ui    --db ./soul.db   # Phase 2 stub today
+clanker-soul ui    --db ./soul.db   # requires [ui] extra
 ```
 
 ## Advanced usage
