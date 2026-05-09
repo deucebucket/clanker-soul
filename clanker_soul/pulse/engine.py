@@ -100,6 +100,7 @@ class PulseEngine:
         gate: "CapabilityGate | None" = None,
         corpus: PromptCorpus | None = None,
         recency: RecencyLog | None = None,
+        previous_face_id: str | None = None,
     ) -> None:
         if event_log is not None and not agent_id:
             raise ValueError(
@@ -135,6 +136,13 @@ class PulseEngine:
         # passes it in here so cooldowns survive restart. Default is
         # the in-memory recency log used by M3.2.
         self._recency: RecencyLog = recency if recency is not None else RecencyLog()
+        # Last delivered face id (M3.4). Used by the corpus sampler to
+        # apply branch-tree weight bumps so follow-up faces win the
+        # dice more often than independent rolls would. Hosts can
+        # pre-populate via the constructor kwarg (e.g. SoulPlugin reads
+        # the most recent dispatched pulse_log row on first build) so
+        # branches survive process restart.
+        self._previous_face_id: str | None = previous_face_id
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -556,6 +564,7 @@ class PulseEngine:
             memory_topics_present=memory_topics,
             recency=self._recency,
             now=now_ts,
+            previous_face_id=self._previous_face_id,
         )
         face_id = face.id if face is not None else None
         action = PulseAction(
@@ -593,6 +602,11 @@ class PulseEngine:
             # subclasses flush this to SQLite for cross-restart cooldown.
             if face is not None:
                 self._recency.note_fired(face.id, self._last_pulse_ts)
+                # M3.4: remember the last delivered face for branch-tree
+                # bias on the NEXT trigger eval. Only updates on
+                # delivered fires — gated/dropped attempts shouldn't
+                # poison the branch chain.
+                self._previous_face_id = face.id
             logger.info(
                 "Pulse fired (%s)%s",
                 trigger.kind,

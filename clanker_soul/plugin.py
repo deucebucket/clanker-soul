@@ -223,6 +223,33 @@ class SoulPlugin:
         self._corpus = PromptCorpus(self._corpus_store.load_faces())
         return self._corpus
 
+    def most_recent_face_id(self) -> str | None:
+        """Return the face_id of the most recent *delivered* pulse for
+        this agent — or None if the pulse log is empty / no event log is
+        wired / the most recent dispatched row predates M3.3.
+
+        Hosts pass this into ``PulseEngine(previous_face_id=...)`` on
+        first construction so branch-tree weights survive process
+        restart: the new engine's first tick still benefits from the
+        last delivered face's branch hints. Returns None silently
+        rather than raising on a missing/empty log so plugin
+        construction never fails for this reason."""
+        if not isinstance(self._event_log, SqliteEventLog):
+            return None
+        try:
+            with self._store.lock:
+                row = self._store.connection.execute(
+                    "SELECT face_id FROM pulse_log "
+                    "WHERE agent_id = ? AND dispatched = 1 "
+                    "  AND face_id IS NOT NULL "
+                    "ORDER BY ts DESC LIMIT 1",
+                    (self._agent_id,),
+                ).fetchone()
+        except Exception:
+            logger.exception("most_recent_face_id query failed — returning None")
+            return None
+        return row[0] if row else None
+
     # ------------------------------------------------------------------
     # Core operations
     # ------------------------------------------------------------------

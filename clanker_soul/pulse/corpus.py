@@ -408,6 +408,31 @@ def novelty(
     return ramp
 
 
+def branch_bias(face: "PromptFace", previous_face_id: str | None) -> float:
+    """Multiplier reflecting whether this face is a coherent follow-up
+    to the previous fire.
+
+    A face's :py:attr:`PromptFace.branch_keys` is the set of parent face
+    ids it wants to follow. When the immediately previous delivered fire
+    is in that set, the face gets a bump so the conversation feels like
+    a sequence rather than independent rolls.
+
+    Returns ``1.0`` when no parent was provided, when the face declares
+    no branch keys, or when the previous face id isn't a declared
+    parent. Returns ``1.5`` on a hit — moderate bias, enough to swing
+    the dice without making branch trees deterministic.
+
+    The bonus magnitude is intentionally not configurable in M3.4 — the
+    issue calls for a "soft preference," and tunability lands later if
+    the distribution feels off in production.
+    """
+    if previous_face_id is None or not face.branch_keys:
+        return 1.0
+    if previous_face_id in face.branch_keys:
+        return 1.5
+    return 1.0
+
+
 def motif_bias(motif: str, mood: list[int] | None, soul: dict) -> float:
     """Up-weight faces whose motif fits the agent's current shape.
 
@@ -508,6 +533,7 @@ class PromptCorpus:
         now: float = 0.0,
         *,
         primed: list[int] | None = None,
+        previous_face_id: str | None = None,
     ) -> list[tuple[PromptFace, float]]:
         """Return ``(face, weight)`` for every face eligible to fire.
 
@@ -516,7 +542,11 @@ class PromptCorpus:
         the face has one and the host supplied a callback), face not in
         cooldown.
 
-        Weight: ``base_weight * vadugwi_affinity * novelty * motif_bias``.
+        Weight: ``base_weight * vadugwi_affinity * novelty * motif_bias
+        * branch_bias``. ``previous_face_id`` (M3.4) is the id of the
+        immediately previous *delivered* fire — faces that name it in
+        ``branch_keys`` get a moderate bump so the conversation feels
+        like a sequence.
         """
         recency = recency or RecencyLog()
         candidates = self._by_trigger.get(trigger.kind, ())
@@ -557,7 +587,8 @@ class PromptCorpus:
                 primed,
             )
             bias = motif_bias(face.motif, trigger.mood, trigger.soul)
-            weight = face.base_weight * affinity * nov * bias
+            branch = branch_bias(face, previous_face_id)
+            weight = face.base_weight * affinity * nov * bias * branch
             if weight <= 0.0:
                 continue
             out.append((face, weight))
@@ -572,11 +603,13 @@ class PromptCorpus:
         now: float = 0.0,
         *,
         primed: list[int] | None = None,
+        previous_face_id: str | None = None,
     ) -> PromptFace | None:
         """Roll a weighted die over eligible faces. Returns None if none."""
         weighted = self.faces_for(
             trigger, situation_tags, memory_topics_present,
             recency, now, primed=primed,
+            previous_face_id=previous_face_id,
         )
         if not weighted:
             return None
@@ -635,5 +668,6 @@ __all__ = [
     "vadugwi_affinity",
     "novelty",
     "motif_bias",
+    "branch_bias",
     "default_tags_from_metrics",
 ]

@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **M3.4 — branch trees + memory anchors.** New
+  `clanker_soul.pulse.corpus.branch_bias` returns a 1.5× multiplier
+  when a face's `branch_keys` contains the immediately previous
+  delivered face id, so follow-up faces win the dice more often than
+  independent rolls would. `PromptCorpus.faces_for` and `.sample` gain
+  an optional `previous_face_id=` kwarg. `compose_self_prompt` and
+  `compose_self_prompt_with_face` thread it through. `PulseEngine`
+  gains a constructor kwarg `previous_face_id=` (so hosts can seed
+  state from disk on first build) and tracks the last delivered
+  face id in `_previous_face_id`, updated only on delivered fires —
+  gated/dropped attempts don't poison the branch chain.
+  `SoulPlugin.most_recent_face_id()` reads the freshest
+  `dispatched=1, face_id IS NOT NULL` row from `pulse_log` so hosts
+  can reconstruct branch state across process restart. Memory anchors
+  (already plumbed end-to-end in M3.1) are now formally documented
+  on `PulseHost` as an optional `memory_topics_present(topic) -> bool`
+  hook (still runtime-detected via `getattr` so existing hosts are
+  unaffected). Live demo at
+  `integrations/hermes/scripts/m3_4_live_demo.py` proves the
+  distribution shift (147/53 child:sibling with parent hint vs 134/66
+  without) and shows the engine actually firing the branched child
+  face after the parent enters cooldown; memory-anchor scenario shows
+  the anchored face filtered when the host has no memory of the topic
+  and winning the dice when it does. Captured at
+  `integrations/hermes/EVIDENCE_M3.4.md` + `logs/m3_4_live_demo.log`.
+
 - **M3.3 — corpus persistence + cross-restart cooldown.** New
   `clanker_soul.pulse.corpus_store.CorpusStore` wraps the
   `SoulStore` connection and provides face CRUD (`save_face`,
