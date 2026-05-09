@@ -179,6 +179,25 @@ class PendingDeltaConfig:
     project's default :py:class:`PhysicsConfig` and DeepSeek V3 Flash
     in the live demo. Hosts with different physics curves may want
     different scales.
+
+    ``delta_mode`` chooses the anchor point for the synthetic Score
+    construction:
+
+      * ``"absolute"`` (default — preserves v0.15 behavior): Score dim =
+        ``clip(128 + delta * scale, 0, 255)``. The synthetic Score is
+        anchored to neutral (128). Best for hosts whose moods stay near
+        neutral; matches today's behavior, no migration burden.
+      * ``"relative"``: Score dim =
+        ``clip(current_mood_dim + delta * scale, 0, 255)``. Anchored to
+        the agent's *current* mood. A positive delta always lands above
+        current mood (positive blend pressure regardless of starting
+        point); a negative delta always lands below (negative blend
+        pressure). Best for hosts whose agents drift well past neutral
+        — without this, ``acknowledged_fast`` cannot lift W on an
+        agent already at high W (the absolute Score lands below current
+        mood and gets absorbed by blending). When ``physics.mood`` is
+        unset (e.g. before the first ingest), the coordinator falls
+        back to absolute mode for that one apply.
     """
 
     acknowledged_fast: tuple[int, int, int, int, int, int, int] = (
@@ -228,6 +247,7 @@ class PendingDeltaConfig:
     )
     fast_threshold_seconds: float = 5 * 60  # 5 minutes
     delta_scale: float = 10.0
+    delta_mode: Literal["absolute", "relative"] = "absolute"
 
 
 # ── Stores ─────────────────────────────────────────────────────────────
@@ -803,6 +823,30 @@ class PendingCoordinator:
     # Helpers
     # ------------------------------------------------------------------
 
+    def _anchors_for_mode(
+        self, mode: Literal["absolute", "relative"]
+    ) -> tuple[int, int, int, int, int, int, int]:
+        """Per-dim anchor points for synthetic Score construction. In
+        ``"absolute"`` mode every dim anchors at neutral 128. In
+        ``"relative"`` mode each dim anchors at the agent's current mood
+        for that dim, pulled from ``physics.mood``. Falls back to
+        ``"absolute"`` when mood isn't initialized — in particular
+        before the first ingest, where physics has no mood yet to
+        relativize against."""
+        if mode == "relative":
+            mood = getattr(self._physics, "mood", None)
+            if mood is not None:
+                return (
+                    int(mood.v),
+                    int(mood.a),
+                    int(mood.d),
+                    int(mood.u),
+                    int(mood.g),
+                    int(mood.w),
+                    int(mood.i),
+                )
+        return (128, 128, 128, 128, 128, 128, 128)
+
     def _resolve_status(self, outcome: ClassifyOutcome) -> PendingStatus:
         # Maps the classifier's outcome label to a stored status.
         if outcome == "acknowledged":
@@ -850,25 +894,24 @@ class PendingCoordinator:
             return None
 
         # Translate deltas (signed) into a Score on the [0, 255] scale.
-        # Naively adding to neutral 128 would give too-mild values: when
-        # the agent's current mood is far from neutral, blending a "+6"
-        # Score (V=134) against a current V=144 actually pulls mood
-        # DOWN toward the Score. To get the delta to read as the spec
-        # intends — a real positive bump — we scale up the magnitude so
-        # the synthetic Score lands meaningfully past the agent's
-        # current mood. ``cfg.delta_scale`` (default 10.0) is operator-
-        # tunable for hosts with different physics curves than the
-        # default; see :py:class:`PendingDeltaConfig.delta_scale`.
+        # See ``PendingDeltaConfig.delta_mode`` and ``delta_scale``
+        # docstrings for the rationale. In short: ``"absolute"`` anchors
+        # the synthetic Score at neutral 128; ``"relative"`` anchors it
+        # at the agent's current mood so positive deltas always read as
+        # positive blend pressure even when current mood is already
+        # saturated past neutral. Relative mode falls back to absolute
+        # if mood isn't initialized yet.
         delta_scale = cfg.delta_scale
         v, a, d, u, g, w, i = deltas
+        anchors = self._anchors_for_mode(cfg.delta_mode)
         score = Score(
-            v=_to_score_dim(v, delta_scale),
-            a=_to_score_dim(a, delta_scale),
-            d=_to_score_dim(d, delta_scale),
-            u=_to_score_dim(u, delta_scale),
-            g=_to_score_dim(g, delta_scale),
-            w=_to_score_dim(w, delta_scale),
-            i=_to_score_dim(i, delta_scale),
+            v=_to_score_dim(v, delta_scale, anchor=anchors[0]),
+            a=_to_score_dim(a, delta_scale, anchor=anchors[1]),
+            d=_to_score_dim(d, delta_scale, anchor=anchors[2]),
+            u=_to_score_dim(u, delta_scale, anchor=anchors[3]),
+            g=_to_score_dim(g, delta_scale, anchor=anchors[4]),
+            w=_to_score_dim(w, delta_scale, anchor=anchors[5]),
+            i=_to_score_dim(i, delta_scale, anchor=anchors[6]),
             patterns=patterns,
             direction="OBSERVATION",
             source=f"pending:{pending.kind}",
@@ -884,18 +927,23 @@ class PendingCoordinator:
         return score
 
 
-def _to_score_dim(delta: int, scale: float = 1.0) -> int:
+def _to_score_dim(delta: int, scale: float = 1.0, *, anchor: int = 128) -> int:
     """Map a signed delta to a Score dim in ``[0, 255]``.
 
-    With ``scale=1``, ``delta`` is interpreted as a direct shift around
-    neutral 128 — useful for callers that already know the absolute
-    Score value they want. With ``scale > 1``, the delta is multiplied
-    so the resulting Score lands further from neutral, which matters
-    when the result will be ingested into physics: blending toward a
-    Score only-slightly-past-neutral tends to fight the intended
-    direction when current mood is also past neutral.
+    ``anchor`` is the value the scaled delta is added to. Default 128
+    (neutral) preserves v0.15 behavior — ``delta`` reads as a shift
+    around neutral. Pass the agent's current mood for that dim
+    (``"relative"`` mode) to make the resulting Score land
+    ``delta * scale`` units above/below current mood, so positive
+    deltas always read as positive blend pressure regardless of where
+    mood currently sits.
+
+    With ``scale > 1``, the delta is multiplied so the resulting Score
+    lands further from the anchor, which matters when the result will
+    be ingested into physics: blending toward a Score only-slightly-
+    past-anchor tends to fight the intended direction.
     """
-    return max(0, min(255, 128 + int(round(int(delta) * float(scale)))))
+    return max(0, min(255, int(anchor) + int(round(int(delta) * float(scale)))))
 
 
 __all__ = [

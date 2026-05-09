@@ -630,6 +630,142 @@ class TestCoordinator:
         assert r.score is not None
         assert r.score.v == 128 + 15
 
+    def test_delta_mode_default_is_absolute(self):
+        cfg = PendingDeltaConfig()
+        assert cfg.delta_mode == "absolute"
+
+    def test_delta_mode_relative_anchors_score_at_current_mood(self):
+        # Drive mood up to high W (172) then resolve acknowledged_fast
+        # in relative mode — the synthetic Score's W must land *above*
+        # current mood W=172 so the blend lifts it. In absolute mode
+        # the same delta would land at W=128+4*10=168, below current
+        # mood, and the blend would fail to lift.
+        cfg = PendingDeltaConfig(delta_mode="relative")
+        c = self._coord(cfg=cfg)
+        # Pre-saturate mood to high W via a heavy-positive event.
+        from clanker_soul import Score
+
+        c._physics.ingest(Score(v=200, a=120, d=180, u=80, g=160, w=200, i=140))
+        mood_before = c._physics.mood
+        assert mood_before.w >= 170, f"setup expected high W, got {mood_before.w}"
+
+        p = PendingAction.new(
+            kind="direct_message",
+            surface_key=("ch",),
+            body="hi",
+            soul_snapshot={},
+            expected_response="ack:hi",
+            fired_at=_now(0),
+        )
+        c.record(p)
+        r = c.observe(("ch",), {"text": "hi"}, now=_now(60))[0]
+        # Synthetic Score's W: anchor=mood.w (~200) + 4*10 = ~240
+        # In absolute mode it would have been 128+40=168.
+        assert r.score is not None
+        assert r.score.w > mood_before.w, (
+            f"relative mode should anchor at current mood; got W={r.score.w}, "
+            f"mood was W={mood_before.w}"
+        )
+
+    def test_delta_mode_absolute_matches_pre_73_behavior(self):
+        # Bit-exact regression check: delta_mode='absolute' (default)
+        # produces exactly the same Score values as before #73.
+        cfg = PendingDeltaConfig(delta_mode="absolute", delta_scale=10.0)
+        c = self._coord(cfg=cfg)
+        p = PendingAction.new(
+            kind="direct_message",
+            surface_key=("ch",),
+            body="hi",
+            soul_snapshot={},
+            expected_response="ack:hi",
+            fired_at=_now(0),
+        )
+        c.record(p)
+        r = c.observe(("ch",), {"text": "hi"}, now=_now(60))[0]
+        # acknowledged_fast = (+6, 0, 0, 0, +2, +4, 0); scale=10
+        # Anchored at neutral 128: V=188, W=168, G=148, others=128
+        assert r.score is not None
+        assert r.score.v == 188
+        assert r.score.w == 168
+        assert r.score.g == 148
+        assert r.score.a == 128
+
+    def test_delta_mode_relative_falls_back_to_absolute_when_mood_unset(self):
+        # If physics.mood is None (no prior ingest), relative mode must
+        # not crash — fall back to absolute anchoring.
+        cfg = PendingDeltaConfig(delta_mode="relative")
+        c = self._coord(cfg=cfg)
+        # Sanity: no prior ingest on this physics.
+        assert c._physics.mood is None
+        p = PendingAction.new(
+            kind="direct_message",
+            surface_key=("ch",),
+            body="hi",
+            soul_snapshot={},
+            expected_response="ack:hi",
+            fired_at=_now(0),
+        )
+        c.record(p)
+        r = c.observe(("ch",), {"text": "hi"}, now=_now(60))[0]
+        # Same as absolute: V=188, W=168
+        assert r.score is not None
+        assert r.score.v == 188
+        assert r.score.w == 168
+
+    def test_delta_mode_relative_negative_delta_lands_below_current_mood(self):
+        # Negative deltas (ignored) in relative mode must still pull
+        # mood DOWN — the synthetic Score's V must land below current
+        # mood for blending to apply negative pressure.
+        cfg = PendingDeltaConfig(delta_mode="relative")
+        c = self._coord(cfg=cfg)
+        # Drive mood somewhere mid-range first.
+        from clanker_soul import Score
+
+        c._physics.ingest(Score(v=160, a=120, d=140, u=100, g=130, w=150, i=130))
+        mood_before = c._physics.mood
+        p = PendingAction.new(
+            kind="direct_message",
+            surface_key=("ch",),
+            body="hi",
+            soul_snapshot={},
+            expected_response="ack:hi;ignore:cancel",
+            fired_at=_now(0),
+        )
+        c.record(p)
+        r = c.observe(("ch",), {"text": "cancel"}, now=_now(60))[0]
+        assert r.outcome == "ignored"
+        # ignored = (-8,...,-6,...); V=mood_v + -8*10 below mood
+        assert r.score is not None
+        assert r.score.v < mood_before.v
+        assert r.score.w < mood_before.w
+
+    def test_delta_mode_relative_clamps_at_boundaries(self):
+        # An extreme positive delta on a near-saturated dim must clamp
+        # to 255, not overflow or wrap.
+        cfg = PendingDeltaConfig(
+            delta_mode="relative",
+            acknowledged_fast=(+50, 0, 0, 0, 0, +50, 0),
+            delta_scale=10.0,
+        )
+        c = self._coord(cfg=cfg)
+        from clanker_soul import Score
+
+        c._physics.ingest(Score(v=240, a=120, d=140, u=100, g=130, w=240, i=130))
+        p = PendingAction.new(
+            kind="direct_message",
+            surface_key=("ch",),
+            body="hi",
+            soul_snapshot={},
+            expected_response="ack:hi",
+            fired_at=_now(0),
+        )
+        c.record(p)
+        r = c.observe(("ch",), {"text": "hi"}, now=_now(60))[0]
+        # mood.v=240 + 50*10 = 740 → clamps to 255
+        assert r.score is not None
+        assert r.score.v == 255
+        assert r.score.w == 255
+
     def test_observe_acknowledged_applies_fast_delta(self):
         c = self._coord()
         p = PendingAction.new(
