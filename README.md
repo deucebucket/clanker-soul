@@ -165,7 +165,7 @@ Routes shipping incrementally:
 - `/` — live panel: SVG mood/soul radar, capability badge, crisis emergency badge, trauma + nourishment by pattern, last pulse decision with prompt, recent events with source attribution, full state-context block. Auto-refreshes every 2s via HTMX polling. (✓ #26)
 - `/events` — sortable, filterable event log with per-row drill-down: full IngestRecord (raw + primed scores, mood/soul before/after, weight/armor/breach math, source + direction, why string). Filters: classification, breach, pattern substring, ts range. Sorts: ts asc/desc, weight asc/desc, breach-first. Paginated 50/page. (✓ #27)
 - `/config` — live sliders for every `PhysicsConfig` field + `SoulState` dim. Each slider writes immediately on change via HTMX → `ConfigOverrides`. Presets bar (`child` / `adult` / `brittle` / `stoic`) applies a bundle in one click. Per-field reset button + `reset all` confirm-protected wipe. Override badges show which fields differ from defaults. (✓ #28)
-- `/simulate` — replay last N events with hypothetical config, side-by-side (#29)
+- `/simulate` — replay last N events through a hypothetical `SoulState` + `PhysicsConfig` and see real vs simulated trajectories side-by-side (per-dim SVG sparklines, end-state soul deviation table). Sandboxed: never writes to the live DB during replay. One-click "apply this config to live agent" writes the simulated overrides through `ConfigOverrides` and redirects to `/config`. (✓ #29)
 
 ### CLI
 
