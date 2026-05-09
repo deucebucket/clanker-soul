@@ -180,6 +180,10 @@ clanker-soul prune --db ./soul.db --before 2026-01-01 --agent-id alice -y
 clanker-soul ui    --db ./soul.db   # requires [ui] extra
 ```
 
+## Hermes Agent integration
+
+clanker-soul ships a first-class plugin for [Nous Research's hermes-agent](https://github.com/NousResearch/hermes-agent). Symlink `integrations/hermes/` into `hermes-agent/plugins/memory/clanker-soul/`, run `hermes config set memory.provider clanker-soul`, and the agent's soul state becomes part of its system prompt every turn. See [`integrations/hermes/README.md`](integrations/hermes/README.md) for full setup, and [`integrations/hermes/EVIDENCE.md`](integrations/hermes/EVIDENCE.md) for a captured A/B run on DeepSeek V4 Flash showing the model literally reflecting back the pattern names from the injected state-context block.
+
 ## Examples
 
 Runnable wire-up samples in [`examples/`](examples/README.md):

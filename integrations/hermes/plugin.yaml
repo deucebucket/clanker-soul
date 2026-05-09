@@ -1,0 +1,7 @@
+name: clanker-soul
+version: 0.9.0
+description: "Persistent VADUGWI emotional state — give the agent mood that survives restarts and accumulates across events."
+pip_dependencies:
+  - clanker-soul>=0.9.0
+hooks:
+  - on_turn_start

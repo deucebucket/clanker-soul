@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-05-09
+
+The proven-on-a-real-LLM release. clanker-soul now ships a first-class
+integration with [Nous Research's hermes-agent](https://github.com/NousResearch/hermes-agent)
+and has captured A/B evidence of an observable effect on a real
+agentic LLM service (DeepSeek V4 Flash via OpenRouter).
+
+### Added
+- **`integrations/hermes/`** — drop-in `MemoryProvider` plugin for
+  hermes-agent. Symlink it into `hermes-agent/plugins/memory/clanker-soul/`,
+  set `memory.provider clanker-soul`, and the agent's emotional state
+  becomes part of its system prompt every turn.
+  - `__init__.py` — `ClankerSoulMemoryProvider` class implementing
+    name/is_available/initialize/system_prompt_block/on_turn_start/
+    sync_turn/get_tool_schemas/handle_tool_call/get_config_schema/
+    save_config/shutdown.
+  - `scorer.py` — `KeywordScorer`, the default natural-language →
+    `Score` mapper with a 22-pattern lexicon covering gratitude,
+    affirmation, humor, abandonment, dehumanization, betrayal,
+    existential negation, criticism, distress, fear, overwhelm, etc.
+    First-person introspection flips direction to `SELF_DIRECTED` for
+    the Safety Governor's spike-vs-emergency discrimination.
+  - `plugin.yaml` — hermes plugin manifest.
+  - `README.md` — install + activate + replace-the-scorer recipe.
+  - `EVIDENCE.md` — captured live A/B run on DeepSeek V4 Flash:
+    same neutral question, soul-on vs soul-off, model literally
+    reflecting back the pattern names from the injected state-context
+    block.
+- **Three agent-facing tools** exposed by the provider:
+  `clanker_soul_state` (read snapshot), `clanker_soul_apply_preset`
+  (reshape personality), `clanker_soul_dashboard_url` (return UI link).
+- **`tests/test_hermes_integration.py`** — 18 tests covering the
+  scorer's lexicon + the provider's lifecycle hooks. Hermes-agent is
+  not a test dep; the provider's import-fallback path makes it
+  loadable without it.
+
+### Notes
+- Hermes-4-70B does not currently support tool use on OpenRouter, so
+  the demo defaults to `deepseek/deepseek-v4-flash` ($0.14/$0.28 per M).
+  Free tier alternatives exist
+  (`nousresearch/hermes-3-llama-3.1-405b:free`).
+
 ## [0.9.0] — 2026-05-09
 
 The runnable-examples release. Cuts time-to-first-event from "read 400
