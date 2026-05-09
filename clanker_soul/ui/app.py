@@ -29,6 +29,13 @@ from fastapi.templating import Jinja2Templates
 from clanker_soul import __version__
 from clanker_soul.governor import GovernorConfig
 from clanker_soul.soul import SoulStore
+from clanker_soul.ui.events import (
+    DEFAULT_PAGE_SIZE,
+    DEFAULT_SORT,
+    SORT_OPTIONS,
+    parse_iso_date,
+    query_events,
+)
 from clanker_soul.ui.live import build_live_view
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -111,6 +118,53 @@ def create_app(
             request, "_live_panel.html",
             {"selected_agent": agent_id, "view": view},
         )
+
+    @app.get("/events", response_class=HTMLResponse)
+    async def events_page(
+        request: Request,
+        agent_id: str | None = None,
+        sort: str = DEFAULT_SORT,
+        classification: str | None = None,
+        breach: str | None = None,
+        q: str | None = None,
+        after: str | None = None,
+        before: str | None = None,
+        page: int = 1,
+        page_size: int = DEFAULT_PAGE_SIZE,
+        partial: int = 0,
+    ) -> HTMLResponse:
+        """Forensic event log. ``partial=1`` returns only the table
+        fragment for HTMX swaps; default returns the full page."""
+        agents, selected = _resolve_agent(agent_id)
+        result = None
+        if selected:
+            result = query_events(
+                store, selected,
+                sort=sort,
+                classification=classification or None,
+                breach=breach or None,
+                pattern_q=q or None,
+                ts_after=parse_iso_date(after),
+                ts_before=parse_iso_date(before),
+                page=page,
+                page_size=page_size,
+            )
+        ctx = {
+            "db_path": str(db_path),
+            "version": __version__,
+            "agents": agents,
+            "selected_agent": selected,
+            "result": result,
+            "filters": {
+                "sort": sort, "classification": classification or "",
+                "breach": breach or "", "q": q or "",
+                "after": after or "", "before": before or "",
+            },
+            "sort_options": SORT_OPTIONS,
+            "page_size": page_size,
+        }
+        template = "_events_table.html" if partial else "events.html"
+        return templates.TemplateResponse(request, template, ctx)
 
     @app.get("/health")
     async def health() -> JSONResponse:
