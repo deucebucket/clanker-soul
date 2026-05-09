@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] — 2026-05-09
+
 ### Changed
 
 - **M3.4 live demo consolidated to a single SoulPlugin / single DB
@@ -1033,7 +1035,8 @@ live-tunable knobs, and personality presets.
 - Host-agnostic `PulseEngine` driven by a `PulseHost` protocol.
 - Test suite covering physics, soul, score, and pulse triggers.
 
-[Unreleased]: https://github.com/deucebucket/clanker-soul/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/deucebucket/clanker-soul/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/deucebucket/clanker-soul/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/deucebucket/clanker-soul/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/deucebucket/clanker-soul/compare/v0.13.1...v0.14.0
 [0.13.1]: https://github.com/deucebucket/clanker-soul/compare/v0.13.0...v0.13.1
