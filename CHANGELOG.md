@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`clanker-soul faces` CLI subcommand (#69).** New local-ops command
+  for auditing pulse activity from the terminal:
+  ``clanker-soul faces --db PATH [--limit N] [--agent ID]
+  [--since YYYY-MM-DD] [--by-face FACE_ID] [--motif MOTIF]
+  [--dispatched-only]``. Reads ``pulse_log`` LEFT JOIN-ed with
+  ``prompt_corpus`` so each row shows ``ts | agent | trigger |
+  face_id | motif | fired | suppressed``. Most-recent-first;
+  empty-result is rc 0 (not an error). Width-aware on a TTY,
+  tab-separated when piped (so `awk` / `sort` / `cut` work). Default
+  ``--limit 20``. Useful for spot-checking a live agent's recent
+  trigger/face distribution without standing up the dashboard. 9 new
+  tests covering each filter axis, the empty-result path, and the
+  invalid-date error path.
+
 - **`PendingActionStore.all_pending(agent_id=None)` — global view of
   unresolved pendings (#68).** New Protocol method returning every
   still-pending action (status="pending") across every surface,

@@ -1,14 +1,14 @@
 """``clanker-soul`` command-line entry.
 
-Three subcommands cover the local-ops surface for v0.2:
+Subcommands cover the local-ops surface:
 
-  - ``clanker-soul info  --db PATH``                       inspect a soul.db
-  - ``clanker-soul prune --db PATH --before YYYY-MM-DD``   trim old log rows
-  - ``clanker-soul ui    --db PATH``                       launch dashboard
-                                                            (stub until Phase 2)
+  - ``clanker-soul info   --db PATH``                       inspect a soul.db
+  - ``clanker-soul prune  --db PATH --before YYYY-MM-DD``   trim old log rows
+  - ``clanker-soul faces  --db PATH``                       audit face firings
+  - ``clanker-soul ui     --db PATH``                       launch dashboard
 
 The CLI is intentionally minimal — anything fancier (filter by classification,
-export to CSV, replay simulator) belongs in the Phase-2 dashboard, not here.
+export to CSV, replay simulator) belongs in the dashboard, not here.
 """
 
 from __future__ import annotations
@@ -138,6 +138,93 @@ def _prune(args: argparse.Namespace) -> int:
     return 0
 
 
+def _faces(args: argparse.Namespace) -> int:
+    """List face firings from ``pulse_log``, joined to ``prompt_corpus`` so
+    each row shows the face's motif when it's still in the corpus.
+
+    Default ordering is most-recent-first. Filtering is additive: every
+    flag tightens the result set. Empty result (no rows match the
+    filters) is not an error — print a header + zero rows + exit 0.
+    """
+    db = Path(args.db)
+    if not db.exists():
+        print(f"error: db not found: {db}", file=sys.stderr)
+        return 2
+    try:
+        store = SoulStore(db)
+    except sqlite3.DatabaseError as e:
+        print(f"error: not a valid sqlite database: {e}", file=sys.stderr)
+        return 2
+
+    where_parts: list[str] = []
+    params: list[object] = []
+    if args.agent:
+        where_parts.append("p.agent_id = ?")
+        params.append(args.agent)
+    if args.since:
+        try:
+            since_ts = _parse_before(args.since)
+        except ValueError as e:
+            print(f"error: --since: {e}", file=sys.stderr)
+            return 2
+        where_parts.append("p.ts >= ?")
+        params.append(since_ts)
+    if args.by_face:
+        where_parts.append("p.face_id = ?")
+        params.append(args.by_face)
+    if args.motif:
+        where_parts.append("c.motif = ?")
+        params.append(args.motif)
+    if args.dispatched_only:
+        where_parts.append("p.dispatched = 1")
+
+    where_sql = (" WHERE " + " AND ".join(where_parts)) if where_parts else ""
+    sql = (
+        "SELECT p.ts, p.agent_id, p.trigger_kind, p.face_id, "
+        "       c.motif, p.dispatched, p.suppressed_reason "
+        "FROM pulse_log p "
+        "LEFT JOIN prompt_corpus c ON p.face_id = c.id "
+        f"{where_sql} "
+        "ORDER BY p.ts DESC LIMIT ?"
+    )
+    params.append(args.limit)
+
+    with store.lock:
+        rows = store.connection.execute(sql, params).fetchall()
+
+    # Header + body. Width-aware — id columns can be long; fall back to
+    # tab-separated when stdout isn't a TTY (so callers can pipe to awk).
+    headers = ("when", "agent", "trigger", "face_id", "motif", "fired", "suppressed")
+    formatted = [
+        (
+            _format_ts(row[0]),
+            row[1] or "-",
+            row[2] or "-",
+            row[3] or "-",
+            row[4] or "-",
+            "yes" if row[5] else "no",
+            row[6] or "-",
+        )
+        for row in rows
+    ]
+    if sys.stdout.isatty():
+        widths = [
+            max(len(h), max((len(r[i]) for r in formatted), default=0))
+            for i, h in enumerate(headers)
+        ]
+        line = "  ".join(h.ljust(w) for h, w in zip(headers, widths))
+        print(line)
+        print("  ".join("-" * w for w in widths))
+        for r in formatted:
+            print("  ".join(c.ljust(w) for c, w in zip(r, widths)))
+    else:
+        print("\t".join(headers))
+        for r in formatted:
+            print("\t".join(r))
+    print(f"\n{len(formatted)} row(s)")
+    return 0
+
+
 def _ui(args: argparse.Namespace) -> int:
     """Phase-2 dashboard launcher. Falls through to a stub when the
     ``[ui]`` extra isn't installed. Once Phase 2 ships, ``clanker_soul.ui``
@@ -179,6 +266,46 @@ def main(argv: list[str] | None = None) -> int:
     prune_p.add_argument("--agent-id", default=None, help="scope to one agent (default: all)")
     prune_p.add_argument("-y", "--yes", action="store_true", help="confirm deletion (required)")
     prune_p.set_defaults(func=_prune)
+
+    faces_p = sub.add_parser(
+        "faces",
+        help="audit face firings — most-recent-first listing of pulse_log + motif",
+    )
+    faces_p.add_argument("--db", required=True, help="path to soul.db")
+    faces_p.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="max rows to return (default 20)",
+    )
+    faces_p.add_argument(
+        "--agent",
+        default=None,
+        help="scope to one agent_id (default: all)",
+    )
+    faces_p.add_argument(
+        "--since",
+        default=None,
+        help="ISO date (YYYY-MM-DD); only show rows fired at-or-after midnight UTC",
+    )
+    faces_p.add_argument(
+        "--by-face",
+        default=None,
+        dest="by_face",
+        help="scope to a single face id (e.g. baseline.distress.directness)",
+    )
+    faces_p.add_argument(
+        "--motif",
+        default=None,
+        help="scope to a single motif (e.g. distress, gratitude)",
+    )
+    faces_p.add_argument(
+        "--dispatched-only",
+        action="store_true",
+        dest="dispatched_only",
+        help="hide gated/suppressed rows; only show successfully dispatched fires",
+    )
+    faces_p.set_defaults(func=_faces)
 
     ui_p = sub.add_parser("ui", help="launch the dashboard (Phase 2; stub for now)")
     ui_p.add_argument("--db", required=True)
