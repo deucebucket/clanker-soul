@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] — 2026-05-09
+
+Infrastructure patch. CI now runs on every push and PR, the package
+ships PEP 561 type info, and a quietly-broken wheel (missing UI
+templates) is fixed.
+
+### Added
+- **GitHub Actions CI** (#37) — `.github/workflows/ci.yml` runs `pytest`
+  on Python 3.10/3.11/3.12/3.13 (matrix, fail-fast off) on every push to
+  main and every PR. Concurrency cancels superseded runs on the same
+  ref. Separate non-blocking ruff job surfaces lint/format issues
+  without gating merges (will be promoted to required once we adopt
+  ruff fully). README CI badge added.
+- **PEP 561 `py.typed` marker** (#38) — `clanker_soul/py.typed` empty
+  marker file ships in the wheel + sdist. Downstream type checkers
+  (mypy, pyright) now consume clanker-soul's annotations directly
+  instead of treating them as `Any`.
+
+### Fixed
+- Wheels were silently missing `clanker_soul/ui/templates/*.html` and
+  the static dir — `pip install clanker-soul[ui]` would have failed at
+  runtime when FastAPI tried to load templates. Added explicit
+  `[tool.setuptools.package-data]` entry covering `py.typed`,
+  templates, and static. Verified by inspecting the built wheel.
+
 ## [0.8.0] — 2026-05-09
 
 The simulator release. The "what if I had tuned this differently?" tool.
