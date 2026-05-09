@@ -126,9 +126,19 @@ def test_prune_rejects_invalid_date(tmp_path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_ui_emits_install_hint_until_phase_2(tmp_path, capsys) -> None:
+def test_ui_emits_install_hint_when_extra_not_installed(tmp_path, capsys) -> None:
+    """If the [ui] extra isn't installed, ``clanker-soul ui`` prints
+    the install hint and exits non-zero. When the extra IS installed,
+    this test skips — the post-install behavior is covered by
+    ``tests/ui/test_scaffold.py::test_cli_ui_subcommand_no_longer_emits_install_hint``."""
+    try:
+        import fastapi  # noqa: F401
+        pytest.skip("[ui] extra is installed; behavior tested in tests/ui/")
+    except ImportError:
+        pass
+
     db = tmp_path / "ui.db"
-    SoulStore(db)  # create empty DB
+    SoulStore(db)
     rc = main(["ui", "--db", str(db)])
     assert rc != 0
     err = capsys.readouterr().err

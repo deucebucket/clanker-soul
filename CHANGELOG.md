@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-05-09
+
+The dashboard scaffold release. `pip install 'clanker-soul[ui]'` and
+`clanker-soul ui --db ./soul.db` now opens a real FastAPI server with
+a working landing page. Subsequent releases (0.5.x) add the live
+panel, events log, config panel, and simulator routes on top.
+
+### Added
+- **`clanker_soul.ui` subpackage** (#25), gated behind a new `[ui]`
+  optional dependency group (`fastapi`, `uvicorn[standard]`, `jinja2`,
+  `httpx` for the test client).
+  - `create_app(db_path, *, default_agent_id) -> FastAPI` — testable
+    factory; can be mounted under any ASGI server.
+  - `launch(db_path, *, agent_id, port, host, log_level)` —
+    blocking uvicorn launcher; binds to `127.0.0.1:7900` by default
+    (not network-exposed).
+  - `templates/base.html` + `templates/index.html` — Jinja2 with
+    Tailwind + HTMX via CDN; no Node toolchain.
+  - Routes: `GET /` (landing page with agent picker), `GET /health`
+    (JSON liveness probe).
+- The `clanker-soul ui --db PATH` CLI subcommand now actually
+  launches when the `[ui]` extra is installed (was a stub before).
+
+### Changed
+- `tests/` mirrors source: new `tests/ui/` directory.
+- `tests/test_cli.py::test_ui_emits_install_hint_*` skips when
+  `[ui]` is installed; the post-install behavior is covered by
+  `tests/ui/test_scaffold.py`.
+
 ## [0.3.0] — 2026-05-09
 
 The safety governor release. Emotional state now translates into operational restrictions
@@ -143,7 +172,8 @@ live-tunable knobs, and personality presets.
 - Host-agnostic `PulseEngine` driven by a `PulseHost` protocol.
 - Test suite covering physics, soul, score, and pulse triggers.
 
-[Unreleased]: https://github.com/deucebucket/clanker-soul/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/deucebucket/clanker-soul/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/deucebucket/clanker-soul/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/deucebucket/clanker-soul/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/deucebucket/clanker-soul/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/deucebucket/clanker-soul/releases/tag/v0.1.0

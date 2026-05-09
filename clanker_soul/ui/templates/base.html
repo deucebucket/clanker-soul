@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}clanker-soul{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
+    <script src="https://unpkg.com/htmx.org@2.0.4/dist/ext/sse.js" defer></script>
+    <style>
+        :root {
+            color-scheme: dark;
+        }
+        body {
+            background: #0a0a0a;
+            color: #e5e5e5;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <header class="border-b border-neutral-800 px-6 py-4 flex items-center justify-between">
+        <div class="flex items-baseline gap-3">
+            <a href="/" class="text-lg font-semibold text-neutral-100">clanker-soul</a>
+            <span class="text-xs text-neutral-500">v{{ version }}</span>
+        </div>
+        <nav class="flex gap-4 text-sm text-neutral-400">
+            <a href="/" class="hover:text-neutral-100">live</a>
+            <a href="/events" class="hover:text-neutral-100 text-neutral-600 cursor-not-allowed" title="coming in #27">events</a>
+            <a href="/config" class="hover:text-neutral-100 text-neutral-600 cursor-not-allowed" title="coming in #28">config</a>
+            <a href="/simulate" class="hover:text-neutral-100 text-neutral-600 cursor-not-allowed" title="coming in #29">simulate</a>
+            <a href="/api/docs" class="hover:text-neutral-100 text-xs text-neutral-500">api</a>
+        </nav>
+    </header>
+    <main class="px-6 py-8 max-w-6xl mx-auto">
+        {% block content %}{% endblock %}
+    </main>
+    <footer class="px-6 py-4 mt-12 text-xs text-neutral-600 border-t border-neutral-900">
+        <span class="font-mono">{{ db_path }}</span>
+    </footer>
+</body>
+</html>
