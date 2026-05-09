@@ -28,6 +28,7 @@ Output:
 
 Reads OPENROUTER_API_KEY from env or ``~/ai-drive/hermes-agent/.env``.
 """
+
 from __future__ import annotations
 
 import json
@@ -87,7 +88,9 @@ def _call_model(api_key: str, system_prompt: str, user_prompt: str) -> str:
     }
     try:
         resp = httpx.post(
-            OPENROUTER_URL, headers=headers, content=json.dumps(payload),
+            OPENROUTER_URL,
+            headers=headers,
+            content=json.dumps(payload),
             timeout=30.0,
         )
         resp.raise_for_status()
@@ -128,11 +131,7 @@ class LLMOutcomeClassifier:
     def classify(self, pending: PendingAction, observation: dict):
         body = pending.body or "(no body)"
         text = observation.get("text", "")
-        user_prompt = (
-            f"Agent's message: {body!r}\n"
-            f"Inbound: {text!r}\n"
-            f"Classification:"
-        )
+        user_prompt = f"Agent's message: {body!r}\nInbound: {text!r}\nClassification:"
         raw = _call_model(self._api_key, self.SYSTEM_PROMPT, user_prompt).lower().strip()
         self.last_raw_response = raw
         for label in ("acknowledged", "ignored", "mixed", "unrelated"):
@@ -160,6 +159,7 @@ def main() -> int:
     if not api_key:
         log("Continuing without LLM — using KeywordOutcomeClassifier reference.")
         from clanker_soul import KeywordOutcomeClassifier
+
         classifier: OutcomeClassifier = KeywordOutcomeClassifier()
     else:
         classifier = LLMOutcomeClassifier(api_key)
@@ -174,10 +174,12 @@ def main() -> int:
     log("\n--- Scenario A: Acknowledged fast ---")
     with SoulPlugin(agent_id="pending-a", db_path=db) as plugin:
         coord = plugin.build_pending_coordinator(
-            classifier=classifier, durable=False,
+            classifier=classifier,
+            durable=False,
         )
         # Drive a tiny amount of soul activity so mood is non-None.
         from clanker_soul import Score
+
         plugin.ingest(Score(v=140, w=160, patterns=("BASELINE",), source="demo"))
         snap_before = plugin.snapshot()
         log(f"A snapshot before: V={snap_before['mood'][0]} W={snap_before['mood'][5]}")
@@ -203,26 +205,30 @@ def main() -> int:
             log(f"A classifier raw: {classifier.last_raw_response!r}")
         snap_after = plugin.snapshot()
         log(f"A snapshot after: V={snap_after['mood'][0]} W={snap_after['mood'][5]}")
-        v_delta = snap_after['mood'][0] - snap_before['mood'][0]
-        w_delta = snap_after['mood'][5] - snap_before['mood'][5]
+        v_delta = snap_after["mood"][0] - snap_before["mood"][0]
+        w_delta = snap_after["mood"][5] - snap_before["mood"][5]
         log(f"A mood delta: ΔV={v_delta:+d} ΔW={w_delta:+d}")
-        summary.append({
-            "scenario": "A — acknowledged fast",
-            "agent_message": body,
-            "inbound": inbound,
-            "classified": result.outcome,
-            "resolved_status": result.resolved_status,
-            "v_delta": v_delta,
-            "w_delta": w_delta,
-        })
+        summary.append(
+            {
+                "scenario": "A — acknowledged fast",
+                "agent_message": body,
+                "inbound": inbound,
+                "classified": result.outcome,
+                "resolved_status": result.resolved_status,
+                "v_delta": v_delta,
+                "w_delta": w_delta,
+            }
+        )
 
     # ── Scenario B: Ignored ───────────────────────────────────────────
     log("\n--- Scenario B: Ignored ---")
     with SoulPlugin(agent_id="pending-b", db_path=tmp / "soul_b.db") as plugin:
         coord = plugin.build_pending_coordinator(
-            classifier=classifier, durable=False,
+            classifier=classifier,
+            durable=False,
         )
         from clanker_soul import Score
+
         plugin.ingest(Score(v=140, w=160, patterns=("BASELINE",), source="demo"))
         snap_before = plugin.snapshot()
         log(f"B snapshot before: V={snap_before['mood'][0]} W={snap_before['mood'][5]}")
@@ -248,26 +254,30 @@ def main() -> int:
             log(f"B classifier raw: {classifier.last_raw_response!r}")
         snap_after = plugin.snapshot()
         log(f"B snapshot after: V={snap_after['mood'][0]} W={snap_after['mood'][5]}")
-        v_delta = snap_after['mood'][0] - snap_before['mood'][0]
-        w_delta = snap_after['mood'][5] - snap_before['mood'][5]
+        v_delta = snap_after["mood"][0] - snap_before["mood"][0]
+        w_delta = snap_after["mood"][5] - snap_before["mood"][5]
         log(f"B mood delta: ΔV={v_delta:+d} ΔW={w_delta:+d}")
-        summary.append({
-            "scenario": "B — ignored",
-            "agent_message": body,
-            "inbound": inbound,
-            "classified": result.outcome,
-            "resolved_status": result.resolved_status,
-            "v_delta": v_delta,
-            "w_delta": w_delta,
-        })
+        summary.append(
+            {
+                "scenario": "B — ignored",
+                "agent_message": body,
+                "inbound": inbound,
+                "classified": result.outcome,
+                "resolved_status": result.resolved_status,
+                "v_delta": v_delta,
+                "w_delta": w_delta,
+            }
+        )
 
     # ── Scenario C: Expired ───────────────────────────────────────────
     log("\n--- Scenario C: Expired (TTL elapses without inbound) ---")
     with SoulPlugin(agent_id="pending-c", db_path=tmp / "soul_c.db") as plugin:
         coord = plugin.build_pending_coordinator(
-            classifier=classifier, durable=False,
+            classifier=classifier,
+            durable=False,
         )
         from clanker_soul import Score
+
         plugin.ingest(Score(v=140, w=160, patterns=("BASELINE",), source="demo"))
         snap_before = plugin.snapshot()
         log(f"C snapshot before: V={snap_before['mood'][0]} W={snap_before['mood'][5]}")
@@ -292,18 +302,20 @@ def main() -> int:
             log(f"C outcome={r.outcome} status={r.resolved_status}")
         snap_after = plugin.snapshot()
         log(f"C snapshot after: V={snap_after['mood'][0]} W={snap_after['mood'][5]}")
-        v_delta = snap_after['mood'][0] - snap_before['mood'][0]
-        w_delta = snap_after['mood'][5] - snap_before['mood'][5]
+        v_delta = snap_after["mood"][0] - snap_before["mood"][0]
+        w_delta = snap_after["mood"][5] - snap_before["mood"][5]
         log(f"C mood delta: ΔV={v_delta:+d} ΔW={w_delta:+d}")
-        summary.append({
-            "scenario": "C — expired",
-            "agent_message": body,
-            "inbound": "(none — TTL elapsed)",
-            "classified": "expired",
-            "resolved_status": "expired",
-            "v_delta": v_delta,
-            "w_delta": w_delta,
-        })
+        summary.append(
+            {
+                "scenario": "C — expired",
+                "agent_message": body,
+                "inbound": "(none — TTL elapsed)",
+                "classified": "expired",
+                "resolved_status": "expired",
+                "v_delta": v_delta,
+                "w_delta": w_delta,
+            }
+        )
 
     # ── Write evidence ──────────────────────────────────────────────────
     log("\n--- Writing evidence ---")

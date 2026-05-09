@@ -55,6 +55,7 @@ Out of scope here (separate issues):
     ``surface_key``).
   * pgvector / postgres persistence — SQLite is the reference.
 """
+
 from __future__ import annotations
 
 import json
@@ -168,19 +169,49 @@ class PendingDeltaConfig:
     """
 
     acknowledged_fast: tuple[int, int, int, int, int, int, int] = (
-        +6, 0, 0, 0, +2, +4, 0,
+        +6,
+        0,
+        0,
+        0,
+        +2,
+        +4,
+        0,
     )
     acknowledged_late: tuple[int, int, int, int, int, int, int] = (
-        +3, 0, 0, 0, +1, +2, 0,
+        +3,
+        0,
+        0,
+        0,
+        +1,
+        +2,
+        0,
     )
     mixed: tuple[int, int, int, int, int, int, int] = (
-        -2, 0, 0, 0, 0, -2, 0,
+        -2,
+        0,
+        0,
+        0,
+        0,
+        -2,
+        0,
     )
     ignored: tuple[int, int, int, int, int, int, int] = (
-        -8, 0, 0, 0, -3, -6, -2,
+        -8,
+        0,
+        0,
+        0,
+        -3,
+        -6,
+        -2,
     )
     expired: tuple[int, int, int, int, int, int, int] = (
-        -3, 0, 0, 0, -2, -3, 0,
+        -3,
+        0,
+        0,
+        0,
+        -2,
+        -3,
+        0,
     )
     fast_threshold_seconds: float = 5 * 60  # 5 minutes
 
@@ -222,10 +253,7 @@ class InMemoryPendingActionStore:
 
     def pending_on(self, surface_key: tuple[str, ...]) -> list[PendingAction]:
         key = tuple(surface_key)
-        return [
-            a for a in self._rows.values()
-            if a.surface_key == key and a.status == "pending"
-        ]
+        return [a for a in self._rows.values() if a.surface_key == key and a.status == "pending"]
 
     def mark(self, action_id: str, status: PendingStatus) -> None:
         row = self._rows.get(action_id)
@@ -298,7 +326,8 @@ class SqlitePendingActionStore:
                     ) VALUES (?,?,?,?,?,?,?,?,?,?)
                     """,
                     (
-                        action.id, action.kind,
+                        action.id,
+                        action.kind,
                         action.fired_at.timestamp(),
                         json.dumps(list(action.surface_key)),
                         action.body,
@@ -556,22 +585,26 @@ class PendingCoordinator:
                 )
                 outcome = "unrelated"
             if outcome == "unrelated":
-                results.append(ResolutionResult(
-                    pending=pending,
-                    outcome=outcome,
-                    resolved_status=pending.status,
-                    score=None,
-                ))
+                results.append(
+                    ResolutionResult(
+                        pending=pending,
+                        outcome=outcome,
+                        resolved_status=pending.status,
+                        score=None,
+                    )
+                )
                 continue
             resolved_status = self._resolve_status(outcome)
             self._store.mark(pending.id, resolved_status)
             score = self._apply_delta(pending, outcome, now)
-            results.append(ResolutionResult(
-                pending=pending,
-                outcome=outcome,
-                resolved_status=resolved_status,
-                score=score,
-            ))
+            results.append(
+                ResolutionResult(
+                    pending=pending,
+                    outcome=outcome,
+                    resolved_status=resolved_status,
+                    score=score,
+                )
+            )
         return results
 
     def tick(self, *, now: datetime | None = None) -> list[ResolutionResult]:
@@ -582,12 +615,14 @@ class PendingCoordinator:
         results: list[ResolutionResult] = []
         for action in expired:
             score = self._apply_delta(action, "expired_outcome_marker", now)
-            results.append(ResolutionResult(
-                pending=action,
-                outcome="ignored",  # closest classify-outcome semantic
-                resolved_status="expired",
-                score=score,
-            ))
+            results.append(
+                ResolutionResult(
+                    pending=action,
+                    outcome="ignored",  # closest classify-outcome semantic
+                    resolved_status="expired",
+                    score=score,
+                )
+            )
         return results
 
     def context_bundle(
@@ -646,7 +681,9 @@ class PendingCoordinator:
                 if elapsed <= cfg.fast_threshold_seconds
                 else cfg.acknowledged_late
             )
-            patterns = (f"PENDING_ACK_{ 'FAST' if elapsed <= cfg.fast_threshold_seconds else 'LATE'}",)
+            patterns = (
+                f"PENDING_ACK_{'FAST' if elapsed <= cfg.fast_threshold_seconds else 'LATE'}",
+            )
         elif outcome == "ignored":
             deltas = cfg.ignored
             patterns = ("PENDING_IGNORED",)

@@ -11,11 +11,11 @@ Layers:
    classifier soft-fail on exceptions
 5. SQLite persistence survives restart (drops the SoulStore singleton)
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-import pytest
 
 from clanker_soul import (
     EmotionalPhysics,
@@ -25,7 +25,6 @@ from clanker_soul import (
     PendingAction,
     PendingCoordinator,
     PendingDeltaConfig,
-    Score,
     SoulState,
     SoulStore,
     SqlitePendingActionStore,
@@ -73,8 +72,12 @@ class TestPendingAction:
 
     def test_new_explicit_id(self):
         p = PendingAction.new(
-            kind="x", surface_key=("a",), body=None, soul_snapshot={},
-            expected_response="ack:x", action_id="custom-id",
+            kind="x",
+            surface_key=("a",),
+            body=None,
+            soul_snapshot={},
+            expected_response="ack:x",
+            action_id="custom-id",
         )
         assert p.id == "custom-id"
 
@@ -90,9 +93,13 @@ class TestInMemoryStore:
 
     def _action(self, action_id="a", surface=("ch",), expires_at=None):
         return PendingAction.new(
-            action_id=action_id, kind="direct_message",
-            surface_key=surface, body="x", soul_snapshot={},
-            expected_response="ack:hi", expires_at=expires_at,
+            action_id=action_id,
+            kind="direct_message",
+            surface_key=surface,
+            body="x",
+            soul_snapshot={},
+            expected_response="ack:hi",
+            expires_at=expires_at,
             fired_at=_now(0),
         )
 
@@ -153,10 +160,13 @@ class TestInMemoryStore:
 class TestSqliteStore:
     def _action(self, action_id="a", surface=("ch", "u"), expires_at=None):
         return PendingAction.new(
-            action_id=action_id, kind="direct_message",
-            surface_key=surface, body="hi",
+            action_id=action_id,
+            kind="direct_message",
+            surface_key=surface,
+            body="hi",
             soul_snapshot={"v": 130, "w": 170},
-            expected_response="ack:hi", expires_at=expires_at,
+            expected_response="ack:hi",
+            expires_at=expires_at,
             fired_at=_now(0),
         )
 
@@ -221,8 +231,11 @@ class TestKeywordClassifier:
     def _pending(self, expected: str = "ack:hi,hello;ignore:cancel,no") -> PendingAction:
         return PendingAction.new(
             kind="direct_message",
-            surface_key=("c",), body="hi", soul_snapshot={},
-            expected_response=expected, fired_at=_now(0),
+            surface_key=("c",),
+            body="hi",
+            soul_snapshot={},
+            expected_response=expected,
+            fired_at=_now(0),
         )
 
     def test_acknowledged_match(self):
@@ -269,6 +282,7 @@ def _physics() -> EmotionalPhysics:
 
 class _StubClassifier:
     """Test classifier with a configurable response per pending id."""
+
     def __init__(self, responses: dict[str, str]):
         self._responses = responses
 
@@ -277,21 +291,27 @@ class _StubClassifier:
 
 
 class TestCoordinator:
-    def _coord(self, classifier: OutcomeClassifier | None = None,
-               cfg: PendingDeltaConfig | None = None):
+    def _coord(
+        self, classifier: OutcomeClassifier | None = None, cfg: PendingDeltaConfig | None = None
+    ):
         physics = _physics()
         store = InMemoryPendingActionStore()
         clf = classifier or KeywordOutcomeClassifier()
         return PendingCoordinator(
-            physics=physics, store=store, classifier=clf,
+            physics=physics,
+            store=store,
+            classifier=clf,
             delta_config=cfg,
         )
 
     def test_record_persists_to_store(self):
         c = self._coord()
         p = PendingAction.new(
-            kind="direct_message", surface_key=("ch",), body="hi",
-            soul_snapshot={}, expected_response="ack:hi",
+            kind="direct_message",
+            surface_key=("ch",),
+            body="hi",
+            soul_snapshot={},
+            expected_response="ack:hi",
         )
         c.record(p)
         assert c.store.get(p.id) is not None
@@ -299,8 +319,12 @@ class TestCoordinator:
     def test_observe_acknowledged_applies_fast_delta(self):
         c = self._coord()
         p = PendingAction.new(
-            action_id="p1", kind="direct_message", surface_key=("ch",),
-            body="hi", soul_snapshot={}, expected_response="ack:hi",
+            action_id="p1",
+            kind="direct_message",
+            surface_key=("ch",),
+            body="hi",
+            soul_snapshot={},
+            expected_response="ack:hi",
             fired_at=_now(0),
         )
         c.record(p)
@@ -320,8 +344,12 @@ class TestCoordinator:
         cfg = PendingDeltaConfig(fast_threshold_seconds=10)
         c = self._coord(cfg=cfg)
         p = PendingAction.new(
-            action_id="p", kind="direct_message", surface_key=("ch",),
-            body="hi", soul_snapshot={}, expected_response="ack:hi",
+            action_id="p",
+            kind="direct_message",
+            surface_key=("ch",),
+            body="hi",
+            soul_snapshot={},
+            expected_response="ack:hi",
             fired_at=_now(0),
         )
         c.record(p)
@@ -334,8 +362,12 @@ class TestCoordinator:
         clf = _StubClassifier({"p": "ignored"})
         c = self._coord(classifier=clf)
         p = PendingAction.new(
-            action_id="p", kind="direct_message", surface_key=("ch",),
-            body="hi", soul_snapshot={}, expected_response="ack:hi",
+            action_id="p",
+            kind="direct_message",
+            surface_key=("ch",),
+            body="hi",
+            soul_snapshot={},
+            expected_response="ack:hi",
         )
         c.record(p)
         results = c.observe(("ch",), {"text": "anything"})
@@ -351,8 +383,12 @@ class TestCoordinator:
         clf = _StubClassifier({"p": "unrelated"})
         c = self._coord(classifier=clf)
         p = PendingAction.new(
-            action_id="p", kind="direct_message", surface_key=("ch",),
-            body="hi", soul_snapshot={}, expected_response="ack:hi",
+            action_id="p",
+            kind="direct_message",
+            surface_key=("ch",),
+            body="hi",
+            soul_snapshot={},
+            expected_response="ack:hi",
         )
         c.record(p)
         results = c.observe(("ch",), {"text": "totally different"})
@@ -369,8 +405,12 @@ class TestCoordinator:
 
         c = self._coord(classifier=BoomClassifier())
         p = PendingAction.new(
-            action_id="p", kind="x", surface_key=("ch",),
-            body="x", soul_snapshot={}, expected_response="ack:x",
+            action_id="p",
+            kind="x",
+            surface_key=("ch",),
+            body="x",
+            soul_snapshot={},
+            expected_response="ack:x",
         )
         c.record(p)
         # Must not raise; outcome treated as unrelated.
@@ -382,13 +422,22 @@ class TestCoordinator:
     def test_tick_expires_and_applies_expired_delta(self):
         c = self._coord()
         old = PendingAction.new(
-            action_id="old", kind="direct_message", surface_key=("ch",),
-            body="hi", soul_snapshot={}, expected_response="ack:hi",
-            fired_at=_now(-1000), expires_at=_now(-100),
+            action_id="old",
+            kind="direct_message",
+            surface_key=("ch",),
+            body="hi",
+            soul_snapshot={},
+            expected_response="ack:hi",
+            fired_at=_now(-1000),
+            expires_at=_now(-100),
         )
         new = PendingAction.new(
-            action_id="new", kind="direct_message", surface_key=("ch",),
-            body="hi", soul_snapshot={}, expected_response="ack:hi",
+            action_id="new",
+            kind="direct_message",
+            surface_key=("ch",),
+            body="hi",
+            soul_snapshot={},
+            expected_response="ack:hi",
             expires_at=_now(+1000),
         )
         c.record(old)
@@ -410,16 +459,28 @@ class TestCoordinator:
 
     def test_context_bundle_with_pendings(self):
         c = self._coord()
-        c.record(PendingAction.new(
-            action_id="a", kind="direct_message", surface_key=("ch",),
-            body="x", soul_snapshot={}, expected_response="ack:x",
-            fired_at=_now(-300),
-        ))
-        c.record(PendingAction.new(
-            action_id="b", kind="post_public", surface_key=("ch",),
-            body="x", soul_snapshot={}, expected_response="ack:x",
-            fired_at=_now(-100),
-        ))
+        c.record(
+            PendingAction.new(
+                action_id="a",
+                kind="direct_message",
+                surface_key=("ch",),
+                body="x",
+                soul_snapshot={},
+                expected_response="ack:x",
+                fired_at=_now(-300),
+            )
+        )
+        c.record(
+            PendingAction.new(
+                action_id="b",
+                kind="post_public",
+                surface_key=("ch",),
+                body="x",
+                soul_snapshot={},
+                expected_response="ack:x",
+                fired_at=_now(-100),
+            )
+        )
         bundle = c.context_bundle(("ch",), now=_now(0))
         assert bundle["pending_count"] == 2
         assert bundle["oldest_age_seconds"] == 300
@@ -427,16 +488,28 @@ class TestCoordinator:
 
     def test_observe_only_classifies_unresolved_pendings(self):
         c = self._coord(classifier=_StubClassifier({"a": "acknowledged", "b": "acknowledged"}))
-        c.record(PendingAction.new(
-            action_id="a", kind="x", surface_key=("ch",),
-            body="x", soul_snapshot={}, expected_response="ack:x",
-            fired_at=_now(0),
-        ))
-        c.record(PendingAction.new(
-            action_id="b", kind="x", surface_key=("ch",),
-            body="x", soul_snapshot={}, expected_response="ack:x",
-            fired_at=_now(0),
-        ))
+        c.record(
+            PendingAction.new(
+                action_id="a",
+                kind="x",
+                surface_key=("ch",),
+                body="x",
+                soul_snapshot={},
+                expected_response="ack:x",
+                fired_at=_now(0),
+            )
+        )
+        c.record(
+            PendingAction.new(
+                action_id="b",
+                kind="x",
+                surface_key=("ch",),
+                body="x",
+                soul_snapshot={},
+                expected_response="ack:x",
+                fired_at=_now(0),
+            )
+        )
         # Mark "a" as already resolved before observing.
         c.store.mark("a", "ignored")
         results = c.observe(("ch",), {"text": "yes"})
@@ -452,6 +525,7 @@ class TestCoordinator:
 class TestSoulPluginIntegration:
     def test_build_pending_coordinator_default_durable(self, tmp_path):
         from clanker_soul import SoulPlugin
+
         with SoulPlugin(agent_id="p1", db_path=tmp_path / "p.db") as plugin:
             coord = plugin.build_pending_coordinator(
                 classifier=KeywordOutcomeClassifier(),
@@ -460,7 +534,9 @@ class TestSoulPluginIntegration:
             assert coord.delta_config is not None
             # Round-trip — ingestion goes into plugin.physics.
             p = PendingAction.new(
-                kind="direct_message", surface_key=("ch",), body="hi",
+                kind="direct_message",
+                surface_key=("ch",),
+                body="hi",
                 soul_snapshot=plugin.snapshot(),
                 expected_response="ack:hi",
             )
@@ -471,6 +547,7 @@ class TestSoulPluginIntegration:
 
     def test_build_pending_coordinator_in_memory(self, tmp_path):
         from clanker_soul import SoulPlugin
+
         with SoulPlugin(agent_id="p2", db_path=tmp_path / "p2.db") as plugin:
             coord = plugin.build_pending_coordinator(
                 classifier=KeywordOutcomeClassifier(),
@@ -480,6 +557,7 @@ class TestSoulPluginIntegration:
 
     def test_build_pending_coordinator_custom_store(self, tmp_path):
         from clanker_soul import SoulPlugin
+
         custom = InMemoryPendingActionStore()
         with SoulPlugin(agent_id="p3", db_path=tmp_path / "p3.db") as plugin:
             coord = plugin.build_pending_coordinator(
