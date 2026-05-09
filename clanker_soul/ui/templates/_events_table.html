@@ -1,0 +1,135 @@
+{# Events table partial. Rendered standalone via /events?partial=1
+   for HTMX filter/sort/paginate, and embedded inside events.html. #}
+{% macro pagination_query(filters, agent_id, page) -%}
+agent_id={{ agent_id }}{% if filters.sort %}&sort={{ filters.sort }}{% endif %}{% if filters.classification %}&classification={{ filters.classification }}{% endif %}{% if filters.breach %}&breach={{ filters.breach }}{% endif %}{% if filters.q %}&q={{ filters.q }}{% endif %}{% if filters.after %}&after={{ filters.after }}{% endif %}{% if filters.before %}&before={{ filters.before }}{% endif %}&page={{ page }}
+{%- endmacro %}
+{% if not result or result.total == 0 %}
+    <div class="rounded border border-neutral-800 p-4 bg-neutral-950 text-neutral-500 text-sm">
+        no events match this filter.
+    </div>
+{% else %}
+
+<div class="rounded border border-neutral-800 bg-neutral-950 overflow-hidden">
+    <div class="px-4 py-2 border-b border-neutral-800 flex items-center text-xs text-neutral-500 font-mono">
+        <span>{{ result.total }} events · page {{ result.page }} · {{ result.page_size }}/page</span>
+    </div>
+    <table class="w-full text-xs font-mono">
+        <thead class="bg-neutral-900 text-neutral-500 uppercase tracking-wide">
+            <tr>
+                <th class="px-3 py-2 text-left">when</th>
+                <th class="px-3 py-2 text-left">classification</th>
+                <th class="px-3 py-2 text-left">patterns</th>
+                <th class="px-3 py-2 text-right">w</th>
+                <th class="px-3 py-2 text-right">w_eff</th>
+                <th class="px-3 py-2 text-center">breach</th>
+                <th class="px-3 py-2 text-left">why</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for ev in result.rows %}
+            <tr class="border-t border-neutral-900 hover:bg-neutral-900">
+                <td class="px-3 py-2 text-neutral-400 whitespace-nowrap">{{ ev.ts | int }}</td>
+                <td class="px-3 py-2">
+                    {% if ev.classification == 'negative' %}
+                        <span class="text-rose-400">negative</span>
+                    {% elif ev.classification == 'positive' %}
+                        <span class="text-emerald-400">positive</span>
+                    {% else %}
+                        <span class="text-neutral-600">—</span>
+                    {% endif %}
+                </td>
+                <td class="px-3 py-2 text-neutral-300">{{ ev.patterns | join(",") }}</td>
+                <td class="px-3 py-2 text-right text-neutral-300">{{ "%.2f"|format(ev.weight_raw) }}</td>
+                <td class="px-3 py-2 text-right text-neutral-400">{{ "%.2f"|format(ev.weight_effective) }}</td>
+                <td class="px-3 py-2 text-center">
+                    {% if ev.breached %}<span class="text-rose-300">●</span>{% else %}<span class="text-neutral-700">○</span>{% endif %}
+                </td>
+                <td class="px-3 py-2 text-neutral-300 max-w-md">
+                    <details>
+                        <summary class="cursor-pointer truncate hover:text-neutral-100">{{ ev.why }}</summary>
+                        <div class="mt-3 space-y-3 pl-3 border-l-2 border-neutral-800 text-xs">
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <div class="text-neutral-500 uppercase mb-1">raw score</div>
+                                    <pre class="text-neutral-300">V={{ ev.raw.v }} A={{ ev.raw.a }} D={{ ev.raw.d }} U={{ ev.raw.u }}
+G={{ ev.raw.g }} W={{ ev.raw.w }} I={{ ev.raw.i }}</pre>
+                                </div>
+                                {% if ev.primed %}
+                                <div>
+                                    <div class="text-neutral-500 uppercase mb-1">primed score</div>
+                                    <pre class="text-neutral-300">V={{ ev.primed.v }} A={{ ev.primed.a }} D={{ ev.primed.d }} U={{ ev.primed.u }}
+G={{ ev.primed.g }} W={{ ev.primed.w }} I={{ ev.primed.i }}</pre>
+                                </div>
+                                {% endif %}
+                            </div>
+
+                            {% if ev.raw.source or ev.raw.direction %}
+                            <div class="text-neutral-500">
+                                {% if ev.raw.source %}<span class="text-neutral-300">source:</span> {{ ev.raw.source }}{% endif %}
+                                {% if ev.raw.direction %}<span class="ml-3 text-neutral-300">direction:</span> {{ ev.raw.direction }}{% endif %}
+                            </div>
+                            {% endif %}
+
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <div class="text-neutral-500 uppercase mb-1">mood before / after</div>
+                                    <div class="text-neutral-300">
+                                        {% if ev.mood_before %}V={{ ev.mood_before.v }} W={{ ev.mood_before.w }}{% else %}—{% endif %}
+                                        →
+                                        V={{ ev.mood_after.v }} W={{ ev.mood_after.w }}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="text-neutral-500 uppercase mb-1">soul before / after</div>
+                                    <div class="text-neutral-300">
+                                        V={{ ev.soul_before.v }} W={{ ev.soul_before.w }}
+                                        →
+                                        V={{ ev.soul_after.v }} W={{ ev.soul_after.w }}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-3 gap-3">
+                                <div><span class="text-neutral-500">weight_raw:</span> {{ "%.4f"|format(ev.weight_raw) }}</div>
+                                <div><span class="text-neutral-500">armor:</span> {{ "%.4f"|format(ev.armor) }}</div>
+                                <div><span class="text-neutral-500">w_eff:</span> {{ "%.4f"|format(ev.weight_effective) }}</div>
+                            </div>
+
+                            {% if ev.breached %}
+                            <div class="text-rose-300">
+                                BREACH · Δ = {{ "%.4f"|format(ev.breach_delta) }}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </details>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <div class="px-4 py-2 border-t border-neutral-800 flex items-center justify-between text-xs">
+        <div>
+            {% if result.has_prev %}
+                <a href="?{{ pagination_query(filters, selected_agent, result.page - 1) }}"
+                   hx-get="?{{ pagination_query(filters, selected_agent, result.page - 1) }}&partial=1"
+                   hx-target="#events-table" hx-push-url="true"
+                   class="text-neutral-300 hover:text-neutral-100">← prev</a>
+            {% else %}
+                <span class="text-neutral-700">← prev</span>
+            {% endif %}
+        </div>
+        <div class="text-neutral-500">page {{ result.page }} of {{ ((result.total - 1) // result.page_size) + 1 if result.total > 0 else 1 }}</div>
+        <div>
+            {% if result.has_next %}
+                <a href="?{{ pagination_query(filters, selected_agent, result.page + 1) }}"
+                   hx-get="?{{ pagination_query(filters, selected_agent, result.page + 1) }}&partial=1"
+                   hx-target="#events-table" hx-push-url="true"
+                   class="text-neutral-300 hover:text-neutral-100">next →</a>
+            {% else %}
+                <span class="text-neutral-700">next →</span>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% endif %}

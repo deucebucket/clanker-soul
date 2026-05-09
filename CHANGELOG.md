@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-05-09
+
+The events log release. Forensic view of every ingest event the agent
+has processed: sortable, filterable, paginated, with per-row drill-down
+showing the full `IngestRecord`. This is the answer to "why did the
+agent do that?"
+
+### Added
+- **`clanker_soul.ui.events`** module (#27): `query_events(store, agent_id, *,
+  sort, classification, breach, pattern_q, ts_after, ts_before, page,
+  page_size)` returns an `EventQueryResult` with rows + total count + pagination
+  metadata. Pure read-only query against the `events` table.
+- **`GET /events`** route — full forensic page: agent picker, filter form
+  (classification, breach, pattern substring, ts range), sort dropdown
+  (ts_desc/asc, weight_desc/asc, breach_first), paginated table, per-row
+  `<details>` drill-down showing raw + primed score, mood-before/after,
+  soul-before/after, source + direction, full weight/armor/breach math.
+  HTMX-driven filter/sort/paginate via `partial=1` query param.
+- **`templates/{events,_events_table}.html`** — full page + table partial
+  for HTMX swaps. Pagination links preserve filter state.
+- Nav in `base.html` enables the `events` link.
+
 ## [0.5.0] — 2026-05-09
 
 The live panel release. Dashboard now shows the agent's actual current state:
@@ -203,7 +225,8 @@ live-tunable knobs, and personality presets.
 - Host-agnostic `PulseEngine` driven by a `PulseHost` protocol.
 - Test suite covering physics, soul, score, and pulse triggers.
 
-[Unreleased]: https://github.com/deucebucket/clanker-soul/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/deucebucket/clanker-soul/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/deucebucket/clanker-soul/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/deucebucket/clanker-soul/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/deucebucket/clanker-soul/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/deucebucket/clanker-soul/compare/v0.2.0...v0.3.0

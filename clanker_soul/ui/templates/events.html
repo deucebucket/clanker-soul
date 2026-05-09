@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block title %}clanker-soul · events · {{ selected_agent or 'pick agent' }}{% endblock %}
+
+{% block content %}
+<section class="space-y-6">
+
+    {# === AGENT PICKER === #}
+    <div class="rounded border border-neutral-800 p-4 bg-neutral-950">
+        <div class="text-xs text-neutral-500 uppercase tracking-wide mb-2">agent</div>
+        {% if agents %}
+            <form method="get" action="/events" class="flex items-center gap-3">
+                <select name="agent_id" class="bg-neutral-900 border border-neutral-700 rounded px-3 py-2 text-neutral-100 font-mono"
+                        onchange="this.form.submit()">
+                    {% for aid in agents %}
+                    <option value="{{ aid }}" {% if aid == selected_agent %}selected{% endif %}>{{ aid }}</option>
+                    {% endfor %}
+                </select>
+                <span class="text-xs text-neutral-500 ml-auto">forensic event log</span>
+            </form>
+        {% else %}
+            <p class="text-neutral-500 text-sm">no agents in this database.</p>
+        {% endif %}
+    </div>
+
+    {% if selected_agent and result is not none %}
+
+    {# === FILTERS === #}
+    <form method="get" action="/events"
+          hx-get="/events?partial=1"
+          hx-target="#events-table"
+          hx-swap="innerHTML"
+          hx-push-url="true"
+          class="rounded border border-neutral-800 p-4 bg-neutral-950 space-y-3 text-xs font-mono">
+        <input type="hidden" name="agent_id" value="{{ selected_agent }}">
+        <div class="grid grid-cols-2 md:grid-cols-6 gap-3">
+            <div>
+                <label class="block text-neutral-500 uppercase tracking-wide mb-1">sort</label>
+                <select name="sort" class="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-neutral-100">
+                    {% for opt in sort_options %}
+                    <option value="{{ opt }}" {% if opt == filters.sort %}selected{% endif %}>{{ opt }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-neutral-500 uppercase tracking-wide mb-1">classification</label>
+                <select name="classification" class="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-neutral-100">
+                    <option value="" {% if not filters.classification %}selected{% endif %}>any</option>
+                    <option value="positive" {% if filters.classification == 'positive' %}selected{% endif %}>positive</option>
+                    <option value="negative" {% if filters.classification == 'negative' %}selected{% endif %}>negative</option>
+                    <option value="null" {% if filters.classification == 'null' %}selected{% endif %}>none/ambiguous</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-neutral-500 uppercase tracking-wide mb-1">breach</label>
+                <select name="breach" class="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-neutral-100">
+                    <option value="" {% if not filters.breach %}selected{% endif %}>any</option>
+                    <option value="yes" {% if filters.breach == 'yes' %}selected{% endif %}>breached</option>
+                    <option value="no" {% if filters.breach == 'no' %}selected{% endif %}>not breached</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-neutral-500 uppercase tracking-wide mb-1">pattern</label>
+                <input type="text" name="q" value="{{ filters.q }}" placeholder="ABANDONMENT"
+                       class="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-neutral-100">
+            </div>
+            <div>
+                <label class="block text-neutral-500 uppercase tracking-wide mb-1">after</label>
+                <input type="text" name="after" value="{{ filters.after }}" placeholder="2026-01-01"
+                       class="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-neutral-100">
+            </div>
+            <div>
+                <label class="block text-neutral-500 uppercase tracking-wide mb-1">before</label>
+                <input type="text" name="before" value="{{ filters.before }}" placeholder="2027-01-01"
+                       class="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-neutral-100">
+            </div>
+        </div>
+        <div class="flex items-center gap-2 pt-1">
+            <button type="submit" class="bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded px-3 py-1 text-xs">apply</button>
+            <a href="/events?agent_id={{ selected_agent }}" class="text-neutral-500 hover:text-neutral-200 text-xs">reset</a>
+        </div>
+    </form>
+
+    {# === TABLE === #}
+    <div id="events-table">
+        {% include "_events_table.html" %}
+    </div>
+
+    {% endif %}
+</section>
+{% endblock %}

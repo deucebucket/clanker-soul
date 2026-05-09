@@ -163,7 +163,7 @@ Read-only against the same `soul.db` your agent writes to. No coupling between a
 
 Routes shipping incrementally:
 - `/` — live panel: SVG mood/soul radar, capability badge, crisis emergency badge, trauma + nourishment by pattern, last pulse decision with prompt, recent events with source attribution, full state-context block. Auto-refreshes every 2s via HTMX polling. (✓ #26)
-- `/events` — sortable, filterable event log with per-row drill-down (#27)
+- `/events` — sortable, filterable event log with per-row drill-down: full IngestRecord (raw + primed scores, mood/soul before/after, weight/armor/breach math, source + direction, why string). Filters: classification, breach, pattern substring, ts range. Sorts: ts asc/desc, weight asc/desc, breach-first. Paginated 50/page. (✓ #27)
 - `/config` — live sliders for every `PhysicsConfig` field + `SoulState` dim, presets dropdown (#28)
 - `/simulate` — replay last N events with hypothetical config, side-by-side (#29)
 
