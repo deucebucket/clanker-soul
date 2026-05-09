@@ -40,9 +40,9 @@ Score (per event) ──► Mood (minutes-hours) ──► Soul (days-weeks, per
 
 **`clanker_soul/score.py`** — `Score` is a frozen 7-int dataclass with optional `patterns` tuple. Tiny on purpose: host-specific telemetry (description, source IDs, latency) belongs in *wrappers* around `Score`, not in it. Physics only reads the 7 dims + patterns.
 
-**`clanker_soul/soul.py`** — `SoulState` (the persistent baseline), `TraumaReservoir` / `NourishmentReservoir` (pattern-keyed, 14-day half-life, capped at `RESERVOIR_CAP=1000`), and `SoulStore` (SQLite). `SoulStore.get(path)` returns a process-wide singleton per path; tests should construct `SoulStore(tmp_path)` directly to avoid sharing the connection.
+**`clanker_soul/soul/`** — package: `state.py` (`SoulState` baseline dataclass), `reservoirs.py` (`TraumaReservoir`, `NourishmentReservoir`, 14-day half-life, capped at `RESERVOIR_CAP=1000`), `store.py` (`SoulStore` with SQLite + the v0.2 schema setup). `SoulStore.get(path)` returns a process-wide singleton per path; tests construct `SoulStore(tmp_path)` directly to avoid sharing the connection. The package `__init__.py` re-exports everything so `from clanker_soul.soul import SoulState` keeps working.
 
-**`clanker_soul/physics.py`** — `EmotionalPhysics` is the engine. One instance per agent, **not thread-safe**. Per-event pipeline in `ingest()`:
+**`clanker_soul/physics/`** — package: `config.py` (`PhysicsConfig`, `POSITIVE_PATTERNS`, `HEAVY_PATTERNS`), `math.py` (pure helpers: `event_weight`, `soul_armor`, `mood_prime_score`, `dim_resilience`, `soul_distance`, plus the internal `_why` reason generator), `tick.py` (`PhysicsTick` diagnostic record), `engine.py` (`EmotionalPhysics` stateful engine — one instance per agent, **not thread-safe**). Per-event pipeline in `ingest()`:
 
 1. `event_weight` from raw VADUGWI (worth/valence distance from neutral, intensified by urgency/gravity)
 2. `soul_armor` from current Soul (high W/D/G = resilient)
@@ -53,7 +53,7 @@ Score (per event) ──► Mood (minutes-hours) ──► Soul (days-weeks, per
 
 `soul_drift()` is the slow bookkeeping pass — call periodically (e.g. from `PulseHost.slow_drift_tick`). Idempotent via `last_drift_ts`; skips work under 3min elapsed.
 
-**`clanker_soul/eventlog.py`** — `IngestRecord` and `PulseRecord` are frozen dataclasses; `EventLog` is a runtime-checkable Protocol. `SqliteEventLog(store)` writes via the shared `SoulStore.connection` + `SoulStore.lock` — no second handle. `NullEventLog` is the noop default. **Soft-fail invariant:** writes that fail (DB locked, disk full, connection closed mid-tick) MUST log a warning and continue; they MUST NOT raise into the caller. Physics catches sink exceptions in addition to `SqliteEventLog`'s own catch — defense in depth for custom impls.
+**`clanker_soul/eventlog/`** — package: `records.py` (`IngestRecord`, `PulseRecord` frozen dataclasses), `protocol.py` (`EventLog` runtime-checkable Protocol, `NullEventLog` noop default), `sqlite.py` (`SqliteEventLog` durable impl writing via the shared `SoulStore.connection` + `SoulStore.lock` — no second handle). **Soft-fail invariant:** writes that fail (DB locked, disk full, connection closed mid-tick) MUST log a warning and continue; they MUST NOT raise into the caller. Physics catches sink exceptions in addition to `SqliteEventLog`'s own catch — defense in depth for custom impls.
 
 **`clanker_soul/overrides.py`** — `OverrideBundle` is a frozen `(physics: dict, soul: dict)` partial-fields dataclass. `ConfigOverrides(store)` reads/writes the v0.2 `config_overrides` table. `apply_overrides()` is a pure merge function. **Partial-merge semantics:** only fields explicitly present in the bundle are overridden. Removing a previously-overridden field reverts that field to its **constructor** value (not the dataclass default — the value the agent was constructed with). Soul fields that were *never* overridden are left alone, so drift accumulated since construction is preserved across `reload_overrides()` calls. Unknown override keys are logged at WARNING and ignored — forward-compat with future `PhysicsConfig` fields and survives a v0.2/v0.3 schema skew between agent and UI processes.
 
@@ -61,7 +61,7 @@ Score (per event) ──► Mood (minutes-hours) ──► Soul (days-weeks, per
 
 **`clanker_soul/__main__.py`** — CLI subcommands `info` / `prune` / `ui`. The `ui` subcommand uses `try: from clanker_soul.ui import launch` to dispatch — Phase 2 just adds the module, no CLI changes needed.
 
-**`clanker_soul/pulse.py`** — `PulseEngine` is **host-agnostic**. It never invents recipients, never knows about your message dataclass, and never imports your channel layer. Hosts implement the `PulseHost` protocol (`snapshot`, `slow_drift_tick`, `most_recent_target`, `dispatch_pulse`, `due_reminders`, `deliver_reminder`). Each host hook may be sync or async; the engine uses `asyncio.iscoroutine()` rather than wrapping. Triggers: `distress`, `elation`, `trauma_pressure`, `gratitude`, `long_silence`. Cooldown is `min_quiet_seconds` since *any* outbound (call `note_outbound()` on reactive replies, not just pulses).
+**`clanker_soul/pulse/`** — package: `config.py` (`PulseConfig`), `triggers.py` (`Trigger`, `PulseTarget`), `host.py` (`PulseHost` Protocol), `prompt.py` (`compose_self_prompt`), `engine.py` (`PulseEngine`). `PulseEngine` is **host-agnostic** — it never invents recipients, never knows about your message dataclass, never imports your channel layer. Hosts implement the `PulseHost` protocol (`snapshot`, `slow_drift_tick`, `most_recent_target`, `dispatch_pulse`, `due_reminders`, `deliver_reminder`). Each host hook may be sync or async; the engine uses `asyncio.iscoroutine()` rather than wrapping. Triggers: `distress`, `elation`, `trauma_pressure`, `gratitude`, `long_silence`. Cooldown is `min_quiet_seconds` since *any* outbound (call `note_outbound()` on reactive replies, not just pulses).
 
 ## Design invariants worth knowing
 

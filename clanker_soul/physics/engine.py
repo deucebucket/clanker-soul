@@ -1,39 +1,49 @@
-"""EmotionalPhysics — the math that turns scored events into Mood + Soul updates.
+"""``EmotionalPhysics`` — the stateful engine that turns scored events
+into Mood + Soul updates.
 
-Pipeline per event:
-
-  1. compute event_weight w from raw VADUGWI (severity-aware, U/G boost heavy)
+Per-event pipeline (``ingest``):
+  1. compute event_weight w from raw VADUGWI (severity-aware)
   2. compute soul_armor a from current Soul (high W/D = resilient)
-  3. effective weight w_eff = w * (1 - a * armor_max)
-  4. mood blend: M_new = M * (1 - w_eff·α) + B * (w_eff·α)
-  5. per-dim soul pull pulls each dim back toward its soul anchor (cushioned
-     proportionally to the soul value on that dim, weight-gated so heavy
-     events still punch through)
-  6. on heavy events with breached mood: direct soul leak (back-to-back damage)
+  3. effective weight ``w_eff = w * (1 - a * armor_max)``
+  4. mood blend: ``M_new = M * (1 - w_eff·α) + B * (w_eff·α)``
+  5. per-dim soul pull pulls each dim back toward its soul anchor
+     (cushioned proportionally to the soul value on that dim,
+     weight-gated so heavy events still punch through)
+  6. on heavy events with breached mood: direct soul leak
   7. trauma reservoir += w_eff for each negative pattern
   8. nourishment reservoir += w_eff for positive patterns
 
-Periodic (called per turn or by background tick):
+Periodic (``soul_drift``, called per turn or by background tick):
+  • mood decay toward Soul (not toward neutral) with half-life
+    depending on Soul.W
+  • soul drift: rolling mood mean nudges Soul; trauma/nourishment
+    imbalance nudges Soul.W and Soul.V proportionally.
 
-  • mood decay toward Soul (not toward neutral) with half-life depending on Soul.W
-  • soul drift: rolling mood mean nudges Soul; trauma/nourishment imbalance
-    nudges Soul.W and Soul.V proportionally.
-
-clanker-soul note: this module is host-agnostic. It accepts ``Score``
-(see ``clanker_soul.score``) as the per-event input — any 7-dim VADUGWI
-read with optional ``patterns``. Hosts whose engine produces a richer
-type can adapt at the boundary; physics never reads description, latency,
-or other host-specific telemetry.
+Stateful, NOT thread-safe — run from a single pipeline worker per agent.
 """
 from __future__ import annotations
 
 import logging
 import math
 import time
-from dataclasses import dataclass, field, fields as dc_fields, replace
+from dataclasses import fields as dc_fields, replace
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
+from clanker_soul.physics.config import (
+    HEAVY_PATTERNS,
+    POSITIVE_PATTERNS,
+    PhysicsConfig,
+)
+from clanker_soul.physics.math import (
+    _clamp,
+    _decay_half_life,
+    _why,
+    event_weight,
+    soul_armor,
+    soul_distance,
+)
+from clanker_soul.physics.tick import PhysicsTick
 from clanker_soul.score import Score
 from clanker_soul.soul import (
     NourishmentReservoir,
@@ -42,245 +52,18 @@ from clanker_soul.soul import (
 )
 
 if TYPE_CHECKING:
-    from clanker_soul.eventlog import EventLog, IngestRecord
+    from clanker_soul.eventlog import EventLog
     from clanker_soul.overrides import ConfigOverrides
 
 logger = logging.getLogger(__name__)
 
 
-# Pattern names that signal positive nourishment (from Clanker engine
-# structures). Hosts using a different engine can extend this set by
-# replacing the constant before constructing EmotionalPhysics, or pass
-# their own classifier via subclassing.
-POSITIVE_PATTERNS = frozenset({
-    "GRATITUDE", "AFFIRMATION", "WARMTH", "HUMOR", "PLAYFULNESS",
-    "ACKNOWLEDGEMENT", "ENCOURAGEMENT", "CARE", "REPAIR",
-    "DIRECTED_POSITIVE", "RECOVERY_MILESTONE", "RELIEF_ABSENCE",
-    "REPORTED_COMFORT", "CONTRADICTION_RESOLVE",
-})
-
-# Patterns that count as "heavy" — these are the ones that, repeated,
-# cause back-to-back soul damage. Includes the major Clanker structures
-# that target self-worth, agency, or existence.
-HEAVY_PATTERNS = frozenset({
-    "SELF_NULLIFY", "EXISTENTIAL_NEGATION", "ABANDONMENT",
-    "BOUNDARY_VIOLATION", "DEHUMANIZATION", "BETRAYAL",
-    "GASLIGHT", "CONTEMPT", "VICTIMIZATION", "DIRECTED_LABEL",
-    "SOCIAL_NULLITY", "SELF_REMOVAL", "SELF_HARM_INTENT",
-    "RHETORICAL_SELF_NEGATION", "RHETORICAL_HOPELESSNESS",
-    "WITHHELD_POSITIVE", "EXCLUDED_POSITIVE", "POWER_OVER_SELF",
-    "GRIEF_LOSS", "ATMOSPHERIC_GRIEF",
-})
-
-
-@dataclass
-class PhysicsConfig:
-    """Tunable parameters for EmotionalPhysics. Defaults chosen so an
-    agent with the default Soul (W=175) feels real but not whiny — small
-    annoyances shrug off, sustained malice leaves marks."""
-
-    # Mood blend coefficient — fraction of "rawness" that displaces mood per hit
-    blend_alpha: float = 0.55
-
-    # Mood decay half-life base (seconds). Modulated by Soul.W (higher W = faster recovery).
-    mood_decay_half_life_base: float = 600.0  # 10 min at neutral W
-
-    # Armor: max fraction of weight that resilience can absorb
-    armor_max: float = 0.55
-
-    # Per-dimension soul pull (gap 2 of layered VADUGWI): after the
-    # global blend, each dim is pulled back toward its soul anchor by an
-    # amount proportional to the soul value. High soul[i] → strong pull
-    # → mood stays close to soul on that dim. Low soul[i] → no pull →
-    # mood follows the event freely. The "high-W soul means W-hits are
-    # buffered; low-W soul means each shock destabilizes hard" mechanic.
-    # 0.5 means a soul[i]=255 dim ends up halfway between blended-mood
-    # and soul.
-    dim_resilience_max: float = 0.5
-
-    # Mood prime (gap 4 of layered VADUGWI): per-event score is tinted
-    # by the agent's current mood before it's stored or ingested —
-    # primed perception. A wounded mood reads ambiguous messages
-    # slightly more negatively; a settled mood reads them flatly. Small
-    # factor keeps the feedback loop bounded (max bias per event is
-    # ±factor*128 = ±12.8 at default 0.1). Set to 0 to disable.
-    mood_prime_factor: float = 0.1
-
-    # Soul drift parameters
-    soul_drift_per_hour: float = 0.0008    # base rate for slow daily averaging
-    soul_drift_min_distance: float = 6.0   # don't drift if mood near soul
-
-    # Breach (back-to-back damage) parameters
-    breach_threshold: float = 35.0         # |M-S| above this counts as "wounded"
-    heavy_threshold: float = 0.6           # event weight above this counts as "heavy"
-    breach_delta: float = 0.085            # max fraction of one heavy event that goes straight to soul
-
-    # Trauma vs nourishment imbalance → soul.W/V drift
-    healing_rate: float = 0.0006           # per-tick W increase when nourishment dominates
-    wounding_rate: float = 0.0009          # per-tick W decrease when trauma dominates
-
-    # When trauma reservoir crosses this, Soul actively starts losing W/V
-    trauma_pressure_floor: float = 5.0
-
-
-# ---------------------------------------------------------------------------
-# Pure math helpers
-# ---------------------------------------------------------------------------
-
-
-def _clamp(x: float, lo: int = 0, hi: int = 255) -> int:
-    return max(lo, min(hi, int(round(x))))
-
-
-def event_weight(score: Score) -> float:
-    """How much this event should move things, on [0, 1].
-
-    Combines distance-from-neutral on V/W (the *what* dimensions) with
-    Urgency and Gravity (the *intensity* dimensions). A neutral chat-message
-    weight is ~0.05; a screaming attack on self-worth weighs ~0.9.
-    """
-    valence_dist = abs(score.v - 128) / 128.0
-    worth_dist = abs(score.w - 128) / 128.0
-    urgency = score.u / 255.0
-    gravity_intensity = abs(score.g - 128) / 128.0
-
-    base = 0.45 * worth_dist + 0.25 * valence_dist
-    intensifier = 0.20 * urgency + 0.10 * gravity_intensity
-    return min(1.0, base + intensifier)
-
-
-def soul_armor(soul: SoulState) -> float:
-    """Resilience derived from Soul. On [0, 1].
-
-    High W (strong self) → primary armor. High D (in-control) → secondary.
-    Grounded G (close to 128 from either side) → tertiary."""
-    w_term = soul.w / 255.0 * 0.55
-    d_term = soul.d / 255.0 * 0.30
-    g_term = (1.0 - abs(128 - soul.g) / 128.0) * 0.15
-    return min(1.0, w_term + d_term + g_term)
-
-
-def mood_prime_score(
-    raw: Score,
-    current_mood: Score | None,
-    factor: float = 0.1,
-) -> Score:
-    """Tint a freshly-computed event score with the agent's current mood
-    — primed perception. A wounded mood reads ambiguous messages
-    slightly more negatively. The shift on each dim is
-    ``(mood[i] - 128) * factor``.
-
-    Returns the raw score unchanged when ``current_mood`` is None
-    (first event of a session) or factor is 0 (opt-out)."""
-    if current_mood is None or factor <= 0:
-        return raw
-
-    def shift(r_val: int, m_val: int) -> int:
-        return _clamp(r_val + (m_val - 128) * factor)
-
-    primed = (
-        shift(raw.v, current_mood.v),
-        shift(raw.a, current_mood.a),
-        shift(raw.d, current_mood.d),
-        shift(raw.u, current_mood.u),
-        shift(raw.g, current_mood.g),
-        shift(raw.w, current_mood.w),
-        shift(raw.i, current_mood.i),
-    )
-    if primed == (raw.v, raw.a, raw.d, raw.u, raw.g, raw.w, raw.i):
-        return raw  # mood was effectively neutral on every dim
-    return Score(
-        v=primed[0], a=primed[1], d=primed[2], u=primed[3],
-        g=primed[4], w=primed[5], i=primed[6],
-        patterns=raw.patterns,
-    )
-
-
-def dim_resilience(
-    soul: SoulState, dim_resilience_max: float = 0.5,
-) -> tuple[float, ...]:
-    """Per-dimension pull-toward-soul factors derived from the Soul vector.
-
-    Returns a 7-tuple of pulls in ``[0.0, dim_resilience_max]``: the
-    fraction of the post-blend mood-vs-soul gap that should be closed
-    back toward soul on each dimension.
-
-    For a default soul ``[145, 110, 160, 80, 130, 175, 135]`` and
-    ``dim_resilience_max=0.5``, the resulting pulls are approximately
-    ``(0.28, 0.22, 0.31, 0.16, 0.25, 0.34, 0.26)`` — strongest on W
-    (the agent's "I know who I am"), weakest on U (a calm baseline is
-    too gentle to fully cushion an urgent hit)."""
-    return tuple(
-        max(0.0, min(dim_resilience_max, dim_resilience_max * (v / 255.0)))
-        for v in soul.as_tuple()
-    )
-
-
-def soul_distance(mood: Score, soul: SoulState) -> float:
-    """L2-ish distance between current Mood and Soul. Returns 0..255-ish."""
-    diffs = [
-        mood.v - soul.v,
-        mood.w - soul.w,
-        mood.g - soul.g,
-        mood.d - soul.d,
-    ]
-    return math.sqrt(sum(d * d for d in diffs) / len(diffs))
-
-
-def _why(tick: "PhysicsTick", event: Score) -> str:
-    """One-line human-readable reason for what just happened.
-
-    Pre-baked so ``sqlite3 soul.db "SELECT ts, why FROM events"`` is
-    immediately readable in the terminal. The UI can also synthesize its
-    own narrative from the structured fields if it wants — this is for
-    fast forensic scanning."""
-    pat_str = ",".join(event.patterns) if event.patterns else "no-pattern"
-    parts = [f"{pat_str} (weight={tick.weight_raw:.2f})"]
-    if tick.armor > 0.05:
-        parts.append(
-            f"armor={tick.armor:.2f} → w_eff={tick.weight_effective:.2f}"
-        )
-    else:
-        parts.append(f"w_eff={tick.weight_effective:.2f}")
-    if tick.breached:
-        parts.append(
-            f"mood was {tick.soul_distance_before:.0f}pt from soul → "
-            f"BREACH (Δ={tick.breach_delta_applied:.3f} to soul.v/w/g)"
-        )
-    elif tick.soul_distance_before > 30:
-        parts.append(f"mood was {tick.soul_distance_before:.0f}pt from soul")
-    return "; ".join(parts)
-
-
-def _decay_half_life(soul: SoulState, base: float) -> float:
-    """Soul.W modulates how fast mood returns to baseline. Strong W = fast
-    recovery; wounded W = slow ruminating recovery."""
-    factor = 0.5 + (soul.w / 255.0)  # 0.5x .. 1.5x
-    return base / factor
-
-
-# ---------------------------------------------------------------------------
-# The engine
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class PhysicsTick:
-    """Result of one event ingestion — for diagnostics/logging."""
-    weight_raw: float
-    armor: float
-    weight_effective: float
-    breached: bool
-    breach_delta_applied: float
-    soul_distance_before: float
-    patterns: list[str] = field(default_factory=list)
-
-
 class EmotionalPhysics:
     """Stateful emotional engine for one agent.
 
-    Holds the Soul, current Mood, and the trauma/nourishment reservoirs.
-    Not thread-safe — run from a single pipeline worker per agent."""
+    Holds the Soul, current Mood, and the trauma/nourishment
+    reservoirs. Not thread-safe — run from a single pipeline worker
+    per agent."""
 
     def __init__(
         self,
@@ -407,13 +190,12 @@ class EmotionalPhysics:
     def ingest(self, event: Score, *, raw: Score | None = None) -> PhysicsTick:
         """Update mood, soul, and reservoirs from a scored event.
 
-        ``raw``: optional pre-mood-prime version of the score. If a host
-        applied :func:`mood_prime_score` before ingest, pass the
-        pre-prime score here so the event log records both. If omitted,
-        ``event`` is logged as both raw and primed=None (no priming
-        recorded)."""
+        ``raw``: optional pre-mood-prime version of the score. If a
+        host applied :func:`mood_prime_score` before ingest, pass the
+        pre-prime score here so the event log records both. If
+        omitted, ``event`` is logged as both raw and primed=None (no
+        priming recorded)."""
         cfg = self.config
-        # Snapshot for the event log (only if we'll actually log).
         soul_before = replace(self.soul) if self._event_log is not None else None
         mood_before = self.mood if self._event_log is not None else None
 
@@ -478,9 +260,9 @@ class EmotionalPhysics:
         """Build an IngestRecord and ship it to the configured sink.
 
         Soft-fail: if the sink raises, log a warning and continue. The
-        SqliteEventLog impl already catches its own exceptions, but
-        custom impls might not, and physics must remain robust either
-        way."""
+        :py:class:`SqliteEventLog` impl already catches its own
+        exceptions, but custom impls might not, and physics must
+        remain robust either way."""
         from clanker_soul.eventlog import IngestRecord
 
         if raw is not None and raw != event:
@@ -515,7 +297,8 @@ class EmotionalPhysics:
 
     def soul_drift(self, *, now_ts: float | None = None) -> dict:
         """Slowly nudge Soul based on time-elapsed × current mood +
-        trauma/nourishment imbalance. Idempotent — uses last_drift_ts."""
+        trauma/nourishment imbalance. Idempotent — uses
+        ``soul.last_drift_ts``."""
         cfg = self.config
         now = now_ts if now_ts is not None else datetime.now(timezone.utc).timestamp()
         elapsed_h = max(0.0, (now - self.soul.last_drift_ts) / 3600.0)
@@ -618,12 +401,13 @@ class EmotionalPhysics:
         blend strength, this layer adds a soul-centered cushion on top.
 
         Pull strength scales DOWN with event weight: ordinary messages
-        get strong cushioning, but heavy hits punch through so the breach
-        mechanic can still fire on sustained attack."""
+        get strong cushioning, but heavy hits punch through so the
+        breach mechanic can still fire on sustained attack."""
+        from clanker_soul.physics.math import dim_resilience as _dim_resilience
         weight_scale = max(0.0, 1.0 - min(1.0, event_weight))
         if weight_scale == 0.0:
             return mood
-        pulls = dim_resilience(self.soul, self.config.dim_resilience_max)
+        pulls = _dim_resilience(self.soul, self.config.dim_resilience_max)
         soul = self.soul.as_tuple()
         cur = (mood.v, mood.a, mood.d, mood.u, mood.g, mood.w, mood.i)
         pulled = tuple(
@@ -687,15 +471,4 @@ class EmotionalPhysics:
         return None
 
 
-__all__ = [
-    "EmotionalPhysics",
-    "PhysicsConfig",
-    "PhysicsTick",
-    "POSITIVE_PATTERNS",
-    "HEAVY_PATTERNS",
-    "event_weight",
-    "soul_armor",
-    "soul_distance",
-    "mood_prime_score",
-    "dim_resilience",
-]
+__all__ = ["EmotionalPhysics"]

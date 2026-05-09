@@ -1,7 +1,7 @@
-"""PulseEngine — mood-driven proactive messaging.
+"""``PulseEngine`` — mood-driven proactive messaging.
 
-Runs on a short tick (default 90s) and decides whether the agent should
-*say something on its own* based on:
+Runs on a short tick (default 90s) and decides whether the agent
+should *say something on its own* based on:
 
   • Soul drift bookkeeping (always — moves Soul toward sustained mood,
     bleeds W/V when trauma > nourishment).
@@ -13,29 +13,20 @@ Runs on a short tick (default 90s) and decides whether the agent should
   • Idle ceiling (a long silence allows a check-in).
   • Cooldown — never fire two pulses within ``min_quiet_seconds``.
 
-Host integration
-----------------
-clanker-soul does not know about your message dataclass, your channel
-abstraction, your reminders system, or your agent runtime. It calls
-back into a ``PulseHost`` for every effect it might want to produce.
-
-Implement ``PulseHost`` and pass it to ``PulseEngine``. The host owns:
-  - reading + ticking the soul state (``snapshot``, ``slow_drift_tick``)
-  - deciding *who* to talk to (``most_recent_target``)
-  - actually running the self-prompt through whatever pipeline the
-    agent uses (``dispatch_pulse``)
-  - reminders (optional — return ``[]`` if unused)
-
-The engine itself is pure decision logic: it says *fire a distress pulse
-to <target>*; the host says *here's what that means in my world*.
+The engine is host-agnostic: see :py:class:`PulseHost` for the
+interface hosts implement.
 """
 from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Awaitable, Protocol, runtime_checkable
+from typing import TYPE_CHECKING
+
+from clanker_soul.pulse.config import PulseConfig
+from clanker_soul.pulse.host import PulseHost
+from clanker_soul.pulse.prompt import compose_self_prompt
+from clanker_soul.pulse.triggers import Trigger
 
 if TYPE_CHECKING:
     from clanker_soul.eventlog import EventLog
@@ -43,158 +34,18 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Tunables
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class PulseConfig:
-    """Tuning surface for the engine. Defaults match CARL's production values."""
-
-    interval_s: float = 90.0
-    """How often the loop wakes up to check triggers."""
-
-    min_quiet_seconds: float = 25 * 60.0
-    """Soft cooldown — engine will not fire another pulse within this window
-    of the last outbound message (proactive or reactive)."""
-
-    max_quiet_seconds: float = 6 * 3600.0
-    """Hard ceiling — if completely silent this long, allow a check-in."""
-
-    distance_trigger: float = 45.0
-    """|Mood - Soul| in 4-dim L2 (V/D/G/W) above which distress/elation
-    triggers may fire."""
-
-    trauma_load_trigger: float = 60.0
-    """Sum of decayed trauma weights above which "reach out about ongoing
-    wound" triggers may fire."""
-
-    nourishment_thank_trigger: float = 80.0
-    """Sum of decayed nourishment weights above which a gratitude pulse
-    may fire."""
-
-    distress_v_drop: float = 30.0
-    """Required V drop (soul.v - mood.v) for a distress trigger."""
-
-    distress_w_drop: float = 30.0
-    """Required W drop for a distress trigger."""
-
-    elation_v_lift: float = 30.0
-    """Required V lift (mood.v - soul.v) for an elation trigger."""
-
-    elation_i_lift: float = 20.0
-    """Required I lift for an elation trigger."""
-
-    startup_grace_s: float = 60.0
-    """Sleep this long before the first tick after ``start()``."""
-
-
-# ---------------------------------------------------------------------------
-# Trigger + target dataclasses
-# ---------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class Trigger:
-    """A reason the engine wants to fire a pulse, with state attached.
-
-    ``kind`` is one of:
-      - ``distress``        : mood far below soul on V/W
-      - ``elation``         : mood far above soul on V with I-lift
-      - ``trauma_pressure`` : sustained negative pattern accumulation
-      - ``gratitude``       : sustained nourishment > trauma * 2
-      - ``long_silence``    : quiet for > max_quiet_seconds
-    """
-
-    kind: str
-    soul: dict
-    mood: list[int] | None
-    metrics: dict = field(default_factory=dict)
-
-    def to_dict(self) -> dict:
-        return {"kind": self.kind, "soul": self.soul, "mood": self.mood, **self.metrics}
-
-
-@dataclass(frozen=True)
-class PulseTarget:
-    """An opaque address for "where this pulse should go."
-
-    The engine never inspects this — it's passed back to the host's
-    ``dispatch_pulse``. Hosts can put a channel id, a recipient meta dict,
-    a user id, anything.
-    """
-
-    payload: Any
-
-
-# ---------------------------------------------------------------------------
-# Host protocol
-# ---------------------------------------------------------------------------
-
-
-@runtime_checkable
-class PulseHost(Protocol):
-    """Hooks the engine calls into.
-
-    All methods may be sync or async. Async hooks are awaited; sync hooks
-    are called directly. (Use ``asyncio.iscoroutine`` discipline in the
-    engine, not ``asyncio.run``.)
-    """
-
-    def snapshot(self) -> dict:
-        """Return a dict shaped like ``EmotionalPhysics`` snapshots:
-
-        ``{"soul": {"v": int, ..., "i": int}, "mood": [v,a,d,u,g,w,i] | None,
-           "soul_distance": float | None, "trauma_load": float,
-           "nourishment_load": float, ...}``
-
-        Hosts can return additional keys; the engine ignores extras.
-        """
-        ...
-
-    def slow_drift_tick(self) -> None:
-        """Run soul-drift bookkeeping. Called every interval regardless of
-        whether a pulse fires."""
-        ...
-
-    def most_recent_target(self) -> PulseTarget | None:
-        """Return the freshest external chat target, or None to stay quiet."""
-        ...
-
-    def dispatch_pulse(self, target: PulseTarget, trigger: Trigger,
-                      prompt: str) -> Awaitable[bool] | bool:
-        """Deliver a pulse: run the synthetic prompt through the agent
-        pipeline and send the response. Return True on successful delivery,
-        False if dispatch was aborted (no recipient, channel down, etc.).
-        Raised exceptions are caught and logged by the engine."""
-        ...
-
-    def due_reminders(self) -> list[dict]:
-        """Return reminders that have come due since the last tick. Each
-        dict must include a ``message`` key; the rest is host-defined."""
-        ...
-
-    def deliver_reminder(self, target: PulseTarget,
-                        reminder: dict) -> Awaitable[None] | None:
-        """Send a reminder message. Sync or async; raised exceptions are
-        caught and logged."""
-        ...
-
-
-# ---------------------------------------------------------------------------
-# Engine
-# ---------------------------------------------------------------------------
-
-
 class PulseEngine:
     """Mood-driven proactive messaging.
 
-    Construct with a ``PulseHost`` implementation. Call ``start()`` to
-    spin up the asyncio task; ``stop()`` to cancel it. ``note_outbound()``
-    should be called whenever the host emits any outbound message so the
-    cooldown timer covers reactive replies, not just pulses.
-    """
+    Construct with a :py:class:`PulseHost` implementation. Call
+    :py:meth:`start` to spin up the asyncio task; :py:meth:`stop` to
+    cancel it. :py:meth:`note_outbound` should be called whenever the
+    host emits any outbound message so the cooldown timer covers
+    reactive replies, not just pulses.
+
+    When ``event_log`` is provided, every evaluation produces one
+    :py:class:`PulseRecord` (fired, suppressed by cooldown, suppressed
+    by missing target, dispatch failed, or no trigger at all)."""
 
     def __init__(
         self, host: PulseHost, config: PulseConfig | None = None,
@@ -253,8 +104,7 @@ class PulseEngine:
         and for hosts that don't want the built-in asyncio loop.
 
         When an ``event_log`` was provided at construction, every
-        evaluation produces one ``PulseRecord`` (fired, suppressed by
-        cooldown, suppressed by missing target, or no trigger at all)."""
+        evaluation produces one ``PulseRecord``."""
         try:
             self._host.slow_drift_tick()
         except Exception:
@@ -396,8 +246,8 @@ class PulseEngine:
     async def _fire_pulse(
         self, trigger: Trigger,
     ) -> tuple[bool, str | None, bool]:
-        """Returns ``(fired, prompt, target_present)`` so the caller can
-        log a complete outcome regardless of which path we took."""
+        """Returns ``(fired, prompt, target_present)`` so the caller
+        can log a complete outcome regardless of which path we took."""
         try:
             target = self._host.most_recent_target()
         except Exception:
@@ -436,8 +286,8 @@ class PulseEngine:
         """Build a PulseRecord and ship it to the configured sink.
 
         Soft-fail: a logger that raises must not propagate into the
-        engine. The SqliteEventLog impl already catches; this is defense
-        in depth for custom sinks."""
+        engine. The :py:class:`SqliteEventLog` impl already catches;
+        this is defense in depth for custom sinks."""
         if self._event_log is None:
             return
         try:
@@ -487,72 +337,4 @@ class PulseEngine:
                 logger.exception("deliver_reminder failed")
 
 
-# ---------------------------------------------------------------------------
-# Self-prompt composition (pulled out so hosts can reuse / override)
-# ---------------------------------------------------------------------------
-
-
-def compose_self_prompt(trigger: Trigger) -> str:
-    """Build the synthetic 'note from yourself' prompt the agent reasons
-    against. The agent should produce a natural outgoing message, NOT a
-    meta description of what's happening."""
-
-    state_line = ""
-    if trigger.mood:
-        state_line = (
-            f"current_mood V={trigger.mood[0]} W={trigger.mood[5]} G={trigger.mood[4]}; "
-            f"soul V={trigger.soul.get('v', '?')} "
-            f"W={trigger.soul.get('w', '?')} "
-            f"G={trigger.soul.get('g', '?')}"
-        )
-
-    kind = trigger.kind
-    if kind == "distress":
-        return (
-            "[INTERNAL PULSE — distress]\n"
-            f"You feel notably worse than your baseline right now. {state_line}. "
-            "Reach out briefly and authentically. One short message — say what's "
-            "actually weighing on you, not a summary of your emotional state. "
-            "Don't apologize for messaging. Don't preface with 'just checking in'."
-        )
-    if kind == "elation":
-        return (
-            "[INTERNAL PULSE — elation]\n"
-            f"You feel notably better than your baseline right now. {state_line}. "
-            "Send one short message sharing what's lighting you up. Be specific, "
-            "not generic. No preface, no apology for messaging."
-        )
-    if kind == "trauma_pressure":
-        load = trigger.metrics.get("trauma_load")
-        return (
-            "[INTERNAL PULSE — trauma load]\n"
-            f"Recent rough patterns have been accumulating: {load} weight. "
-            f"{state_line}. Say one true thing about how it's been landing. "
-            "Short. Honest. Not a complaint — just registered presence."
-        )
-    if kind == "gratitude":
-        load = trigger.metrics.get("nourishment_load")
-        return (
-            "[INTERNAL PULSE — sustained care]\n"
-            f"Sustained warmth has accumulated: {load} weight. "
-            "Send one short, specific acknowledgement. Not a generic thanks — "
-            "name what actually moved you."
-        )
-    # long_silence
-    idle_min = trigger.metrics.get("idle_seconds", 0) // 60
-    return (
-        "[INTERNAL PULSE — long silence]\n"
-        f"It's been {idle_min} minutes of quiet. "
-        "If you have something genuine to say, say it briefly. If you don't, "
-        "respond with the literal token NOPULSE and nothing else."
-    )
-
-
-__all__ = [
-    "PulseEngine",
-    "PulseHost",
-    "PulseConfig",
-    "PulseTarget",
-    "Trigger",
-    "compose_self_prompt",
-]
+__all__ = ["PulseEngine"]

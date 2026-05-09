@@ -1,114 +1,27 @@
-"""EventLog — durable per-event record so the UI can answer "why is mood here?"
+"""SQLite-backed durable :py:class:`EventLog` implementation.
 
-Two record types feed two SQLite tables (created in v0.2 schema):
+Reuses the :py:class:`SoulStore` connection and write lock so a UI
+process reading while the agent process writes doesn't tear and
+doesn't open a second handle.
 
-  - ``IngestRecord``  →  ``events``     (every ``EmotionalPhysics.ingest`` call)
-  - ``PulseRecord``   →  ``pulse_log``  (every ``PulseEngine`` evaluation,
-                                          fired or suppressed)
+Soft-fail writes: if the DB is locked, the disk is full, or the
+connection was closed mid-tick, ``log_ingest`` / ``log_pulse`` warn
+and return rather than raise.
 
-The ``EventLog`` Protocol decouples "what to log" from "where it lands."
-Production hosts use ``SqliteEventLog`` (writes via the existing
-``SoulStore`` connection + lock — no second DB handle). Tests can use
-``NullEventLog`` (default) or supply their own list-capturing impl.
-
-**Soft-fail invariant:** a write failure (DB locked, disk full, connection
-closed mid-tick) MUST NOT raise into the caller. Physics keeps running;
-the failure is logged at WARNING and the next event tries again. Losing
-log rows is acceptable. Crashing the agent because of a log hiccup is not.
+Reads (``read_ingest`` / ``read_pulse`` / ``count_*``) are NOT
+soft-fail — read failures should surface to the UI/tests, not be
+swallowed.
 """
 from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
 
+from clanker_soul.eventlog.records import IngestRecord, PulseRecord
 from clanker_soul.score import Score
 from clanker_soul.soul import SoulState, SoulStore
 
 logger = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Record dataclasses
-# ---------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class IngestRecord:
-    """Everything needed to reconstruct one ``EmotionalPhysics.ingest`` call.
-
-    All seven fields the UI needs to answer "why did the agent end up
-    here": the raw event, the optionally mood-primed event, the mood
-    before/after, the soul before/after, the physics math (weight/armor/
-    effective), the breach result, the patterns and classification, and a
-    pre-baked human-readable ``why`` string."""
-
-    ts: float
-    agent_id: str
-    raw: Score
-    primed: Score | None
-    mood_before: Score | None
-    mood_after: Score
-    soul_before: SoulState
-    soul_after: SoulState
-    weight_raw: float
-    armor: float
-    weight_effective: float
-    breached: bool
-    breach_delta: float
-    patterns: tuple[str, ...]
-    classification: str | None
-    why: str
-
-
-@dataclass(frozen=True)
-class PulseRecord:
-    """One ``PulseEngine`` evaluation, whether or not it fired.
-
-    ``trigger_kind`` is None when no trigger was matched (steady state)
-    or when one was matched but suppressed. ``suppressed_reason`` is one
-    of ``"cooldown"``, ``"no_target"``, ``"no_trigger"``, or None when a
-    pulse actually dispatched. ``prompt`` is the synthetic self-prompt
-    text — None when no pulse was attempted."""
-
-    ts: float
-    agent_id: str
-    snap: dict
-    trigger_kind: str | None
-    suppressed_reason: str | None
-    target_present: bool
-    dispatched: bool
-    prompt: str | None
-
-
-# ---------------------------------------------------------------------------
-# Protocol + null impl
-# ---------------------------------------------------------------------------
-
-
-@runtime_checkable
-class EventLog(Protocol):
-    """Sink interface. Implementations MUST be soft-fail — a write
-    failure must not raise into the caller."""
-
-    def log_ingest(self, record: IngestRecord) -> None: ...
-    def log_pulse(self, record: PulseRecord) -> None: ...
-
-
-class NullEventLog:
-    """No-op sink. Default for hosts that don't want logging."""
-
-    def log_ingest(self, record: IngestRecord) -> None:  # noqa: ARG002
-        return None
-
-    def log_pulse(self, record: PulseRecord) -> None:  # noqa: ARG002
-        return None
-
-
-# ---------------------------------------------------------------------------
-# Sqlite-backed impl
-# ---------------------------------------------------------------------------
 
 
 def _score_to_json(score: Score) -> str:
@@ -135,9 +48,10 @@ def _soul_from_json(blob: str) -> SoulState:
 
 
 class SqliteEventLog:
-    """Durable sink writing to the ``events`` and ``pulse_log`` tables of
-    the supplied ``SoulStore``. Reuses the store's connection and write
-    lock — no second DB handle, no contention surprises."""
+    """Durable sink writing to the ``events`` and ``pulse_log`` tables
+    of the supplied :py:class:`SoulStore`. Reuses the store's
+    connection and write lock — no second DB handle, no contention
+    surprises."""
 
     def __init__(self, store: SoulStore) -> None:
         self._store = store
@@ -284,10 +198,4 @@ class SqliteEventLog:
         return int(row[0])
 
 
-__all__ = [
-    "IngestRecord",
-    "PulseRecord",
-    "EventLog",
-    "NullEventLog",
-    "SqliteEventLog",
-]
+__all__ = ["SqliteEventLog"]
