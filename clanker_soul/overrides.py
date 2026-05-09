@@ -19,6 +19,7 @@ Concurrency: ConfigOverrides reuses the SoulStore connection + lock,
 so a UI process writing an override while the agent process is
 mid-tick won't tear (SQLite serializes the writes).
 """
+
 from __future__ import annotations
 
 import json
@@ -46,7 +47,9 @@ class OverrideBundle:
 
 
 def apply_overrides(
-    config: PhysicsConfig, soul: SoulState, bundle: OverrideBundle,
+    config: PhysicsConfig,
+    soul: SoulState,
+    bundle: OverrideBundle,
 ) -> tuple[PhysicsConfig, SoulState]:
     """Pure: returns merged COPIES, leaves the inputs untouched.
 
@@ -63,7 +66,8 @@ def apply_overrides(
             p_kwargs[k] = v
         else:
             logger.warning(
-                "ignoring unknown PhysicsConfig override: %r", k,
+                "ignoring unknown PhysicsConfig override: %r",
+                k,
             )
 
     s_kwargs = {}
@@ -72,10 +76,12 @@ def apply_overrides(
             s_kwargs[k] = v
         else:
             logger.warning(
-                "ignoring unknown SoulState override: %r", k,
+                "ignoring unknown SoulState override: %r",
+                k,
             )
 
     from dataclasses import replace
+
     return replace(config, **p_kwargs), replace(soul, **s_kwargs)
 
 
@@ -108,7 +114,8 @@ class ConfigOverrides:
         except json.JSONDecodeError as e:
             logger.warning(
                 "config_overrides row for %r is corrupt (%s) — treating as empty",
-                agent_id, e,
+                agent_id,
+                e,
             )
             return OverrideBundle(physics={}, soul={})
         return OverrideBundle(
@@ -121,8 +128,11 @@ class ConfigOverrides:
     # ------------------------------------------------------------------
 
     def set(
-        self, agent_id: str, *,
-        physics: dict | None = None, soul: dict | None = None,
+        self,
+        agent_id: str,
+        *,
+        physics: dict | None = None,
+        soul: dict | None = None,
     ) -> None:
         """Replace the overrides for ``agent_id`` outright. Pass empty
         dicts to clear all overrides while keeping the row."""
@@ -140,8 +150,11 @@ class ConfigOverrides:
             self._store.connection.commit()
 
     def update(
-        self, agent_id: str, *,
-        physics: dict | None = None, soul: dict | None = None,
+        self,
+        agent_id: str,
+        *,
+        physics: dict | None = None,
+        soul: dict | None = None,
     ) -> None:
         """Merge new fields into the existing overrides. Existing fields
         not in the update are preserved (use :py:meth:`set` to replace

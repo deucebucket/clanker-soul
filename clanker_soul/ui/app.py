@@ -17,6 +17,7 @@ Routes added in this scaffold PR:
 Subsequent PRs (#26-#29) will add ``/`` (live panel),
 ``/events``, ``/config``, ``/simulate``.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -127,7 +128,8 @@ def create_app(
         body so HTMX can swap it into the page without a full reload."""
         view = build_live_view(store, agent_id, governor_config=cfg)
         return templates.TemplateResponse(
-            request, "_live_panel.html",
+            request,
+            "_live_panel.html",
             {"selected_agent": agent_id, "view": view},
         )
 
@@ -151,7 +153,8 @@ def create_app(
         result = None
         if selected:
             result = query_events(
-                store, selected,
+                store,
+                selected,
                 sort=sort,
                 classification=classification or None,
                 breach=breach or None,
@@ -168,9 +171,12 @@ def create_app(
             "selected_agent": selected,
             "result": result,
             "filters": {
-                "sort": sort, "classification": classification or "",
-                "breach": breach or "", "q": q or "",
-                "after": after or "", "before": before or "",
+                "sort": sort,
+                "classification": classification or "",
+                "breach": breach or "",
+                "q": q or "",
+                "after": after or "",
+                "before": before or "",
             },
             "sort_options": SORT_OPTIONS,
             "page_size": page_size,
@@ -213,7 +219,8 @@ def create_app(
             raise HTTPException(status_code=400, detail=str(e))
         view = build_config_view(overrides, agent_id)
         return templates.TemplateResponse(
-            request, "_config_panel.html",
+            request,
+            "_config_panel.html",
             {"selected_agent": agent_id, "view": view, "presets": PRESETS},
         )
 
@@ -234,7 +241,8 @@ def create_app(
             overrides.set(agent_id, physics={}, soul={})
         view = build_config_view(overrides, agent_id)
         return templates.TemplateResponse(
-            request, "_config_panel.html",
+            request,
+            "_config_panel.html",
             {"selected_agent": agent_id, "view": view, "presets": PRESETS},
         )
 
@@ -250,7 +258,8 @@ def create_app(
         PRESETS[preset].apply(overrides, agent_id)
         view = build_config_view(overrides, agent_id)
         return templates.TemplateResponse(
-            request, "_config_panel.html",
+            request,
+            "_config_panel.html",
             {"selected_agent": agent_id, "view": view, "presets": PRESETS},
         )
 
@@ -265,18 +274,18 @@ def create_app(
         # Pre-populate form fields with the agent's *current* live config
         # so operators tweak from where they are, not from defaults.
         from clanker_soul.ui.config import PHYSICS_FIELDS, SOUL_FIELDS
+
         prefill_soul = {f.name: 128 for f in SOUL_FIELDS}
         prefill_physics = {}
         if selected:
             from clanker_soul.physics import PhysicsConfig
             from clanker_soul.soul import SoulState
+
             base_soul = SoulState()
             base_phys = PhysicsConfig()
             bundle = ConfigOverrides(store).get(selected)
             for f in SOUL_FIELDS:
-                prefill_soul[f.name] = int(
-                    bundle.soul.get(f.name, getattr(base_soul, f.name))
-                )
+                prefill_soul[f.name] = int(bundle.soul.get(f.name, getattr(base_soul, f.name)))
             for f in PHYSICS_FIELDS:
                 prefill_physics[f.name] = float(
                     bundle.physics.get(f.name, getattr(base_phys, f.name))
@@ -316,16 +325,21 @@ def create_app(
             raise HTTPException(status_code=400, detail=str(e))
 
         from clanker_soul.eventlog import SqliteEventLog
+
         log = SqliteEventLog(store)
         records_desc = log.read_ingest(agent_id, limit=n_events)
         # read_ingest returns newest-first; replay needs oldest-first.
         records = list(reversed(records_desc))
 
         result = replay_events(
-            records, sim_soul, sim_config, agent_id=agent_id,
+            records,
+            sim_soul,
+            sim_config,
+            agent_id=agent_id,
         )
         return templates.TemplateResponse(
-            request, "_simulate_result.html",
+            request,
+            "_simulate_result.html",
             {
                 "result": result,
                 "selected_agent": agent_id,
@@ -352,6 +366,7 @@ def create_app(
         from clanker_soul.physics import PhysicsConfig
         from clanker_soul.soul import SoulState
         from clanker_soul.ui.config import PHYSICS_FIELDS
+
         base_phys = PhysicsConfig()
         base_soul = SoulState()
         # Only persist fields that *differ from defaults* — otherwise we
@@ -367,21 +382,23 @@ def create_app(
             if getattr(sim_soul, f) != getattr(base_soul, f)
         }
         overrides = ConfigOverrides(store)
-        overrides.set(agent_id,
-                      physics=physics_overrides, soul=soul_overrides)
+        overrides.set(agent_id, physics=physics_overrides, soul=soul_overrides)
         # Send the operator to /config so they can see what landed.
         return RedirectResponse(
-            url=f"/config?agent_id={agent_id}", status_code=303,
+            url=f"/config?agent_id={agent_id}",
+            status_code=303,
         )
 
     @app.get("/health")
     async def health() -> JSONResponse:
-        return JSONResponse({
-            "ok": True,
-            "version": __version__,
-            "db_path": str(db_path),
-            "agent_count": len(_list_agents(store)),
-        })
+        return JSONResponse(
+            {
+                "ok": True,
+                "version": __version__,
+                "db_path": str(db_path),
+                "agent_count": len(_list_agents(store)),
+            }
+        )
 
     return app
 

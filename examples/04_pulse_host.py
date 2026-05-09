@@ -25,6 +25,7 @@ What it shows:
   / engine.stop() and let the internal asyncio loop drive ticks at
   PulseConfig.interval_s.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -56,8 +57,7 @@ class StdoutPulseHost:
         # somewhere to dispatch.
         return PulseTarget(payload={"channel": "stdout", "user": "demo"})
 
-    def dispatch_pulse(self, target: PulseTarget, trigger: Trigger,
-                      prompt: str) -> bool:
+    def dispatch_pulse(self, target: PulseTarget, trigger: Trigger, prompt: str) -> bool:
         # Sync return — the engine handles both sync and async.
         print(f"\n[PULSE FIRED] kind={trigger.kind!r} → target={target.payload}")
         print("synthetic self-prompt (the agent reads this and responds in its")
@@ -92,8 +92,8 @@ async def main() -> None:
             host,
             config=replace(
                 PulseConfig(),
-                min_quiet_seconds=0.0,         # disable cooldown for demo
-                distress_v_drop=15,            # easier than default 30
+                min_quiet_seconds=0.0,  # disable cooldown for demo
+                distress_v_drop=15,  # easier than default 30
                 distress_w_drop=15,
             ),
             event_log=plugin.event_log,
@@ -102,11 +102,15 @@ async def main() -> None:
 
         # Drive mood far below soul on V and W → distress conditions.
         for _ in range(8):
-            plugin.ingest(Score(
-                v=40, w=40, u=200,
-                patterns=("ABANDONMENT", "CRITICISM"),
-                direction="SELF_DIRECTED",
-            ))
+            plugin.ingest(
+                Score(
+                    v=40,
+                    w=40,
+                    u=200,
+                    patterns=("ABANDONMENT", "CRITICISM"),
+                    direction="SELF_DIRECTED",
+                )
+            )
 
         # Suppress the 'long_silence' trigger (which would fire first
         # since _last_outbound_ts defaults to 0 = "silent since epoch").

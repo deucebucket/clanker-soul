@@ -19,6 +19,7 @@ who wants to do something other than \"silently suppress\" (e.g.
 substitute a withdraw, log to a different sink) inspects the
 decision and acts on it.
 """
+
 from __future__ import annotations
 
 import time
@@ -33,10 +34,12 @@ from clanker_soul.governor.levels import (
 )
 
 
-_PUBLIC_ACTION_KINDS: frozenset[str] = frozenset({
-    "post_public",
-    "comment_reply",
-})
+_PUBLIC_ACTION_KINDS: frozenset[str] = frozenset(
+    {
+        "post_public",
+        "comment_reply",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -78,10 +81,16 @@ class CapabilityGate:
         return self._config.capability_profiles.get(
             level,
             CapabilityProfile(
-                allowed_action_kinds=frozenset({
-                    "direct_message", "post_public", "comment_reply",
-                    "browse_topic", "withdraw", "tool_invocation",
-                }),
+                allowed_action_kinds=frozenset(
+                    {
+                        "direct_message",
+                        "post_public",
+                        "comment_reply",
+                        "browse_topic",
+                        "withdraw",
+                        "tool_invocation",
+                    }
+                ),
                 description=f"permissive fallback (no profile for {level.name})",
             ),
         )

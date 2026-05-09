@@ -23,6 +23,7 @@ What it shows:
   not single events. This loop won't move the needle by itself —
   imagine running it for hours of real interactions.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -36,18 +37,25 @@ from clanker_soul import Score, SoulPlugin
 async def tick_loop(plugin: SoulPlugin, n: int) -> None:
     """A trivial agent loop: score, tick, log, sleep."""
     pattern_pool = [
-        ("AFFIRMATION",), ("CRITICISM",), ("ABANDONMENT",),
-        ("GRATITUDE",), ("CONNECTION",),
+        ("AFFIRMATION",),
+        ("CRITICISM",),
+        ("ABANDONMENT",),
+        ("GRATITUDE",),
+        ("CONNECTION",),
     ]
     for i in range(n):
         # In real life the Score comes from your scoring engine
         # (LLM scorer, clanker-lang, hand rules). Here we fake it.
         v = random.randint(40, 220)
         w = random.randint(40, 220)
-        plugin.ingest(Score(
-            v=v, w=w, a=128,
-            patterns=random.choice(pattern_pool),
-        ))
+        plugin.ingest(
+            Score(
+                v=v,
+                w=w,
+                a=128,
+                patterns=random.choice(pattern_pool),
+            )
+        )
 
         plugin.tick()  # drift + reload_overrides
 
@@ -55,9 +63,11 @@ async def tick_loop(plugin: SoulPlugin, n: int) -> None:
         cap = plugin.capability_level()
         dist = snap.get("soul_distance")
         mood = snap.get("mood")
-        print(f"[t={i}] cap={cap.name:<14} mood={mood} soul_dist={dist:.1f}"
-              if dist is not None
-              else f"[t={i}] cap={cap.name} (mood not yet established)")
+        print(
+            f"[t={i}] cap={cap.name:<14} mood={mood} soul_dist={dist:.1f}"
+            if dist is not None
+            else f"[t={i}] cap={cap.name} (mood not yet established)"
+        )
 
         await asyncio.sleep(0.1)
 

@@ -16,6 +16,7 @@ should *say something on its own* based on:
 The engine is host-agnostic: see :py:class:`PulseHost` for the
 interface hosts implement.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -72,10 +73,12 @@ def _action_kind_for_trigger(trigger_kind: str) -> str:
 # Action kinds that NEED a recipient. Other kinds (withdraw,
 # browse_topic, post_public, tool_invocation) can dispatch with
 # target=None.
-_TARGET_REQUIRED_ACTIONS: frozenset[str] = frozenset({
-    "direct_message",
-    "comment_reply",
-})
+_TARGET_REQUIRED_ACTIONS: frozenset[str] = frozenset(
+    {
+        "direct_message",
+        "comment_reply",
+    }
+)
 
 
 class PulseEngine:
@@ -92,7 +95,9 @@ class PulseEngine:
     by missing target, dispatch failed, or no trigger at all)."""
 
     def __init__(
-        self, host: PulseHost, config: PulseConfig | None = None,
+        self,
+        host: PulseHost,
+        config: PulseConfig | None = None,
         *,
         event_log: "EventLog | None" = None,
         agent_id: str | None = None,
@@ -104,8 +109,7 @@ class PulseEngine:
     ) -> None:
         if event_log is not None and not agent_id:
             raise ValueError(
-                "agent_id is required when event_log is provided "
-                "(log rows are scoped per-agent)"
+                "agent_id is required when event_log is provided (log rows are scoped per-agent)"
             )
         self._host = host
         self._cfg = config or PulseConfig()
@@ -195,9 +199,12 @@ class PulseEngine:
 
         if trigger is None:
             self._log_pulse_outcome(
-                snap=log_snap, trigger_kind=None,
+                snap=log_snap,
+                trigger_kind=None,
                 suppressed_reason="no_trigger",
-                target_present=False, dispatched=False, prompt=None,
+                target_present=False,
+                dispatched=False,
+                prompt=None,
                 face_id=None,
             )
             return None
@@ -207,9 +214,12 @@ class PulseEngine:
         if now - last_activity < self._cfg.min_quiet_seconds:
             logger.debug("Pulse suppressed (cooldown): trigger=%s", trigger.kind)
             self._log_pulse_outcome(
-                snap=log_snap, trigger_kind=trigger.kind,
+                snap=log_snap,
+                trigger_kind=trigger.kind,
                 suppressed_reason="cooldown",
-                target_present=False, dispatched=False, prompt=None,
+                target_present=False,
+                dispatched=False,
+                prompt=None,
                 face_id=None,
             )
             return None
@@ -218,17 +228,23 @@ class PulseEngine:
         if not fired:
             reason = "no_target" if not target_present else "dispatch_failed"
             self._log_pulse_outcome(
-                snap=log_snap, trigger_kind=trigger.kind,
+                snap=log_snap,
+                trigger_kind=trigger.kind,
                 suppressed_reason=reason,
-                target_present=target_present, dispatched=False, prompt=prompt,
+                target_present=target_present,
+                dispatched=False,
+                prompt=prompt,
                 face_id=face_id,
             )
             return None
 
         self._log_pulse_outcome(
-            snap=log_snap, trigger_kind=trigger.kind,
+            snap=log_snap,
+            trigger_kind=trigger.kind,
             suppressed_reason=None,
-            target_present=True, dispatched=True, prompt=prompt,
+            target_present=True,
+            dispatched=True,
+            prompt=prompt,
             face_id=face_id,
         )
         return trigger
@@ -288,7 +304,8 @@ class PulseEngine:
         if idle > cfg.max_quiet_seconds:
             return Trigger(
                 kind="long_silence",
-                soul=soul, mood=mood,
+                soul=soul,
+                mood=mood,
                 metrics={"idle_seconds": int(idle)},
             )
 
@@ -299,10 +316,12 @@ class PulseEngine:
             if v_drop > cfg.distress_v_drop or w_drop > cfg.distress_w_drop:
                 return Trigger(
                     kind="distress",
-                    soul=soul, mood=mood,
+                    soul=soul,
+                    mood=mood,
                     metrics={
                         "distance": round(distance, 1),
-                        "v_drop": v_drop, "w_drop": w_drop,
+                        "v_drop": v_drop,
+                        "w_drop": w_drop,
                     },
                 )
 
@@ -310,14 +329,11 @@ class PulseEngine:
         # Special: produces a no-op action; the agent declines to engage.
         # Checked before all other engagement triggers so the agent can
         # actually withdraw instead of being pulled toward outreach.
-        if (
-            mood
-            and trauma > cfg.withdraw_trauma_min
-            and mood[5] < cfg.withdraw_w_max
-        ):
+        if mood and trauma > cfg.withdraw_trauma_min and mood[5] < cfg.withdraw_w_max:
             return Trigger(
                 kind="withdraw_impulse",
-                soul=soul, mood=mood,
+                soul=soul,
+                mood=mood,
                 metrics={
                     "trauma_load": round(trauma, 1),
                     "w_mood": mood[5],
@@ -331,7 +347,8 @@ class PulseEngine:
             if v_lift > cfg.elation_v_lift and i_lift > cfg.elation_i_lift:
                 return Trigger(
                     kind="elation",
-                    soul=soul, mood=mood,
+                    soul=soul,
+                    mood=mood,
                     metrics={"distance": round(distance, 1), "v_lift": v_lift},
                 )
 
@@ -345,7 +362,8 @@ class PulseEngine:
         ):
             return Trigger(
                 kind="share_impulse",
-                soul=soul, mood=mood,
+                soul=soul,
+                mood=mood,
                 metrics={
                     "v_lift": mood[0] - soul.get("v", 128),
                     "arousal": mood[1],
@@ -364,7 +382,8 @@ class PulseEngine:
         ):
             return Trigger(
                 kind="argue_impulse",
-                soul=soul, mood=mood,
+                soul=soul,
+                mood=mood,
                 metrics={
                     "v_drop": soul.get("v", 128) - mood[0],
                     "arousal": mood[1],
@@ -380,7 +399,8 @@ class PulseEngine:
             if peer_signals:
                 return Trigger(
                     kind="caretake_impulse",
-                    soul=soul, mood=mood,
+                    soul=soul,
+                    mood=mood,
                     metrics={
                         "peer_count": len(peer_signals),
                         "peers": [s.get("agent_id", "?") for s in peer_signals[:3]],
@@ -397,7 +417,8 @@ class PulseEngine:
         ):
             return Trigger(
                 kind="connect_impulse",
-                soul=soul, mood=mood,
+                soul=soul,
+                mood=mood,
                 metrics={"idle_seconds": int(idle), "trauma_load": round(trauma, 1)},
             )
 
@@ -405,7 +426,8 @@ class PulseEngine:
         if trauma > cfg.trauma_load_trigger and trauma > nourishment * 1.5:
             return Trigger(
                 kind="trauma_pressure",
-                soul=soul, mood=mood,
+                soul=soul,
+                mood=mood,
                 metrics={
                     "trauma_load": round(trauma, 1),
                     "nourishment_load": round(nourishment, 1),
@@ -422,7 +444,8 @@ class PulseEngine:
         ):
             return Trigger(
                 kind="reflective_impulse",
-                soul=soul, mood=mood,
+                soul=soul,
+                mood=mood,
                 metrics={
                     "idle_seconds": int(idle),
                     "distance": round(distance, 1),
@@ -433,7 +456,8 @@ class PulseEngine:
         if nourishment > cfg.nourishment_thank_trigger and nourishment > trauma * 2:
             return Trigger(
                 kind="gratitude",
-                soul=soul, mood=mood,
+                soul=soul,
+                mood=mood,
                 metrics={"nourishment_load": round(nourishment, 1)},
             )
 
@@ -448,7 +472,8 @@ class PulseEngine:
         ):
             return Trigger(
                 kind="restless_curiosity",
-                soul=soul, mood=mood,
+                soul=soul,
+                mood=mood,
                 metrics={"arousal": mood[1], "idle_seconds": int(idle)},
             )
 
@@ -501,6 +526,7 @@ class PulseEngine:
         # Lazy import to keep cyclic-import surface small. The helper
         # lives in the corpus module and is intentionally cheap.
         from clanker_soul.pulse.corpus import default_tags_from_metrics
+
         return default_tags_from_metrics(trigger)
 
     def _memory_topics_callback(self):
@@ -520,7 +546,8 @@ class PulseEngine:
     # ------------------------------------------------------------------
 
     async def _fire_pulse(
-        self, trigger: Trigger,
+        self,
+        trigger: Trigger,
     ) -> tuple[bool, str | None, bool, str | None]:
         """Returns ``(fired, prompt, target_present, face_id)`` so the
         caller can log a complete outcome including the corpus face
@@ -550,7 +577,8 @@ class PulseEngine:
         if target_required and target is None:
             logger.debug(
                 "Pulse trigger=%s requires target (action=%s) — staying quiet",
-                trigger.kind, action_kind,
+                trigger.kind,
+                action_kind,
             )
             return False, None, False, None
 
@@ -582,7 +610,8 @@ class PulseEngine:
         if not self._action_permitted(action):
             logger.info(
                 "Pulse trigger=%s action=%s suppressed by capability gate",
-                trigger.kind, action.kind,
+                trigger.kind,
+                action.kind,
             )
             return False, prompt, True, face_id
 
@@ -615,7 +644,8 @@ class PulseEngine:
         return outcome.delivered, prompt, True, face_id
 
     async def _dispatch_action_via_host(
-        self, action: PulseAction,
+        self,
+        action: PulseAction,
     ) -> ActionOutcome | None:
         """Try ``host.dispatch_action`` first; fall back to
         ``host.dispatch_pulse`` for legacy hosts.
@@ -636,7 +666,8 @@ class PulseEngine:
                 if not isinstance(outcome, ActionOutcome):
                     logger.warning(
                         "dispatch_action(%s) returned %r, expected ActionOutcome",
-                        action.kind, type(outcome).__name__,
+                        action.kind,
+                        type(outcome).__name__,
                     )
                     return None
                 return outcome
@@ -684,10 +715,12 @@ class PulseEngine:
             logger.exception("capability assessment failed — allowing action")
             return True
         decision = gate.evaluate(
-            action.kind, level,
+            action.kind,
+            level,
             tool_name=action.extra.get("tool_name") if action.extra else None,
             is_user_message=bool(action.extra.get("is_user_message", False))
-            if action.extra else False,
+            if action.extra
+            else False,
         )
         return decision.permitted
 
@@ -697,10 +730,12 @@ class PulseEngine:
         circular dependency. Falls back to UNRESTRICTED if anything
         misses (defensive — better to allow than crash gating)."""
         from clanker_soul.governor import CapabilityLevel
+
         if self._gate is None:
             return CapabilityLevel.UNRESTRICTED
         try:
             from clanker_soul.governor import assess_capability
+
             snap = self._host.snapshot() or {}
             return assess_capability(snap, self._gate.config)
         except Exception:
@@ -736,9 +771,14 @@ class PulseEngine:
                 )
 
     def _log_pulse_outcome(
-        self, *, snap: dict, trigger_kind: str | None,
+        self,
+        *,
+        snap: dict,
+        trigger_kind: str | None,
         suppressed_reason: str | None,
-        target_present: bool, dispatched: bool, prompt: str | None,
+        target_present: bool,
+        dispatched: bool,
+        prompt: str | None,
         face_id: str | None = None,
     ) -> None:
         """Build a PulseRecord and ship it to the configured sink.
@@ -750,6 +790,7 @@ class PulseEngine:
             return
         try:
             from clanker_soul.eventlog import PulseRecord
+
             rec = PulseRecord(
                 ts=datetime.now(timezone.utc).timestamp(),
                 agent_id=self._agent_id or "",

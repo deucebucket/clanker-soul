@@ -9,6 +9,7 @@ config.
 
 If this file ever fails, Phase 1's drop-in plugin promise is broken.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -142,6 +143,7 @@ def test_two_agents_share_db_without_cross_contamination(tmp_path) -> None:
 class _PluginPulseHost:
     """Minimal PulseHost that delegates to a SoulPlugin's snapshot +
     drift, and records what the engine wanted to dispatch."""
+
     plugin: SoulPlugin
     target: PulseTarget = field(default_factory=lambda: PulseTarget(payload="test"))
     dispatched: list = field(default_factory=list)
@@ -176,7 +178,8 @@ async def test_plugin_drives_pulseengine_with_logging(tmp_path) -> None:
 
     db = tmp_path / "pulse.db"
     plugin = SoulPlugin(
-        agent_id="pulser", db_path=db,
+        agent_id="pulser",
+        db_path=db,
         default_soul=BRITTLE.soul,
     )
     BRITTLE.apply(plugin.overrides, "pulser")
@@ -184,15 +187,15 @@ async def test_plugin_drives_pulseengine_with_logging(tmp_path) -> None:
 
     # Drive mood far below soul to trip distress.
     for _ in range(3):
-        plugin.ingest(Score(v=20, w=20, u=220,
-                            patterns=("EXISTENTIAL_NEGATION",)))
+        plugin.ingest(Score(v=20, w=20, u=220, patterns=("EXISTENTIAL_NEGATION",)))
 
     host = _PluginPulseHost(plugin=plugin)
     # Wire the pulse engine to write to the same event log the plugin uses.
     engine = PulseEngine(
         host,
         config=PulseConfig(min_quiet_seconds=1.0, startup_grace_s=0.0),
-        event_log=plugin.event_log, agent_id="pulser",
+        event_log=plugin.event_log,
+        agent_id="pulser",
     )
     engine._last_outbound_ts = datetime.now(timezone.utc).timestamp() - 60
     engine._last_pulse_ts = datetime.now(timezone.utc).timestamp() - 60
@@ -226,14 +229,30 @@ def test_all_phase1_names_importable_from_top_level() -> None:
     expected = {
         # Phase 1 deliverables
         "SoulPlugin",
-        "ConfigOverrides", "OverrideBundle", "apply_overrides",
-        "EventLog", "IngestRecord", "PulseRecord",
-        "NullEventLog", "SqliteEventLog",
-        "Preset", "CHILD", "ADULT", "BRITTLE", "STOIC", "PRESETS",
+        "ConfigOverrides",
+        "OverrideBundle",
+        "apply_overrides",
+        "EventLog",
+        "IngestRecord",
+        "PulseRecord",
+        "NullEventLog",
+        "SqliteEventLog",
+        "Preset",
+        "CHILD",
+        "ADULT",
+        "BRITTLE",
+        "STOIC",
+        "PRESETS",
         # Carried forward from v0.1
-        "Score", "SoulState", "SoulStore",
-        "EmotionalPhysics", "PhysicsConfig",
-        "PulseEngine", "PulseHost", "PulseTarget", "Trigger",
+        "Score",
+        "SoulState",
+        "SoulStore",
+        "EmotionalPhysics",
+        "PhysicsConfig",
+        "PulseEngine",
+        "PulseHost",
+        "PulseTarget",
+        "Trigger",
     }
     missing = expected - set(dir(cs))
     assert not missing, f"missing top-level exports: {missing}"

@@ -9,6 +9,7 @@ Re-exports the public surface of the four submodules:
   - :py:mod:`.engine` — :py:class:`EmotionalPhysics` stateful engine
 
 ``from clanker_soul.physics import X`` keeps working unchanged."""
+
 from clanker_soul.physics.config import (
     HEAVY_PATTERNS,
     POSITIVE_PATTERNS,

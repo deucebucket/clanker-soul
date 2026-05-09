@@ -1,4 +1,5 @@
 """CapabilityLevel + GovernorConfig — shape, defaults, descriptions."""
+
 from __future__ import annotations
 
 from clanker_soul.governor import CapabilityLevel, GovernorConfig

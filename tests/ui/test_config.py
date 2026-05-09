@@ -1,4 +1,5 @@
 """Config panel — view builder, write helpers, /config routes."""
+
 from __future__ import annotations
 
 import pytest
@@ -191,8 +192,12 @@ def test_post_override_persists(tmp_path) -> None:
     with TestClient(app) as client:
         res = client.post(
             "/config/override",
-            data={"agent_id": "alice", "section": "physics",
-                  "field": "blend_alpha", "value": "0.65"},
+            data={
+                "agent_id": "alice",
+                "section": "physics",
+                "field": "blend_alpha",
+                "value": "0.65",
+            },
         )
     assert res.status_code == 200
     overrides = ConfigOverrides(SoulStore.get(db))
@@ -205,8 +210,7 @@ def test_post_override_rejects_out_of_range(tmp_path) -> None:
     with TestClient(app) as client:
         res = client.post(
             "/config/override",
-            data={"agent_id": "alice", "section": "soul",
-                  "field": "v", "value": "9999"},
+            data={"agent_id": "alice", "section": "soul", "field": "v", "value": "9999"},
         )
     assert res.status_code == 400
 
@@ -214,14 +218,12 @@ def test_post_override_rejects_out_of_range(tmp_path) -> None:
 def test_post_clear_field_removes_one_only(tmp_path) -> None:
     db = _fresh_db(tmp_path)
     overrides = ConfigOverrides(SoulStore.get(db))
-    overrides.update("alice",
-                     physics={"blend_alpha": 0.7, "armor_max": 0.4})
+    overrides.update("alice", physics={"blend_alpha": 0.7, "armor_max": 0.4})
     app = create_app(db)
     with TestClient(app) as client:
         res = client.post(
             "/config/clear",
-            data={"agent_id": "alice", "section": "physics",
-                  "field": "blend_alpha"},
+            data={"agent_id": "alice", "section": "physics", "field": "blend_alpha"},
         )
     assert res.status_code == 200
     bundle = ConfigOverrides(SoulStore.get(db)).get("alice")
@@ -232,8 +234,7 @@ def test_post_clear_field_removes_one_only(tmp_path) -> None:
 def test_post_clear_all_wipes_bundle(tmp_path) -> None:
     db = _fresh_db(tmp_path)
     overrides = ConfigOverrides(SoulStore.get(db))
-    overrides.update("alice",
-                     physics={"blend_alpha": 0.7}, soul={"v": 220})
+    overrides.update("alice", physics={"blend_alpha": 0.7}, soul={"v": 220})
     app = create_app(db)
     with TestClient(app) as client:
         res = client.post("/config/clear", data={"agent_id": "alice"})
@@ -255,8 +256,7 @@ def test_post_preset_applies_bundle(tmp_path) -> None:
     bundle = ConfigOverrides(SoulStore.get(db)).get("alice")
     # CHILD overrides soul + soul_drift_per_hour
     assert bundle.soul["v"] == PRESETS["child"].soul.v
-    assert bundle.physics["soul_drift_per_hour"] == \
-           PRESETS["child"].config.soul_drift_per_hour
+    assert bundle.physics["soul_drift_per_hour"] == PRESETS["child"].config.soul_drift_per_hour
 
 
 def test_post_preset_rejects_unknown(tmp_path) -> None:

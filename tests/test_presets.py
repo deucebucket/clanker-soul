@@ -1,7 +1,7 @@
 """Personality presets — child / adult / brittle / stoic."""
+
 from __future__ import annotations
 
-import pytest
 
 from clanker_soul import (
     EmotionalPhysics,
@@ -113,13 +113,19 @@ def test_brittle_and_stoic_diverge_under_identical_events() -> None:
 def _soul_dict(soul: SoulState) -> dict:
     """Helper: extract just the personality fields from a SoulState."""
     return {
-        "v": soul.v, "a": soul.a, "d": soul.d, "u": soul.u,
-        "g": soul.g, "w": soul.w, "i": soul.i,
+        "v": soul.v,
+        "a": soul.a,
+        "d": soul.d,
+        "u": soul.u,
+        "g": soul.g,
+        "w": soul.w,
+        "i": soul.i,
     }
 
 
 def _config_dict(config: PhysicsConfig) -> dict:
     from dataclasses import asdict
+
     return asdict(config)
 
 
@@ -151,7 +157,8 @@ def test_apply_then_reload_changes_running_engine(tmp_path) -> None:
     physics = EmotionalPhysics(
         soul=SoulState(),  # adult defaults
         config=PhysicsConfig(),
-        overrides=overrides, agent_id="x",
+        overrides=overrides,
+        agent_id="x",
     )
     assert physics.soul.w == 175  # ADULT default
 

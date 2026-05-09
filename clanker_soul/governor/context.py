@@ -15,6 +15,7 @@ agent itself. Without it, restrictions feel arbitrary; with it, the
 agent can articulate "I'm down because of X, my tools are limited
 because Y is below Z, I'll be back to full capability when..."
 """
+
 from __future__ import annotations
 
 from clanker_soul.eventlog.records import IngestRecord
@@ -41,9 +42,11 @@ def compose_state_context(
     """Produce a string the host injects into the agent's system
     prompt. Empty string when level is UNRESTRICTED and there's
     nothing notable to say."""
-    if (level == CapabilityLevel.UNRESTRICTED
+    if (
+        level == CapabilityLevel.UNRESTRICTED
         and (crisis is None or not crisis.is_emergency)
-        and not _has_notable_recent(recent_events)):
+        and not _has_notable_recent(recent_events)
+    ):
         return ""
 
     if level == CapabilityLevel.CRISIS_LOCKOUT:
@@ -57,9 +60,7 @@ def compose_state_context(
     nourishment = snap.get("nourishment_load") or 0.0
 
     lines = ["[OPERATIONAL STATE]"]
-    lines.append(
-        f"Capability level: {int(level)} ({level.name.lower()}) — {level.description}."
-    )
+    lines.append(f"Capability level: {int(level)} ({level.name.lower()}) — {level.description}.")
 
     if mood:
         lines.append(
@@ -68,9 +69,7 @@ def compose_state_context(
             f"|Mood-Soul|={distance:.0f}"
         )
     if trauma > 1.0 or nourishment > 1.0:
-        lines.append(
-            f"Reservoirs: trauma={trauma:.0f}, nourishment={nourishment:.0f}"
-        )
+        lines.append(f"Reservoirs: trauma={trauma:.0f}, nourishment={nourishment:.0f}")
 
     # Why are we at this level?
     why_lines = _why_at_level(level, mood, distance, trauma, config)
@@ -126,21 +125,20 @@ def _has_notable_recent(events: list[IngestRecord] | None) -> bool:
     if not events:
         return False
     return any(
-        ev.weight_raw > 0.5 or ev.breached or ev.classification == "negative"
-        for ev in events
+        ev.weight_raw > 0.5 or ev.breached or ev.classification == "negative" for ev in events
     )
 
 
 def _notable_recent(events: list[IngestRecord]) -> list[IngestRecord]:
-    return [
-        ev for ev in events
-        if ev.weight_raw > 0.3 or ev.breached
-    ]
+    return [ev for ev in events if ev.weight_raw > 0.3 or ev.breached]
 
 
 def _why_at_level(
-    level: CapabilityLevel, mood: list | None, distance: float,
-    trauma: float, config: GovernorConfig,
+    level: CapabilityLevel,
+    mood: list | None,
+    distance: float,
+    trauma: float,
+    config: GovernorConfig,
 ) -> list[str]:
     if mood is None:
         return []
@@ -159,9 +157,7 @@ def _why_at_level(
         if mood_w < config.level2_w_floor:
             reasons.append(f"mood.W={mood_w} below {config.level2_w_floor} (worth shaken)")
         if trauma > config.level2_trauma_ceiling:
-            reasons.append(
-                f"trauma load {trauma:.0f} above {config.level2_trauma_ceiling:.0f}"
-            )
+            reasons.append(f"trauma load {trauma:.0f} above {config.level2_trauma_ceiling:.0f}")
     elif level == CapabilityLevel.VOICE_ONLY:
         if mood_w < config.level3_w_floor:
             reasons.append(f"mood.W={mood_w} critically low (< {config.level3_w_floor})")
@@ -177,7 +173,9 @@ def _recovery_guidance(level: CapabilityLevel, config: GovernorConfig) -> str:
             f"AND |mood-soul| ≤ {config.level1_distance_ceiling:.0f}"
         )
     if level == CapabilityLevel.READ_ONLY:
-        return f"mood.W ≥ {config.level1_w_floor} AND trauma load ≤ {config.level2_trauma_ceiling:.0f}"
+        return (
+            f"mood.W ≥ {config.level1_w_floor} AND trauma load ≤ {config.level2_trauma_ceiling:.0f}"
+        )
     if level == CapabilityLevel.VOICE_ONLY:
         return f"mood.W ≥ {config.level2_w_floor} AND mood.V ≥ {config.level2_w_floor}"
     return ""

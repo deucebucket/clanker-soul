@@ -5,6 +5,7 @@ wire shape is verified against the actual upstream API.
 in-carl `PulseDispatcher`. Moved here verbatim per issue #53; the only
 difference is the import line. They run in <0.1s.
 """
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
@@ -24,7 +25,11 @@ def _trigger(kind: str = "restless_curiosity") -> Trigger:
 
 
 def _action(
-    kind: str, *, target=None, prompt: str = "test", extra: dict | None = None,
+    kind: str,
+    *,
+    target=None,
+    prompt: str = "test",
+    extra: dict | None = None,
 ) -> PulseAction:
     return PulseAction(
         kind=kind,
@@ -123,10 +128,12 @@ async def test_tool_invocation_success():
     executor = MagicMock()
     executor.execute_tool = AsyncMock(return_value={"status": "ok", "data": "x"})
     d = PulseDispatcher(tool_executor=executor)
-    out = await d.dispatch(_action(
-        "tool_invocation",
-        extra={"tool_name": "phone", "args": {"action": "open_app"}},
-    ))
+    out = await d.dispatch(
+        _action(
+            "tool_invocation",
+            extra={"tool_name": "phone", "args": {"action": "open_app"}},
+        )
+    )
     assert out.delivered is True
     executor.execute_tool.assert_awaited_once_with("phone", {"action": "open_app"})
 
@@ -215,20 +222,28 @@ async def test_post_public_routes_to_platform_handler():
 async def test_comment_reply_routes_to_platform_handler():
     h = AsyncMock(return_value=True)
     d = PulseDispatcher(reply_handlers={"x": h})
-    out = await d.dispatch(_action(
-        "comment_reply", target=PulseTarget("thread-123"),
-        prompt="reply", extra={"platform": "x"},
-    ))
+    out = await d.dispatch(
+        _action(
+            "comment_reply",
+            target=PulseTarget("thread-123"),
+            prompt="reply",
+            extra={"platform": "x"},
+        )
+    )
     assert out.delivered is True
     h.assert_awaited_once()
 
 
 async def test_comment_reply_no_handler():
     d = PulseDispatcher()
-    out = await d.dispatch(_action(
-        "comment_reply", target=PulseTarget("thread"),
-        prompt="r", extra={"platform": "x"},
-    ))
+    out = await d.dispatch(
+        _action(
+            "comment_reply",
+            target=PulseTarget("thread"),
+            prompt="r",
+            extra={"platform": "x"},
+        )
+    )
     assert out.delivered is False
 
 

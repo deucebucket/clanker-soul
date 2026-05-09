@@ -12,6 +12,7 @@ Reads (``read_ingest`` / ``read_pulse`` / ``count_*``) are NOT
 soft-fail — read failures should surface to the UI/tests, not be
 swallowed.
 """
+
 from __future__ import annotations
 
 import json
@@ -25,13 +26,20 @@ logger = logging.getLogger(__name__)
 
 
 def _score_to_json(score: Score) -> str:
-    return json.dumps({
-        "v": score.v, "a": score.a, "d": score.d, "u": score.u,
-        "g": score.g, "w": score.w, "i": score.i,
-        "patterns": list(score.patterns),
-        "direction": score.direction,
-        "source": score.source,
-    })
+    return json.dumps(
+        {
+            "v": score.v,
+            "a": score.a,
+            "d": score.d,
+            "u": score.u,
+            "g": score.g,
+            "w": score.w,
+            "i": score.i,
+            "patterns": list(score.patterns),
+            "direction": score.direction,
+            "source": score.source,
+        }
+    )
 
 
 def _score_from_json(blob: str | None) -> Score | None:
@@ -39,8 +47,13 @@ def _score_from_json(blob: str | None) -> Score | None:
         return None
     d = json.loads(blob)
     return Score(
-        v=d["v"], a=d["a"], d=d["d"], u=d["u"],
-        g=d["g"], w=d["w"], i=d["i"],
+        v=d["v"],
+        a=d["a"],
+        d=d["d"],
+        u=d["u"],
+        g=d["g"],
+        w=d["w"],
+        i=d["i"],
         patterns=tuple(d.get("patterns", ())),
         direction=d.get("direction"),
         source=d.get("source"),
@@ -78,15 +91,19 @@ class SqliteEventLog:
                     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                     """,
                     (
-                        record.ts, record.agent_id,
+                        record.ts,
+                        record.agent_id,
                         _score_to_json(record.raw),
                         _score_to_json(record.primed) if record.primed else None,
                         _score_to_json(record.mood_before) if record.mood_before else None,
                         _score_to_json(record.mood_after),
                         json.dumps(record.soul_before.to_dict()),
                         json.dumps(record.soul_after.to_dict()),
-                        record.weight_raw, record.armor, record.weight_effective,
-                        1 if record.breached else 0, record.breach_delta,
+                        record.weight_raw,
+                        record.armor,
+                        record.weight_effective,
+                        1 if record.breached else 0,
+                        record.breach_delta,
                         json.dumps(list(record.patterns)),
                         record.classification,
                         record.why,
@@ -107,9 +124,11 @@ class SqliteEventLog:
                     ) VALUES (?,?,?,?,?,?,?,?,?)
                     """,
                     (
-                        record.ts, record.agent_id,
+                        record.ts,
+                        record.agent_id,
                         json.dumps(record.snap),
-                        record.trigger_kind, record.suppressed_reason,
+                        record.trigger_kind,
+                        record.suppressed_reason,
                         1 if record.target_present else 0,
                         1 if record.dispatched else 0,
                         record.prompt,
@@ -125,7 +144,10 @@ class SqliteEventLog:
     # ------------------------------------------------------------------
 
     def read_ingest(
-        self, agent_id: str, *, limit: int | None = None,
+        self,
+        agent_id: str,
+        *,
+        limit: int | None = None,
     ) -> list[IngestRecord]:
         """Return ingest records for ``agent_id``, most recent first."""
         sql = (
@@ -144,23 +166,31 @@ class SqliteEventLog:
             rows = self._store.connection.execute(sql, params).fetchall()
         return [
             IngestRecord(
-                ts=row[0], agent_id=row[1],
+                ts=row[0],
+                agent_id=row[1],
                 raw=_score_from_json(row[2]),  # type: ignore[arg-type]
                 primed=_score_from_json(row[3]),
                 mood_before=_score_from_json(row[4]),
                 mood_after=_score_from_json(row[5]),  # type: ignore[arg-type]
                 soul_before=_soul_from_json(row[6]),
                 soul_after=_soul_from_json(row[7]),
-                weight_raw=row[8], armor=row[9], weight_effective=row[10],
-                breached=bool(row[11]), breach_delta=row[12],
+                weight_raw=row[8],
+                armor=row[9],
+                weight_effective=row[10],
+                breached=bool(row[11]),
+                breach_delta=row[12],
                 patterns=tuple(json.loads(row[13])),
-                classification=row[14], why=row[15],
+                classification=row[14],
+                why=row[15],
             )
             for row in rows
         ]
 
     def read_pulse(
-        self, agent_id: str, *, limit: int | None = None,
+        self,
+        agent_id: str,
+        *,
+        limit: int | None = None,
     ) -> list[PulseRecord]:
         """Return pulse records for ``agent_id``, most recent first."""
         sql = (
@@ -177,10 +207,13 @@ class SqliteEventLog:
             rows = self._store.connection.execute(sql, params).fetchall()
         return [
             PulseRecord(
-                ts=row[0], agent_id=row[1],
+                ts=row[0],
+                agent_id=row[1],
                 snap=json.loads(row[2]),
-                trigger_kind=row[3], suppressed_reason=row[4],
-                target_present=bool(row[5]), dispatched=bool(row[6]),
+                trigger_kind=row[3],
+                suppressed_reason=row[4],
+                target_present=bool(row[5]),
+                dispatched=bool(row[6]),
                 prompt=row[7],
                 face_id=row[8],
             )

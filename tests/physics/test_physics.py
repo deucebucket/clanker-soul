@@ -1,4 +1,5 @@
 """EmotionalPhysics — mood, soul-armor, dim-resilience, mood-prime, breach."""
+
 from __future__ import annotations
 
 import pytest
@@ -15,8 +16,7 @@ from clanker_soul import (
 )
 
 
-def _physics(soul: SoulState | None = None,
-             cfg: PhysicsConfig | None = None) -> EmotionalPhysics:
+def _physics(soul: SoulState | None = None, cfg: PhysicsConfig | None = None) -> EmotionalPhysics:
     return EmotionalPhysics(soul=soul or SoulState(), config=cfg or PhysicsConfig())
 
 
@@ -40,15 +40,13 @@ def test_soul_drift_runs_without_event() -> None:
 
 def test_negative_event_loads_trauma_reservoir() -> None:
     p = _physics()
-    p.ingest(Score(v=40, a=180, d=70, u=180, g=80, w=50, i=110,
-                   patterns=("ABANDONMENT",)))
+    p.ingest(Score(v=40, a=180, d=70, u=180, g=80, w=50, i=110, patterns=("ABANDONMENT",)))
     assert p.trauma.load() > 0
 
 
 def test_positive_event_loads_nourishment_reservoir() -> None:
     p = _physics()
-    p.ingest(Score(v=220, a=140, d=170, u=20, g=160, w=210, i=160,
-                   patterns=("AFFIRMATION",)))
+    p.ingest(Score(v=220, a=140, d=170, u=20, g=160, w=210, i=160, patterns=("AFFIRMATION",)))
     # Nourishment OR mood should reflect a positive movement; we only
     # require that the positive event moved *something* in the right
     # direction in at least one of the two channels.

@@ -21,6 +21,7 @@ Periodic (``soul_drift``, called per turn or by background tick):
 
 Stateful, NOT thread-safe — run from a single pipeline worker per agent.
 """
+
 from __future__ import annotations
 
 import logging
@@ -96,12 +97,10 @@ class EmotionalPhysics:
         # un-overridden soul fields (which may have drifted) aren't
         # clobbered.
         self._original_config: dict[str, object] = {
-            f.name: getattr(self.config, f.name)
-            for f in dc_fields(self.config)
+            f.name: getattr(self.config, f.name) for f in dc_fields(self.config)
         }
         self._original_soul: dict[str, object] = {
-            f.name: getattr(self.soul, f.name)
-            for f in dc_fields(self.soul)
+            f.name: getattr(self.soul, f.name) for f in dc_fields(self.soul)
         }
         self._active_physics_overrides: set[str] = set()
         self._active_soul_overrides: set[str] = set()
@@ -125,15 +124,15 @@ class EmotionalPhysics:
         new_physics_keys = set(bundle.physics.keys())
         physics_field_names = {f.name for f in dc_fields(self.config)}
         # Revert fields that were overridden but no longer are.
-        for field_name in (self._active_physics_overrides - new_physics_keys):
+        for field_name in self._active_physics_overrides - new_physics_keys:
             if field_name in self._original_config:
-                setattr(self.config, field_name,
-                        self._original_config[field_name])
+                setattr(self.config, field_name, self._original_config[field_name])
         # Apply current overrides.
         for field_name, value in bundle.physics.items():
             if field_name not in physics_field_names:
                 logger.warning(
-                    "ignoring unknown PhysicsConfig override: %r", field_name,
+                    "ignoring unknown PhysicsConfig override: %r",
+                    field_name,
                 )
                 continue
             setattr(self.config, field_name, value)
@@ -142,14 +141,14 @@ class EmotionalPhysics:
         # SOUL
         new_soul_keys = set(bundle.soul.keys())
         soul_field_names = {f.name for f in dc_fields(self.soul)}
-        for field_name in (self._active_soul_overrides - new_soul_keys):
+        for field_name in self._active_soul_overrides - new_soul_keys:
             if field_name in self._original_soul:
-                setattr(self.soul, field_name,
-                        self._original_soul[field_name])
+                setattr(self.soul, field_name, self._original_soul[field_name])
         for field_name, value in bundle.soul.items():
             if field_name not in soul_field_names:
                 logger.warning(
-                    "ignoring unknown SoulState override: %r", field_name,
+                    "ignoring unknown SoulState override: %r",
+                    field_name,
                 )
                 continue
             setattr(self.soul, field_name, value)
@@ -245,7 +244,8 @@ class EmotionalPhysics:
 
         if self._event_log is not None:
             self._emit_ingest_log(
-                event=event, raw=raw,
+                event=event,
+                raw=raw,
                 soul_before=soul_before,  # type: ignore[arg-type]
                 mood_before=mood_before,
                 tick=tick,
@@ -253,8 +253,12 @@ class EmotionalPhysics:
         return tick
 
     def _emit_ingest_log(
-        self, *, event: Score, raw: Score | None,
-        soul_before: SoulState, mood_before: Score | None,
+        self,
+        *,
+        event: Score,
+        raw: Score | None,
+        soul_before: SoulState,
+        mood_before: Score | None,
         tick: PhysicsTick,
     ) -> None:
         """Build an IngestRecord and ship it to the configured sink.
@@ -386,15 +390,20 @@ class EmotionalPhysics:
             return _clamp(m_val * b + e_val * a)
 
         return Score(
-            v=mix(mood.v, event.v), a=mix(mood.a, event.a),
-            d=mix(mood.d, event.d), u=mix(mood.u, event.u),
-            g=mix(mood.g, event.g), w=mix(mood.w, event.w),
+            v=mix(mood.v, event.v),
+            a=mix(mood.a, event.a),
+            d=mix(mood.d, event.d),
+            u=mix(mood.u, event.u),
+            g=mix(mood.g, event.g),
+            w=mix(mood.w, event.w),
             i=mix(mood.i, event.i),
             patterns=event.patterns,
         )
 
     def _apply_dim_resilience(
-        self, mood: Score, event_weight: float = 0.0,
+        self,
+        mood: Score,
+        event_weight: float = 0.0,
     ) -> Score:
         """Pull each mood dim back toward its soul anchor by the per-dim
         resilience factor. Composes with the global armor — armor reduces
@@ -404,19 +413,22 @@ class EmotionalPhysics:
         get strong cushioning, but heavy hits punch through so the
         breach mechanic can still fire on sustained attack."""
         from clanker_soul.physics.math import dim_resilience as _dim_resilience
+
         weight_scale = max(0.0, 1.0 - min(1.0, event_weight))
         if weight_scale == 0.0:
             return mood
         pulls = _dim_resilience(self.soul, self.config.dim_resilience_max)
         soul = self.soul.as_tuple()
         cur = (mood.v, mood.a, mood.d, mood.u, mood.g, mood.w, mood.i)
-        pulled = tuple(
-            _clamp(c + (s - c) * p * weight_scale)
-            for c, s, p in zip(cur, soul, pulls)
-        )
+        pulled = tuple(_clamp(c + (s - c) * p * weight_scale) for c, s, p in zip(cur, soul, pulls))
         return Score(
-            v=pulled[0], a=pulled[1], d=pulled[2], u=pulled[3],
-            g=pulled[4], w=pulled[5], i=pulled[6],
+            v=pulled[0],
+            a=pulled[1],
+            d=pulled[2],
+            u=pulled[3],
+            g=pulled[4],
+            w=pulled[5],
+            i=pulled[6],
             patterns=mood.patterns,
         )
 
@@ -446,9 +458,11 @@ class EmotionalPhysics:
             return
         target = self.nourishment if bucket == "positive" else self.trauma
         now = datetime.now(timezone.utc).timestamp()
-        patterns = list(event.patterns) if event.patterns else [
-            "WARMTH" if bucket == "positive" else "GENERIC_NEGATIVE"
-        ]
+        patterns = (
+            list(event.patterns)
+            if event.patterns
+            else ["WARMTH" if bucket == "positive" else "GENERIC_NEGATIVE"]
+        )
         per_pattern = weight * 100.0 / max(1, len(patterns))
         for p in patterns:
             target.add(p, per_pattern, now_ts=now)

@@ -9,6 +9,7 @@ Exported as the package's public math API so hosts can reuse the
 helpers — e.g. compute ``event_weight`` outside ingest for a
 prediction model.
 """
+
 from __future__ import annotations
 
 import math
@@ -83,14 +84,20 @@ def mood_prime_score(
     if primed == (raw.v, raw.a, raw.d, raw.u, raw.g, raw.w, raw.i):
         return raw  # mood was effectively neutral on every dim
     return Score(
-        v=primed[0], a=primed[1], d=primed[2], u=primed[3],
-        g=primed[4], w=primed[5], i=primed[6],
+        v=primed[0],
+        a=primed[1],
+        d=primed[2],
+        u=primed[3],
+        g=primed[4],
+        w=primed[5],
+        i=primed[6],
         patterns=raw.patterns,
     )
 
 
 def dim_resilience(
-    soul: SoulState, dim_resilience_max: float = 0.5,
+    soul: SoulState,
+    dim_resilience_max: float = 0.5,
 ) -> tuple[float, ...]:
     """Per-dimension pull-toward-soul factors derived from the Soul vector.
 
@@ -104,8 +111,7 @@ def dim_resilience(
     (the agent's "I know who I am"), weakest on U (a calm baseline is
     too gentle to fully cushion an urgent hit)."""
     return tuple(
-        max(0.0, min(dim_resilience_max, dim_resilience_max * (v / 255.0)))
-        for v in soul.as_tuple()
+        max(0.0, min(dim_resilience_max, dim_resilience_max * (v / 255.0))) for v in soul.as_tuple()
     )
 
 
@@ -137,9 +143,7 @@ def _why(tick: "PhysicsTick", event: Score) -> str:
     pat_str = ",".join(event.patterns) if event.patterns else "no-pattern"
     parts = [f"{pat_str} (weight={tick.weight_raw:.2f})"]
     if tick.armor > 0.05:
-        parts.append(
-            f"armor={tick.armor:.2f} → w_eff={tick.weight_effective:.2f}"
-        )
+        parts.append(f"armor={tick.armor:.2f} → w_eff={tick.weight_effective:.2f}")
     else:
         parts.append(f"w_eff={tick.weight_effective:.2f}")
     if tick.breached:

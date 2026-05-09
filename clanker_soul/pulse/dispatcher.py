@@ -36,6 +36,7 @@ Handler signatures (all callables; sync or async return type):
   * ``reply_handlers[platform](target, prompt, extra) -> bool``
   * ``withdraw_handler(seconds) -> None``
 """
+
 from __future__ import annotations
 
 import inspect
@@ -98,7 +99,8 @@ class PulseDispatcher:
             }.get(action.kind)
             if handler is None:
                 logger.warning(
-                    "PulseDispatcher: unknown action kind %r", action.kind,
+                    "PulseDispatcher: unknown action kind %r",
+                    action.kind,
                 )
                 return ActionOutcome(
                     delivered=False,
@@ -107,7 +109,8 @@ class PulseDispatcher:
             return await handler(action)
         except Exception as e:
             logger.exception(
-                "PulseDispatcher: handler raised for %s", action.kind,
+                "PulseDispatcher: handler raised for %s",
+                action.kind,
             )
             return ActionOutcome(
                 delivered=False,
@@ -130,9 +133,7 @@ class PulseDispatcher:
         args = action.extra.get("args") or {}
         if not tool_name:
             return ActionOutcome(delivered=False, note="tool_invocation_missing_tool_name")
-        result = await _maybe_await(
-            self._tool_executor.execute_tool(tool_name, args)
-        )
+        result = await _maybe_await(self._tool_executor.execute_tool(tool_name, args))
         delivered = bool(result and result.get("status") == "ok")
         if delivered:
             return ActionOutcome(delivered=True)
@@ -173,9 +174,7 @@ class PulseDispatcher:
                 delivered=False,
                 note=f"comment_reply_not_wired:{platform or 'no_platform'}",
             )
-        ok = await _maybe_await(
-            handler(action.target, action.prompt, action.extra)
-        )
+        ok = await _maybe_await(handler(action.target, action.prompt, action.extra))
         return ActionOutcome(
             delivered=bool(ok),
             note=None if ok else f"comment_reply_failed:{platform}",

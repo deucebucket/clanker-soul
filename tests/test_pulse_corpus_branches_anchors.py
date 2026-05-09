@@ -14,6 +14,7 @@ Three layers covered:
    when no host callback is supplied OR the callback returns False.
    With the callback returning True, anchored faces enter the dice.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -32,14 +33,18 @@ from clanker_soul import (
     SoulPlugin,
     SoulStore,
     Trigger,
-    VadugwiPredicate,
 )
 from clanker_soul.pulse.corpus import branch_bias
 
 
 SOUL_DEFAULT = {
-    "v": 145, "a": 110, "d": 160, "u": 80,
-    "g": 130, "w": 175, "i": 135,
+    "v": 145,
+    "a": 110,
+    "d": 160,
+    "u": 80,
+    "g": 130,
+    "w": 175,
+    "i": 135,
 }
 MOOD_DISTRESS = [80, 130, 110, 70, 100, 110, 100]
 
@@ -112,20 +117,18 @@ class TestSamplerBranchBias:
         corpus = PromptCorpus([parent, child, independent])
 
         # Without a previous face, all three weigh equally.
-        weights_no_parent = {
-            f.id: w for f, w in corpus.faces_for(_trigger())
-        }
+        weights_no_parent = {f.id: w for f, w in corpus.faces_for(_trigger())}
         assert weights_no_parent["c"] == pytest.approx(weights_no_parent["i"])
 
         # With parent = "p", child gets the 1.5× bump; independent doesn't.
         weights_with_parent = {
-            f.id: w for f, w in corpus.faces_for(
-                _trigger(), previous_face_id="p",
+            f.id: w
+            for f, w in corpus.faces_for(
+                _trigger(),
+                previous_face_id="p",
             )
         }
-        assert weights_with_parent["c"] == pytest.approx(
-            weights_with_parent["i"] * 1.5
-        )
+        assert weights_with_parent["c"] == pytest.approx(weights_with_parent["i"] * 1.5)
         assert weights_with_parent["i"] == pytest.approx(weights_no_parent["i"])
 
     def test_branch_bonus_visible_in_distribution(self):
@@ -147,9 +150,7 @@ class TestSamplerBranchBias:
         # With 1.5× bump and roughly equal pre-bias weights:
         # P(c) ≈ 1.5/3.5 ≈ 0.428; P(s) ≈ 1.0/3.5 ≈ 0.286
         # Allow ±10% tolerance for sampling variance.
-        assert counts["c"] > counts["s"], (
-            f"child should win more rolls than sibling: {counts}"
-        )
+        assert counts["c"] > counts["s"], f"child should win more rolls than sibling: {counts}"
         # Rough proportionality check.
         ratio = counts["c"] / max(counts["s"], 1)
         assert 1.2 < ratio < 1.9, f"expected ~1.5× ratio, got {ratio}"
@@ -175,7 +176,8 @@ class TestMemoryAnchors:
         plain = _face("p")
         corpus = PromptCorpus([anchored, plain])
         eligible = {
-            f.id for f, _ in corpus.faces_for(
+            f.id
+            for f, _ in corpus.faces_for(
                 _trigger(),
                 memory_topics_present=lambda topic: False,
             )
@@ -188,7 +190,8 @@ class TestMemoryAnchors:
         plain = _face("p")
         corpus = PromptCorpus([anchored, plain])
         eligible = {
-            f.id for f, _ in corpus.faces_for(
+            f.id
+            for f, _ in corpus.faces_for(
                 _trigger(),
                 memory_topics_present=lambda topic: True,
             )
@@ -204,9 +207,12 @@ class TestMemoryAnchors:
             raise RuntimeError("memory backend down")
 
         # Callback raises → face is filtered out, sampler doesn't crash.
-        eligible = list(corpus.faces_for(
-            _trigger(), memory_topics_present=boom,
-        ))
+        eligible = list(
+            corpus.faces_for(
+                _trigger(),
+                memory_topics_present=boom,
+            )
+        )
         assert eligible == []
 
 
@@ -262,7 +268,8 @@ class TestEnginePreviousFaceId:
         corpus = PromptCorpus([only])
         host = _Host(_distress_snap())
         engine = PulseEngine(
-            host, PulseConfig(min_quiet_seconds=0, startup_grace_s=0),
+            host,
+            PulseConfig(min_quiet_seconds=0, startup_grace_s=0),
             corpus=corpus,
         )
         # Pre-tick the previous face id is whatever was passed (None
@@ -282,7 +289,8 @@ class TestEnginePreviousFaceId:
 
         host = _Host(_distress_snap())
         engine = PulseEngine(
-            host, PulseConfig(min_quiet_seconds=0, startup_grace_s=0),
+            host,
+            PulseConfig(min_quiet_seconds=0, startup_grace_s=0),
             corpus=corpus,
             previous_face_id="parent",  # restored from disk
         )
@@ -295,7 +303,8 @@ class TestEnginePreviousFaceId:
         for _ in range(50):
             host_local = _Host(_distress_snap())
             engine_local = PulseEngine(
-                host_local, PulseConfig(min_quiet_seconds=0, startup_grace_s=0),
+                host_local,
+                PulseConfig(min_quiet_seconds=0, startup_grace_s=0),
                 corpus=corpus,
                 previous_face_id="parent",
             )
@@ -321,8 +330,10 @@ class TestEnginePreviousFaceId:
 
         host = _NoTargetHost(_distress_snap())
         engine = PulseEngine(
-            host, PulseConfig(min_quiet_seconds=0, startup_grace_s=0),
-            corpus=corpus, previous_face_id="seeded",
+            host,
+            PulseConfig(min_quiet_seconds=0, startup_grace_s=0),
+            corpus=corpus,
+            previous_face_id="seeded",
         )
         engine.note_outbound()
         asyncio.run(engine.tick())
@@ -345,9 +356,12 @@ class TestPluginMostRecentFaceId:
         host = _Host(_distress_snap())
         with SoulPlugin(agent_id="m2", db_path=db) as plugin:
             engine = PulseEngine(
-                host, PulseConfig(min_quiet_seconds=0, startup_grace_s=0),
-                event_log=plugin.event_log, agent_id="m2",
-                corpus=plugin.corpus, recency=plugin.recency,
+                host,
+                PulseConfig(min_quiet_seconds=0, startup_grace_s=0),
+                event_log=plugin.event_log,
+                agent_id="m2",
+                corpus=plugin.corpus,
+                recency=plugin.recency,
                 physics=plugin.physics,
             )
             engine.note_outbound()
@@ -362,9 +376,12 @@ class TestPluginMostRecentFaceId:
         host = _Host(_distress_snap())
         with SoulPlugin(agent_id="m3", db_path=db) as plugin:
             engine = PulseEngine(
-                host, PulseConfig(min_quiet_seconds=0, startup_grace_s=0),
-                event_log=plugin.event_log, agent_id="m3",
-                corpus=plugin.corpus, recency=plugin.recency,
+                host,
+                PulseConfig(min_quiet_seconds=0, startup_grace_s=0),
+                event_log=plugin.event_log,
+                agent_id="m3",
+                corpus=plugin.corpus,
+                recency=plugin.recency,
                 physics=plugin.physics,
             )
             engine.note_outbound()
@@ -378,7 +395,8 @@ class TestPluginMostRecentFaceId:
             engine2 = PulseEngine(
                 _Host(_distress_snap()),
                 PulseConfig(min_quiet_seconds=0, startup_grace_s=0),
-                corpus=plugin2.corpus, recency=plugin2.recency,
+                corpus=plugin2.corpus,
+                recency=plugin2.recency,
                 previous_face_id=plugin2.most_recent_face_id(),
             )
             assert engine2._previous_face_id == fired_id

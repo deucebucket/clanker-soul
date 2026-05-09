@@ -10,6 +10,7 @@ than on the dataclass because slider UIs need explicit ranges that
 exceed the source-of-truth defaults. Adding new fields means adding a
 metadata entry here and the slider auto-renders.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -32,32 +33,69 @@ class FieldMeta:
 # PhysicsConfig sliders. Ranges chosen to span useful + extreme values
 # without forcing absurd defaults.
 PHYSICS_FIELDS: tuple[FieldMeta, ...] = (
-    FieldMeta("blend_alpha", 0.0, 1.0, 0.01,
-              "Fraction of an event that displaces mood per hit. Higher = more reactive."),
-    FieldMeta("mood_decay_half_life_base", 60.0, 3600.0, 30.0,
-              "Mood decay half-life in seconds. Lower = quicker recovery."),
-    FieldMeta("armor_max", 0.0, 1.0, 0.01,
-              "Maximum fraction of weight that soul-armor can absorb."),
-    FieldMeta("dim_resilience_max", 0.0, 1.0, 0.01,
-              "Per-dim soul-pull cap. Higher = mood snaps back to soul harder."),
-    FieldMeta("mood_prime_factor", 0.0, 0.5, 0.01,
-              "How strongly the previous mood tints the next score. 0 disables."),
-    FieldMeta("soul_drift_per_hour", 0.0, 0.01, 0.0001,
-              "Hourly drift rate of soul toward sustained mood."),
-    FieldMeta("soul_drift_min_distance", 0.0, 30.0, 0.5,
-              "Don't drift soul if mood is within this distance."),
-    FieldMeta("breach_threshold", 10.0, 100.0, 1.0,
-              "|mood-soul| above which heavy events leak to soul (breach)."),
-    FieldMeta("heavy_threshold", 0.3, 1.0, 0.01,
-              "Event weight above which patterns count as 'heavy'."),
-    FieldMeta("breach_delta", 0.0, 0.3, 0.005,
-              "Max fraction of one heavy event that goes straight to soul."),
-    FieldMeta("healing_rate", 0.0, 0.005, 0.0001,
-              "W/V per-hour drift when nourishment dominates."),
-    FieldMeta("wounding_rate", 0.0, 0.005, 0.0001,
-              "W/V per-hour drift when trauma dominates."),
-    FieldMeta("trauma_pressure_floor", 0.0, 50.0, 1.0,
-              "Trauma load above which soul actively loses W/V."),
+    FieldMeta(
+        "blend_alpha",
+        0.0,
+        1.0,
+        0.01,
+        "Fraction of an event that displaces mood per hit. Higher = more reactive.",
+    ),
+    FieldMeta(
+        "mood_decay_half_life_base",
+        60.0,
+        3600.0,
+        30.0,
+        "Mood decay half-life in seconds. Lower = quicker recovery.",
+    ),
+    FieldMeta(
+        "armor_max", 0.0, 1.0, 0.01, "Maximum fraction of weight that soul-armor can absorb."
+    ),
+    FieldMeta(
+        "dim_resilience_max",
+        0.0,
+        1.0,
+        0.01,
+        "Per-dim soul-pull cap. Higher = mood snaps back to soul harder.",
+    ),
+    FieldMeta(
+        "mood_prime_factor",
+        0.0,
+        0.5,
+        0.01,
+        "How strongly the previous mood tints the next score. 0 disables.",
+    ),
+    FieldMeta(
+        "soul_drift_per_hour", 0.0, 0.01, 0.0001, "Hourly drift rate of soul toward sustained mood."
+    ),
+    FieldMeta(
+        "soul_drift_min_distance",
+        0.0,
+        30.0,
+        0.5,
+        "Don't drift soul if mood is within this distance.",
+    ),
+    FieldMeta(
+        "breach_threshold",
+        10.0,
+        100.0,
+        1.0,
+        "|mood-soul| above which heavy events leak to soul (breach).",
+    ),
+    FieldMeta(
+        "heavy_threshold", 0.3, 1.0, 0.01, "Event weight above which patterns count as 'heavy'."
+    ),
+    FieldMeta(
+        "breach_delta",
+        0.0,
+        0.3,
+        0.005,
+        "Max fraction of one heavy event that goes straight to soul.",
+    ),
+    FieldMeta("healing_rate", 0.0, 0.005, 0.0001, "W/V per-hour drift when nourishment dominates."),
+    FieldMeta("wounding_rate", 0.0, 0.005, 0.0001, "W/V per-hour drift when trauma dominates."),
+    FieldMeta(
+        "trauma_pressure_floor", 0.0, 50.0, 1.0, "Trauma load above which soul actively loses W/V."
+    ),
 )
 
 # Personality soul fields (V/A/D/U/G/W/I). Bookkeeping fields excluded.
@@ -65,7 +103,9 @@ SOUL_FIELDS: tuple[FieldMeta, ...] = (
     FieldMeta("v", 0, 255, 1, "Valence — 0 negative, 128 neutral, 255 positive.", is_int=True),
     FieldMeta("a", 0, 255, 1, "Arousal — 0 calm, 255 intense.", is_int=True),
     FieldMeta("d", 0, 255, 1, "Dominance — 0 helpless, 128 balanced, 255 in-control.", is_int=True),
-    FieldMeta("u", 0, 255, 1, "Urgency — intensity, not polarity. 0 none, 255 critical.", is_int=True),
+    FieldMeta(
+        "u", 0, 255, 1, "Urgency — intensity, not polarity. 0 none, 255 critical.", is_int=True
+    ),
     FieldMeta("g", 0, 255, 1, "Gravity — 0 crushing, 128 grounded, 255 floating.", is_int=True),
     FieldMeta("w", 0, 255, 1, "self-Worth — 0 shattered, 128 stable, 255 strong.", is_int=True),
     FieldMeta("i", 0, 255, 1, "Intent — 0 withdraw, 128 neutral, 255 control.", is_int=True),
@@ -107,7 +147,8 @@ def _soul_default() -> SoulState:
 
 
 def build_config_view(
-    overrides: ConfigOverrides, agent_id: str,
+    overrides: ConfigOverrides,
+    agent_id: str,
 ) -> ConfigView:
     """Read the current override bundle and assemble per-field rows."""
     bundle = overrides.get(agent_id)
@@ -117,9 +158,7 @@ def build_config_view(
     physics_rows = tuple(
         FieldRow(
             meta=meta,
-            current=float(bundle.physics.get(
-                meta.name, getattr(physics_default, meta.name)
-            )),
+            current=float(bundle.physics.get(meta.name, getattr(physics_default, meta.name))),
             default=float(getattr(physics_default, meta.name)),
             is_overridden=meta.name in bundle.physics,
         )
@@ -128,9 +167,7 @@ def build_config_view(
     soul_rows = tuple(
         FieldRow(
             meta=meta,
-            current=float(bundle.soul.get(
-                meta.name, getattr(soul_default, meta.name)
-            )),
+            current=float(bundle.soul.get(meta.name, getattr(soul_default, meta.name))),
             default=float(getattr(soul_default, meta.name)),
             is_overridden=meta.name in bundle.soul,
         )
@@ -149,15 +186,16 @@ def coerce_value(meta: FieldMeta, raw: str) -> float | int:
     this field. Validates the range — out-of-range raises ValueError."""
     val = float(raw)
     if not (meta.min <= val <= meta.max):
-        raise ValueError(
-            f"{meta.name}={val} is out of range [{meta.min}, {meta.max}]"
-        )
+        raise ValueError(f"{meta.name}={val} is out of range [{meta.min}, {meta.max}]")
     return int(val) if meta.is_int else val
 
 
 def apply_field_override(
-    overrides: ConfigOverrides, agent_id: str,
-    section: str, field_name: str, value: str,
+    overrides: ConfigOverrides,
+    agent_id: str,
+    section: str,
+    field_name: str,
+    value: str,
 ) -> None:
     """Section is 'physics' or 'soul'. Validates the field name + value
     range. Raises ValueError on bad input."""
@@ -178,8 +216,10 @@ def apply_field_override(
 
 
 def clear_field_override(
-    overrides: ConfigOverrides, agent_id: str,
-    section: str, field_name: str,
+    overrides: ConfigOverrides,
+    agent_id: str,
+    section: str,
+    field_name: str,
 ) -> None:
     """Drop one field from the override bundle, leaving others
     untouched."""

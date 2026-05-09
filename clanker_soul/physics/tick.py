@@ -5,6 +5,7 @@ Pre-rounded floats so direct print/log output is human-readable. The
 deeper, structured-for-forensics record is :py:class:`IngestRecord`
 in :py:mod:`clanker_soul.eventlog`.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

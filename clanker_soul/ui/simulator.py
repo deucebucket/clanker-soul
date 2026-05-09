@@ -19,6 +19,7 @@ Determinism + safety:
 - Soul drift is replayed deterministically via ``soul_drift(now_ts=)``,
   which already accepts an injected clock.
 """
+
 from __future__ import annotations
 
 import time
@@ -98,12 +99,10 @@ def replay_events(
             soul_real_end=replace(soul),
             soul_sim_end=replace(soul),
             mood_deviations=tuple(
-                DimDeviation(d, getattr(soul, d), getattr(soul, d), 0)
-                for d in _DIMS
+                DimDeviation(d, getattr(soul, d), getattr(soul, d), 0) for d in _DIMS
             ),
             soul_deviations=tuple(
-                DimDeviation(d, getattr(soul, d), getattr(soul, d), 0)
-                for d in _DIMS
+                DimDeviation(d, getattr(soul, d), getattr(soul, d), 0) for d in _DIMS
             ),
             elapsed_ms=0.0,
         )
@@ -112,8 +111,7 @@ def replay_events(
     # of the same input produce byte-identical output regardless of when
     # they run. SoulState() default-factories last_drift_ts=now(), which
     # would otherwise leak the wall clock into our output.
-    sim_soul = replace(soul, last_drift_ts=records[0].ts,
-                       last_save_ts=records[0].ts)
+    sim_soul = replace(soul, last_drift_ts=records[0].ts, last_save_ts=records[0].ts)
     physics = EmotionalPhysics(soul=sim_soul, config=replace(config))
     steps: list[SimStep] = []
 
@@ -125,14 +123,16 @@ def replay_events(
         assert sim_mood is not None
         sim_soul = replace(physics.soul)
 
-        steps.append(SimStep(
-            ts=rec.ts,
-            patterns=rec.patterns,
-            mood_real=rec.mood_after,
-            soul_real=rec.soul_after,
-            mood_sim=sim_mood,
-            soul_sim=sim_soul,
-        ))
+        steps.append(
+            SimStep(
+                ts=rec.ts,
+                patterns=rec.patterns,
+                mood_real=rec.mood_after,
+                soul_real=rec.soul_after,
+                mood_sim=sim_mood,
+                soul_sim=sim_soul,
+            )
+        )
 
         if i + 1 < len(records):
             gap = records[i + 1].ts - rec.ts
@@ -218,10 +218,7 @@ def parse_config(form: dict[str, str]) -> PhysicsConfig:
             continue
         v = float(raw)
         if not (meta.min <= v <= meta.max):
-            raise ValueError(
-                f"physics.{meta.name}={v} is out of range "
-                f"[{meta.min}, {meta.max}]"
-            )
+            raise ValueError(f"physics.{meta.name}={v} is out of range [{meta.min}, {meta.max}]")
         kwargs[meta.name] = v
     return PhysicsConfig(**kwargs)
 

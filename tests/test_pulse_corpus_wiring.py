@@ -10,6 +10,7 @@ Three layers covered:
 3. Default corpus shape — coverage of all 12 triggers; motif diversity;
    no duplicate ids; templates render against a real trigger.
 """
+
 from __future__ import annotations
 
 import random
@@ -31,8 +32,13 @@ from clanker_soul.pulse import (
 
 
 SOUL_DEFAULT = {
-    "v": 145, "a": 110, "d": 160, "u": 80,
-    "g": 130, "w": 175, "i": 135,
+    "v": 145,
+    "a": 110,
+    "d": 160,
+    "u": 80,
+    "g": 130,
+    "w": 175,
+    "i": 135,
 }
 MOOD_NEUTRAL = [145, 110, 160, 80, 130, 175, 135]
 MOOD_DISTRESS = [80, 130, 110, 70, 100, 110, 100]
@@ -167,10 +173,18 @@ class TestDefaultCorpus:
     def test_all_twelve_triggers_covered(self):
         kinds = {k for f in DEFAULT_FACES for k in f.trigger_kinds}
         expected = {
-            "distress", "elation", "trauma_pressure", "gratitude",
-            "long_silence", "share_impulse", "argue_impulse",
-            "connect_impulse", "withdraw_impulse", "reflective_impulse",
-            "caretake_impulse", "restless_curiosity",
+            "distress",
+            "elation",
+            "trauma_pressure",
+            "gratitude",
+            "long_silence",
+            "share_impulse",
+            "argue_impulse",
+            "connect_impulse",
+            "withdraw_impulse",
+            "reflective_impulse",
+            "caretake_impulse",
+            "restless_curiosity",
         }
         missing = expected - kinds
         assert not missing, f"trigger kinds missing default faces: {missing}"
@@ -178,7 +192,10 @@ class TestDefaultCorpus:
     def test_all_motifs_appear(self):
         motifs = {f.motif for f in DEFAULT_FACES}
         assert motifs == {
-            "informational", "relational", "exploratory", "regulatory",
+            "informational",
+            "relational",
+            "exploratory",
+            "regulatory",
         }, f"unexpected motif set: {motifs}"
 
     def test_no_duplicate_face_ids(self):
@@ -199,15 +216,25 @@ class TestDefaultCorpus:
             "peers": ["agent_x"],
         }
         for kind in (
-            "distress", "elation", "trauma_pressure", "gratitude",
-            "long_silence", "share_impulse", "argue_impulse",
-            "connect_impulse", "withdraw_impulse", "reflective_impulse",
-            "caretake_impulse", "restless_curiosity",
+            "distress",
+            "elation",
+            "trauma_pressure",
+            "gratitude",
+            "long_silence",
+            "share_impulse",
+            "argue_impulse",
+            "connect_impulse",
+            "withdraw_impulse",
+            "reflective_impulse",
+            "caretake_impulse",
+            "restless_curiosity",
         ):
             # Build different mood shapes so different faces become eligible.
-            mood = MOOD_DISTRESS if kind in ("distress", "trauma_pressure",
-                                              "withdraw_impulse") \
-                   else MOOD_NEUTRAL
+            mood = (
+                MOOD_DISTRESS
+                if kind in ("distress", "trauma_pressure", "withdraw_impulse")
+                else MOOD_NEUTRAL
+            )
             trig = _trigger(kind, mood=mood, metrics=sample_metrics)
             # Roll many times — over enough rolls every eligible face
             # should fire at least once (modulo motif weighting). The
@@ -227,16 +254,17 @@ class TestDefaultCorpus:
             seen.add(out)
         # Multiple distinct outputs → corpus is doing real work.
         assert len(seen) >= 2, (
-            f"expected at least 2 distinct prompts over 50 rolls, "
-            f"got {len(seen)}"
+            f"expected at least 2 distinct prompts over 50 rolls, got {len(seen)}"
         )
 
     def test_build_default_corpus_extra_appends(self):
-        extra = (PromptFace(
-            id="myhost.elation.foo",
-            trigger_kinds=frozenset({"elation"}),
-            template="my custom prompt",
-        ),)
+        extra = (
+            PromptFace(
+                id="myhost.elation.foo",
+                trigger_kinds=frozenset({"elation"}),
+                template="my custom prompt",
+            ),
+        )
         corpus = build_default_corpus(extra=extra)
         ids = [f.id for f in corpus.faces]
         assert "myhost.elation.foo" in ids
@@ -244,11 +272,13 @@ class TestDefaultCorpus:
         assert any(fid.startswith("core.") for fid in ids)
 
     def test_build_default_corpus_replace_drops_baseline(self):
-        my_only = (PromptFace(
-            id="myhost.only",
-            trigger_kinds=frozenset({"distress"}),
-            template="just mine",
-        ),)
+        my_only = (
+            PromptFace(
+                id="myhost.only",
+                trigger_kinds=frozenset({"distress"}),
+                template="just mine",
+            ),
+        )
         corpus = build_default_corpus(extra=my_only, replace=True)
         ids = [f.id for f in corpus.faces]
         assert ids == ["myhost.only"]
@@ -278,10 +308,12 @@ class _FakeHost:
 
     def most_recent_target(self):
         from clanker_soul import PulseTarget
+
         return PulseTarget(payload="op")
 
     def dispatch_action(self, action):
         from clanker_soul import ActionOutcome
+
         self.dispatched.append(action)
         return ActionOutcome(delivered=True)
 
@@ -374,8 +406,10 @@ async def test_engine_uses_host_situation_tags():
 
     # Two faces, eligible only with specific tags.
     universal = PromptFace(
-        id="t.universal", trigger_kinds=frozenset({"distress"}),
-        template="universal", base_weight=0.001,  # almost-never default
+        id="t.universal",
+        trigger_kinds=frozenset({"distress"}),
+        template="universal",
+        base_weight=0.001,  # almost-never default
     )
     tagged = PromptFace(
         id="t.tagged",

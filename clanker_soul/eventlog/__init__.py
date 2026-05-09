@@ -6,6 +6,7 @@ Re-exports the public surface of the three submodules:
   - :py:mod:`.sqlite` — :py:class:`SqliteEventLog`
 
 ``from clanker_soul.eventlog import X`` keeps working unchanged."""
+
 from clanker_soul.eventlog.protocol import EventLog, NullEventLog
 from clanker_soul.eventlog.records import IngestRecord, PulseRecord
 from clanker_soul.eventlog.sqlite import SqliteEventLog

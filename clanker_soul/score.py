@@ -12,6 +12,7 @@ latency telemetry) belong in metadata wrappers around this, not in the
 core type. The physics never reads those; it reads (v, a, d, u, g, w, i,
 patterns).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -26,12 +27,14 @@ def _clamp_byte(x: int) -> int:
     return int(x)
 
 
-DIRECTION_VALUES = frozenset({
-    "SELF_DIRECTED",     # input is aimed AT the agent (insults, support, attacks)
-    "EXTERNAL_REPORT",   # input describes a real external state/event
-    "ATMOSPHERIC",       # ambient mood — environmental, not directed
-    "OBSERVATION",       # agent's own observation; neutral attribution
-})
+DIRECTION_VALUES = frozenset(
+    {
+        "SELF_DIRECTED",  # input is aimed AT the agent (insults, support, attacks)
+        "EXTERNAL_REPORT",  # input describes a real external state/event
+        "ATMOSPHERIC",  # ambient mood — environmental, not directed
+        "OBSERVATION",  # agent's own observation; neutral attribution
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -119,8 +122,7 @@ class Score:
         return [self.v, self.a, self.d, self.u, self.g, self.w, self.i]
 
     @classmethod
-    def from_sequence(cls, seq: Sequence[int],
-                      patterns: Sequence[str] = ()) -> "Score":
+    def from_sequence(cls, seq: Sequence[int], patterns: Sequence[str] = ()) -> "Score":
         """Build a Score from a 7-int sequence in V/A/D/U/G/W/I order."""
         if len(seq) != 7:
             raise ValueError(f"expected 7 dims, got {len(seq)}: {list(seq)!r}")

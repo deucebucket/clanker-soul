@@ -3,6 +3,7 @@
 These are the rows. The :py:class:`EventLog` protocol decides where
 they go; :py:class:`SqliteEventLog` is the production sink.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

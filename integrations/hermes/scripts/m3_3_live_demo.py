@@ -31,6 +31,7 @@ Usage::
 
 Reads the key from env or ``~/ai-drive/hermes-agent/.env`` if absent.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -104,7 +105,9 @@ def _call_model(api_key: str, system_prompt: str, user_prompt: str) -> str:
     }
     try:
         resp = httpx.post(
-            OPENROUTER_URL, headers=headers, content=json.dumps(payload),
+            OPENROUTER_URL,
+            headers=headers,
+            content=json.dumps(payload),
             timeout=30.0,
         )
         resp.raise_for_status()
@@ -119,11 +122,20 @@ def _call_model(api_key: str, system_prompt: str, user_prompt: str) -> str:
 
 def _drive_distress(plugin: SoulPlugin, ticks: int = 6) -> None:
     for _ in range(ticks):
-        plugin.ingest(Score(
-            v=60, a=140, d=110, u=70, g=100, w=100, i=100,
-            patterns=("ABANDONMENT",), direction="SELF_DIRECTED",
-            source="demo-m33:distress",
-        ))
+        plugin.ingest(
+            Score(
+                v=60,
+                a=140,
+                d=110,
+                u=70,
+                g=100,
+                w=100,
+                i=100,
+                patterns=("ABANDONMENT",),
+                direction="SELF_DIRECTED",
+                source="demo-m33:distress",
+            )
+        )
 
 
 def _custom_distress_face() -> PromptFace:
@@ -132,9 +144,7 @@ def _custom_distress_face() -> PromptFace:
     return PromptFace(
         id="hermes.custom.distress.signal_check",
         trigger_kinds=frozenset({"distress"}),
-        vadugwi_predicates=(
-            VadugwiPredicate("V", "<=", 110, "mood"),
-        ),
+        vadugwi_predicates=(VadugwiPredicate("V", "<=", 110, "mood"),),
         situation_tags=frozenset(),
         cooldown_seconds=600,
         base_weight=4.0,  # heavy bias so it's likely to win the dice
@@ -184,8 +194,10 @@ def _build_engine(plugin: SoulPlugin, host: _DemoHost) -> PulseEngine:
     return PulseEngine(
         host,
         PulseConfig(min_quiet_seconds=0, startup_grace_s=0),
-        event_log=plugin.event_log, agent_id=plugin.agent_id,
-        corpus=plugin.corpus, recency=plugin.recency,
+        event_log=plugin.event_log,
+        agent_id=plugin.agent_id,
+        corpus=plugin.corpus,
+        recency=plugin.recency,
         physics=plugin.physics,
     )
 
@@ -253,13 +265,15 @@ def main() -> int:
         else:
             llm = "[LLM-SKIPPED]"
         log(f"step 1 model response: {llm[:160]}...")
-        summary.append({
-            "step": "1 — first-run default seed",
-            "face_id": face_id_step1,
-            "prompt": action_step1.prompt,
-            "model_response": llm,
-            "n_faces": n_faces,
-        })
+        summary.append(
+            {
+                "step": "1 — first-run default seed",
+                "face_id": face_id_step1,
+                "prompt": action_step1.prompt,
+                "model_response": llm,
+                "n_faces": n_faces,
+            }
+        )
 
     # ── Step 2: Reopen + cooldown survives restart ──────────────────────
     log("\n--- Step 2: Reopen — cooldown survives, different face wins ---")
@@ -281,21 +295,25 @@ def main() -> int:
         log(f"step 2 fired face_id: {face_id_step2}")
         log(f"step 2 prompt: {action_step2.prompt[:120]}...")
         cooldown_held = face_id_step2 != face_id_step1
-        log(f"COOLDOWN-SURVIVED-RESTART: {cooldown_held} "
-            f"(step1={face_id_step1!r} != step2={face_id_step2!r})")
+        log(
+            f"COOLDOWN-SURVIVED-RESTART: {cooldown_held} "
+            f"(step1={face_id_step1!r} != step2={face_id_step2!r})"
+        )
         if api_key:
             llm2 = _call_model(api_key, _system_prompt(), action_step2.prompt)
         else:
             llm2 = "[LLM-SKIPPED]"
         log(f"step 2 model response: {llm2[:160]}...")
-        summary.append({
-            "step": "2 — cooldown survives restart",
-            "face_id": face_id_step2,
-            "prompt": action_step2.prompt,
-            "model_response": llm2,
-            "cooldown_held": cooldown_held,
-            "step1_face_id": face_id_step1,
-        })
+        summary.append(
+            {
+                "step": "2 — cooldown survives restart",
+                "face_id": face_id_step2,
+                "prompt": action_step2.prompt,
+                "model_response": llm2,
+                "cooldown_held": cooldown_held,
+                "step1_face_id": face_id_step1,
+            }
+        )
 
     # ── Step 3: extra_corpus augments default ───────────────────────────
     log("\n--- Step 3: extra_corpus — host face joins default set ---")
@@ -304,11 +322,12 @@ def main() -> int:
     # Use a brand new agent_id so cooldowns don't suppress the new face
     # via the recency log accumulated above.
     with SoulPlugin(
-        agent_id="demo-m33-augment", db_path=db_path, extra_corpus=extra,
+        agent_id="demo-m33-augment",
+        db_path=db_path,
+        extra_corpus=extra,
     ) as plugin:
         ids = {f.id for f in plugin.corpus.faces}
-        log(f"plugin.corpus.faces: {len(ids)} "
-            f"(default {len(DEFAULT_FACES)} + extra 1)")
+        log(f"plugin.corpus.faces: {len(ids)} (default {len(DEFAULT_FACES)} + extra 1)")
         custom_present = "hermes.custom.distress.signal_check" in ids
         log(f"custom face present: {custom_present}")
         # Drive distress; with base_weight=4.0 the custom face has good odds.
@@ -326,21 +345,25 @@ def main() -> int:
         else:
             llm3 = "[LLM-SKIPPED]"
         log(f"step 3 model response: {llm3[:160]}...")
-        summary.append({
-            "step": "3 — extra_corpus augments default",
-            "face_id": face_id_step3,
-            "prompt": action_step3.prompt,
-            "model_response": llm3,
-            "custom_face_in_corpus": custom_present,
-            "won_dice_roll": face_id_step3 == "hermes.custom.distress.signal_check",
-        })
+        summary.append(
+            {
+                "step": "3 — extra_corpus augments default",
+                "face_id": face_id_step3,
+                "prompt": action_step3.prompt,
+                "model_response": llm3,
+                "custom_face_in_corpus": custom_present,
+                "won_dice_roll": face_id_step3 == "hermes.custom.distress.signal_check",
+            }
+        )
 
     # ── Step 4: replace_corpus wipes-and-replaces ───────────────────────
     log("\n--- Step 4: replace_corpus — clean slate, only host faces ---")
     _reset_store()
     with SoulPlugin(
-        agent_id="demo-m33-replace", db_path=db_path,
-        extra_corpus=extra, replace_corpus=True,
+        agent_id="demo-m33-replace",
+        db_path=db_path,
+        extra_corpus=extra,
+        replace_corpus=True,
     ) as plugin:
         ids = {f.id for f in plugin.corpus.faces}
         log(f"plugin.corpus.faces: {len(ids)} (expected: 1)")
@@ -359,13 +382,15 @@ def main() -> int:
         else:
             llm4 = "[LLM-SKIPPED]"
         log(f"step 4 model response: {llm4[:160]}...")
-        summary.append({
-            "step": "4 — replace_corpus clean-slate",
-            "face_id": face_id_step4,
-            "prompt": action_step4.prompt,
-            "model_response": llm4,
-            "corpus_size": len(ids),
-        })
+        summary.append(
+            {
+                "step": "4 — replace_corpus clean-slate",
+                "face_id": face_id_step4,
+                "prompt": action_step4.prompt,
+                "model_response": llm4,
+                "corpus_size": len(ids),
+            }
+        )
 
     # ── Step 5: pulse_log.face_id round-trips through SQL ───────────────
     log("\n--- Step 5: pulse_log.face_id — read back from SQL ---")
@@ -382,13 +407,13 @@ def main() -> int:
             log(f"  row {i}: trigger={row[2]} face_id={row[0]}")
         all_face_ids_present = all(r[0] is not None for r in rows)
         log(f"all face_ids non-NULL: {all_face_ids_present}")
-        summary.append({
-            "step": "5 — pulse_log.face_id round-trip",
-            "rows": [
-                {"trigger": r[2], "face_id": r[0]} for r in rows
-            ],
-            "all_present": all_face_ids_present,
-        })
+        summary.append(
+            {
+                "step": "5 — pulse_log.face_id round-trip",
+                "rows": [{"trigger": r[2], "face_id": r[0]} for r in rows],
+                "all_present": all_face_ids_present,
+            }
+        )
 
     # ── Write evidence ──────────────────────────────────────────────────
     log("\n--- Writing evidence ---")
@@ -418,9 +443,7 @@ def main() -> int:
             notes.append(f"corpus_size={entry['corpus_size']}")
         if "all_present" in entry:
             notes.append(f"all_face_ids_non_null={entry['all_present']}")
-        md_lines.append(
-            f"| {entry['step']} | `{face_id}` | {', '.join(notes) or '—'} |"
-        )
+        md_lines.append(f"| {entry['step']} | `{face_id}` | {', '.join(notes) or '—'} |")
     md_lines.append("")
 
     for entry in summary:
@@ -444,9 +467,13 @@ def main() -> int:
             md_lines.append("```")
             md_lines.append("")
         for k in (
-            "cooldown_held", "step1_face_id",
-            "custom_face_in_corpus", "won_dice_roll",
-            "corpus_size", "all_present", "rows",
+            "cooldown_held",
+            "step1_face_id",
+            "custom_face_in_corpus",
+            "won_dice_roll",
+            "corpus_size",
+            "all_present",
+            "rows",
         ):
             if k in entry:
                 md_lines.append(f"- **{k}**: `{entry[k]}`")

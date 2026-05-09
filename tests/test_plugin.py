@@ -4,6 +4,7 @@ Verifies the full lifecycle: construct, ingest, tick, save, close,
 reopen — state must persist; events must be logged; presets must
 apply via the plugin's bundled overrides provider.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -92,7 +93,9 @@ def test_state_survives_close_and_reopen(tmp_path) -> None:
 def test_event_log_disabled_writes_no_rows(tmp_path) -> None:
     db = tmp_path / "nolog.db"
     plugin = SoulPlugin(
-        agent_id="quiet", db_path=db, event_log=False,
+        agent_id="quiet",
+        db_path=db,
+        event_log=False,
     )
     for _ in range(3):
         plugin.ingest(Score(v=80, w=50, patterns=("ABANDONMENT",)))
@@ -108,7 +111,8 @@ def test_event_log_disabled_writes_no_rows(tmp_path) -> None:
 
 def test_default_soul_used_when_no_saved_state(tmp_path) -> None:
     plugin = SoulPlugin(
-        agent_id="newborn", db_path=tmp_path / "n.db",
+        agent_id="newborn",
+        db_path=tmp_path / "n.db",
         default_soul=SoulState(v=200, w=210, d=180),
     )
     snap = plugin.snapshot()
@@ -121,14 +125,16 @@ def test_default_soul_ignored_when_state_exists(tmp_path) -> None:
     persisted soul wins."""
     db = tmp_path / "exists.db"
     p1 = SoulPlugin(
-        agent_id="returning", db_path=db,
+        agent_id="returning",
+        db_path=db,
         default_soul=SoulState(v=180, w=180),
     )
     p1.close()  # writes the default-soul row to disk
 
     # Open again with a different default — the saved value wins.
     p2 = SoulPlugin(
-        agent_id="returning", db_path=db,
+        agent_id="returning",
+        db_path=db,
         default_soul=SoulState(v=50, w=50),
     )
     snap = p2.snapshot()

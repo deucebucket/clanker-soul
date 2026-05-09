@@ -1,4 +1,5 @@
 """PulseEngine triggers, cooldown, and host hookup using a fake host."""
+
 from __future__ import annotations
 
 import asyncio

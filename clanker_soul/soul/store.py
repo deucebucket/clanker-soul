@@ -10,6 +10,7 @@ Schema is created idempotently — opening a fresh DB creates everything;
 opening a v0.1 DB (only the ``soul_state`` table) adds the v0.2 tables
 in place without touching existing rows.
 """
+
 from __future__ import annotations
 
 import json

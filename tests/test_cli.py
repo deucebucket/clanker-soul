@@ -3,6 +3,7 @@
 Tests call ``main()`` directly with argv lists — faster than spawning
 a subprocess and captures output via capsys.
 """
+
 from __future__ import annotations
 
 import time
@@ -102,11 +103,18 @@ def test_prune_with_yes_deletes_old_rows(tmp_path, capsys) -> None:
 def test_prune_scoped_by_agent_id(tmp_path) -> None:
     db = tmp_path / "p.db"
     _populate_db(db)
-    rc = main([
-        "prune", "--db", str(db),
-        "--before", "2099-01-01",
-        "--agent-id", "alice", "-y",
-    ])
+    rc = main(
+        [
+            "prune",
+            "--db",
+            str(db),
+            "--before",
+            "2099-01-01",
+            "--agent-id",
+            "alice",
+            "-y",
+        ]
+    )
     assert rc == 0
 
     log = SqliteEventLog(SoulStore.get(db))
@@ -133,6 +141,7 @@ def test_ui_emits_install_hint_when_extra_not_installed(tmp_path, capsys) -> Non
     ``tests/ui/test_scaffold.py::test_cli_ui_subcommand_no_longer_emits_install_hint``."""
     try:
         import fastapi  # noqa: F401
+
         pytest.skip("[ui] extra is installed; behavior tested in tests/ui/")
     except ImportError:
         pass

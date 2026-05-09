@@ -13,12 +13,11 @@ loop. Tests here exercise:
 
 All tests use synthetic dispatchers; no LLM, no network.
 """
+
 from __future__ import annotations
 
 import importlib
-import os
 import sys
-import threading
 import time
 from pathlib import Path
 from typing import List
@@ -37,7 +36,8 @@ for _k in list(sys.modules):
 
 # Load the plugin via spec_from_file_location so relative imports resolve.
 _pkg_spec = importlib.util.spec_from_file_location(
-    "clanker_soul_hermes_plugin", str(_PLUGIN_DIR / "__init__.py"),
+    "clanker_soul_hermes_plugin",
+    str(_PLUGIN_DIR / "__init__.py"),
     submodule_search_locations=[str(_PLUGIN_DIR)],
 )
 _pkg = importlib.util.module_from_spec(_pkg_spec)
@@ -47,7 +47,7 @@ _pkg_spec.loader.exec_module(_pkg)
 ClankerSoulMemoryProvider = _pkg.ClankerSoulMemoryProvider
 PulseRunner = _pkg.PulseRunner
 
-from clanker_soul import (
+from clanker_soul import (  # noqa: E402  -- intentional late import after dynamic loader above
     ActionOutcome,
     PulseAction,
     PulseConfig,
@@ -165,12 +165,14 @@ def test_dispatch_env_var_resolves_module_callable(monkeypatch) -> None:
 
 def test_dispatch_env_var_unset_returns_none(monkeypatch) -> None:
     from pulse_runner import _resolve_dispatcher_from_env
+
     monkeypatch.delenv("CLANKER_SOUL_PULSE_DISPATCH", raising=False)
     assert _resolve_dispatcher_from_env() is None
 
 
 def test_dispatch_env_var_bad_format_warns(monkeypatch, caplog) -> None:
     from pulse_runner import _resolve_dispatcher_from_env
+
     monkeypatch.setenv("CLANKER_SOUL_PULSE_DISPATCH", "no_colon_here")
     with caplog.at_level("WARNING"):
         cb = _resolve_dispatcher_from_env()
@@ -180,6 +182,7 @@ def test_dispatch_env_var_bad_format_warns(monkeypatch, caplog) -> None:
 
 def test_dispatch_env_var_unimportable_warns(monkeypatch, caplog) -> None:
     from pulse_runner import _resolve_dispatcher_from_env
+
     monkeypatch.setenv(
         "CLANKER_SOUL_PULSE_DISPATCH",
         "no.such.module:nope",
@@ -238,8 +241,10 @@ def test_runner_default_dispatcher_is_noop(tmp_path) -> None:
     dispatcher = _NoOpDispatcher()
     trigger = _make_trigger("distress")
     action = PulseAction(
-        kind="direct_message", trigger=trigger,
-        target=PulseTarget(payload="x"), prompt="test",
+        kind="direct_message",
+        trigger=trigger,
+        target=PulseTarget(payload="x"),
+        prompt="test",
     )
     out = dispatcher(action)
     assert out.delivered is False
@@ -253,7 +258,8 @@ def test_runner_default_dispatcher_is_noop(tmp_path) -> None:
 
 def _make_trigger(kind: str):
     from clanker_soul import Trigger
-    return Trigger(kind=kind, soul={"v": 145, "w": 175}, mood=[40]*7)
+
+    return Trigger(kind=kind, soul={"v": 145, "w": 175}, mood=[40] * 7)
 
 
 def test_runner_dispatches_synthetic_pulse(tmp_path, monkeypatch) -> None:
@@ -269,11 +275,15 @@ def test_runner_dispatches_synthetic_pulse(tmp_path, monkeypatch) -> None:
     with SoulPlugin(agent_id="alice", db_path=db) as plugin:
         # Wound the soul → mood drops far from soul.
         for _ in range(10):
-            plugin.ingest(Score(
-                v=40, w=40, u=200,
-                patterns=("ABANDONMENT",),
-                direction="SELF_DIRECTED",
-            ))
+            plugin.ingest(
+                Score(
+                    v=40,
+                    w=40,
+                    u=200,
+                    patterns=("ABANDONMENT",),
+                    direction="SELF_DIRECTED",
+                )
+            )
 
         runner = PulseRunner(
             plugin=plugin,
@@ -292,6 +302,7 @@ def test_runner_dispatches_synthetic_pulse(tmp_path, monkeypatch) -> None:
         # Drive a single tick from the runner's loop, synchronously.
         # We schedule a coroutine onto the loop and wait for it.
         import asyncio
+
         engine = runner.engine
         assert engine is not None
         loop = runner._loop
@@ -316,19 +327,21 @@ def test_runner_consequences_feed_back_into_soul(tmp_path) -> None:
         # Pretend the agent's distress message got a hostile reply.
         return ActionOutcome(
             delivered=True,
-            consequences=(
-                Score(v=40, w=30, patterns=("HOSTILE_RESPONSE",)),
-            ),
+            consequences=(Score(v=40, w=30, patterns=("HOSTILE_RESPONSE",)),),
         )
 
     db = tmp_path / "ts.db"
     with SoulPlugin(agent_id="alice", db_path=db) as plugin:
         for _ in range(10):
-            plugin.ingest(Score(
-                v=40, w=40, u=200,
-                patterns=("ABANDONMENT",),
-                direction="SELF_DIRECTED",
-            ))
+            plugin.ingest(
+                Score(
+                    v=40,
+                    w=40,
+                    u=200,
+                    patterns=("ABANDONMENT",),
+                    direction="SELF_DIRECTED",
+                )
+            )
 
         runner = PulseRunner(
             plugin=plugin,
@@ -345,6 +358,7 @@ def test_runner_consequences_feed_back_into_soul(tmp_path) -> None:
         runner.note_outbound()
 
         import asyncio
+
         engine = runner.engine
         assert engine is not None
         loop = runner._loop

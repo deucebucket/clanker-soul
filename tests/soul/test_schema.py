@@ -4,6 +4,7 @@ Verifies that ``SoulStore`` creates the v0.2 tables idempotently and that
 opening a v0.1-shaped DB (containing only ``soul_state``) upgrades cleanly
 without losing existing rows.
 """
+
 from __future__ import annotations
 
 import json
@@ -30,8 +31,7 @@ def _table_names(db_path) -> set[str]:
     conn = sqlite3.connect(str(db_path))
     try:
         rows = conn.execute(
-            "SELECT name FROM sqlite_master "
-            "WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
         ).fetchall()
     finally:
         conn.close()
@@ -52,15 +52,11 @@ def _indexes(db_path, table: str) -> list[tuple[str, list[str]]]:
     """Return [(index_name, [col1, col2, ...]), ...] for the given table."""
     conn = sqlite3.connect(str(db_path))
     try:
-        idx_rows = conn.execute(
-            f"PRAGMA index_list({table})"
-        ).fetchall()
+        idx_rows = conn.execute(f"PRAGMA index_list({table})").fetchall()
         out = []
         for idx in idx_rows:
             idx_name = idx[1]
-            cols = conn.execute(
-                f"PRAGMA index_info({idx_name})"
-            ).fetchall()
+            cols = conn.execute(f"PRAGMA index_info({idx_name})").fetchall()
             # PRAGMA index_info returns (seqno, cid, name)
             out.append((idx_name, [c[2] for c in cols]))
     finally:
@@ -77,8 +73,12 @@ def test_fresh_db_has_all_v02_tables(tmp_path) -> None:
     db = tmp_path / "fresh.db"
     SoulStore(db)
     assert _table_names(db) == {
-        "soul_state", "events", "config_overrides", "pulse_log",
-        "prompt_corpus", "face_recency",
+        "soul_state",
+        "events",
+        "config_overrides",
+        "pulse_log",
+        "prompt_corpus",
+        "face_recency",
     }
 
 
@@ -87,15 +87,25 @@ def test_events_table_has_documented_columns(tmp_path) -> None:
     SoulStore(db)
     cols = _columns(db, "events")
     expected = {
-        "id", "ts", "agent_id", "raw_score", "primed_score",
-        "mood_before", "mood_after", "soul_before", "soul_after",
-        "weight_raw", "armor", "weight_effective",
-        "breached", "breach_delta",
-        "patterns", "classification", "why",
+        "id",
+        "ts",
+        "agent_id",
+        "raw_score",
+        "primed_score",
+        "mood_before",
+        "mood_after",
+        "soul_before",
+        "soul_after",
+        "weight_raw",
+        "armor",
+        "weight_effective",
+        "breached",
+        "breach_delta",
+        "patterns",
+        "classification",
+        "why",
     }
-    assert expected <= set(cols), (
-        f"missing columns: {expected - set(cols)}"
-    )
+    assert expected <= set(cols), f"missing columns: {expected - set(cols)}"
 
 
 def test_config_overrides_table_has_documented_columns(tmp_path) -> None:
@@ -103,7 +113,9 @@ def test_config_overrides_table_has_documented_columns(tmp_path) -> None:
     SoulStore(db)
     cols = _columns(db, "config_overrides")
     expected = {
-        "agent_id", "physics_config_overrides", "soul_overrides",
+        "agent_id",
+        "physics_config_overrides",
+        "soul_overrides",
         "last_modified",
     }
     assert expected <= set(cols)
@@ -114,9 +126,15 @@ def test_pulse_log_table_has_documented_columns(tmp_path) -> None:
     SoulStore(db)
     cols = _columns(db, "pulse_log")
     expected = {
-        "id", "ts", "agent_id", "snap",
-        "trigger_kind", "suppressed_reason",
-        "target_present", "dispatched", "prompt_text",
+        "id",
+        "ts",
+        "agent_id",
+        "snap",
+        "trigger_kind",
+        "suppressed_reason",
+        "target_present",
+        "dispatched",
+        "prompt_text",
         # M3.3 — face attribution.
         "face_id",
     }
@@ -128,10 +146,20 @@ def test_prompt_corpus_table_has_documented_columns(tmp_path) -> None:
     SoulStore(db)
     cols = _columns(db, "prompt_corpus")
     expected = {
-        "id", "trigger_kinds", "vadugwi_predicates",
-        "situation_tags", "situation_match", "memory_anchor",
-        "cooldown_seconds", "base_weight", "motif", "template",
-        "branch_keys", "source", "created_at", "retired_at",
+        "id",
+        "trigger_kinds",
+        "vadugwi_predicates",
+        "situation_tags",
+        "situation_match",
+        "memory_anchor",
+        "cooldown_seconds",
+        "base_weight",
+        "motif",
+        "template",
+        "branch_keys",
+        "source",
+        "created_at",
+        "retired_at",
     }
     assert expected <= set(cols)
 
@@ -218,8 +246,12 @@ def test_reopening_db_is_idempotent(tmp_path) -> None:
     SoulStore(db)  # second open must not raise
     SoulStore(db)
     assert _table_names(db) == {
-        "soul_state", "events", "config_overrides", "pulse_log",
-        "prompt_corpus", "face_recency",
+        "soul_state",
+        "events",
+        "config_overrides",
+        "pulse_log",
+        "prompt_corpus",
+        "face_recency",
     }
 
 
@@ -271,8 +303,12 @@ def test_v01_db_upgrades_without_losing_soul_state(tmp_path) -> None:
 
     # And all v0.2 tables now exist.
     assert _table_names(db) == {
-        "soul_state", "events", "config_overrides", "pulse_log",
-        "prompt_corpus", "face_recency",
+        "soul_state",
+        "events",
+        "config_overrides",
+        "pulse_log",
+        "prompt_corpus",
+        "face_recency",
     }
 
 

@@ -1,4 +1,5 @@
 """Score is the conversational-layer atom — small, frozen, and clamped."""
+
 from __future__ import annotations
 
 import pytest

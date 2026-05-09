@@ -13,6 +13,7 @@ The runner exposes itself as the engine's :py:class:`PulseHost` —
 the operator-supplied callback, the rest are no-ops or simple
 defaults. Hosts wanting richer behavior can subclass.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -20,7 +21,7 @@ import importlib
 import logging
 import os
 import threading
-from typing import Any, Awaitable, Callable, Optional, Union
+from typing import Awaitable, Callable, Optional, Union
 
 from clanker_soul import (
     ActionOutcome,
@@ -36,7 +37,8 @@ logger = logging.getLogger(__name__)
 
 # Type alias for the operator-supplied dispatcher. Sync OR async.
 PulseDispatcher = Callable[
-    [PulseAction], Union[ActionOutcome, Awaitable[ActionOutcome]],
+    [PulseAction],
+    Union[ActionOutcome, Awaitable[ActionOutcome]],
 ]
 
 
@@ -49,8 +51,8 @@ def _resolve_dispatcher_from_env() -> Optional[PulseDispatcher]:
         return None
     if ":" not in spec:
         logger.warning(
-            "CLANKER_SOUL_PULSE_DISPATCH=%r missing ':' (expected "
-            "'module.path:callable')", spec,
+            "CLANKER_SOUL_PULSE_DISPATCH=%r missing ':' (expected 'module.path:callable')",
+            spec,
         )
         return None
     module_path, attr = spec.split(":", 1)
@@ -59,13 +61,15 @@ def _resolve_dispatcher_from_env() -> Optional[PulseDispatcher]:
         cb = getattr(mod, attr, None)
         if not callable(cb):
             logger.warning(
-                "CLANKER_SOUL_PULSE_DISPATCH=%r resolved to non-callable", spec,
+                "CLANKER_SOUL_PULSE_DISPATCH=%r resolved to non-callable",
+                spec,
             )
             return None
         return cb
     except Exception:
         logger.exception(
-            "CLANKER_SOUL_PULSE_DISPATCH=%r failed to import", spec,
+            "CLANKER_SOUL_PULSE_DISPATCH=%r failed to import",
+            spec,
         )
         return None
 
@@ -78,10 +82,13 @@ class _NoOpDispatcher:
     def __call__(self, action: PulseAction) -> ActionOutcome:
         logger.info(
             "pulse fired (no dispatcher configured): kind=%s trigger=%s prompt=%r",
-            action.kind, action.trigger.kind, action.prompt[:80],
+            action.kind,
+            action.trigger.kind,
+            action.prompt[:80],
         )
         return ActionOutcome(
-            delivered=False, note="no_dispatcher_configured",
+            delivered=False,
+            note="no_dispatcher_configured",
         )
 
 
@@ -117,7 +124,8 @@ class _PulseHostAdapter:
             return None
 
     def dispatch_action(
-        self, action: PulseAction,
+        self,
+        action: PulseAction,
     ) -> Union[ActionOutcome, Awaitable[ActionOutcome]]:
         """Hand off to the operator-supplied dispatcher. Sync or async
         — the engine handles both via ``asyncio.iscoroutine``."""
@@ -170,7 +178,9 @@ class PulseRunner:
         self._stop_event.clear()
         self._ready_event.clear()
         self._thread = threading.Thread(
-            target=self._run, name="clanker-soul-pulse", daemon=True,
+            target=self._run,
+            name="clanker-soul-pulse",
+            daemon=True,
         )
         self._thread.start()
         # Wait briefly for engine setup so callers can immediately

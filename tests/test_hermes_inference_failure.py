@@ -7,6 +7,7 @@ fires through the ``MemoryProvider.on_inference_failure`` plugin hook,
 and clanker-soul ingests it as an emotional event so the agent's affect
 tracks its own connection state.
 """
+
 from __future__ import annotations
 
 import importlib
@@ -24,14 +25,14 @@ _PLUGIN_DIR = Path(__file__).parent.parent / "integrations" / "hermes"
 sys.path.insert(0, str(_PLUGIN_DIR))
 
 for _k in list(sys.modules):
-    if _k in ("inference_health", "scorer", "pulse_runner",
-              "clanker_soul_hermes_plugin"):
+    if _k in ("inference_health", "scorer", "pulse_runner", "clanker_soul_hermes_plugin"):
         sys.modules.pop(_k, None)
 
 
 def _load(name: str, fname: str):
     spec = importlib.util.spec_from_file_location(
-        name, str(_PLUGIN_DIR / fname),
+        name,
+        str(_PLUGIN_DIR / fname),
     )
     mod = importlib.util.module_from_spec(spec)
     sys.modules[name] = mod
@@ -43,7 +44,8 @@ inference_health = _load("inference_health", "inference_health.py")
 _load("scorer", "scorer.py")
 _load("pulse_runner", "pulse_runner.py")
 plugin_spec = importlib.util.spec_from_file_location(
-    "clanker_soul_hermes_plugin", str(_PLUGIN_DIR / "__init__.py"),
+    "clanker_soul_hermes_plugin",
+    str(_PLUGIN_DIR / "__init__.py"),
     submodule_search_locations=[str(_PLUGIN_DIR)],
 )
 plugin_mod = importlib.util.module_from_spec(plugin_spec)
@@ -128,17 +130,23 @@ def test_patterns_are_not_in_heavy_set():
 
     seen: set[str] = set()
     for reason in (
-        "auth", "auth_permanent", "billing", "rate_limit",
-        "overloaded", "server_error", "timeout",
-        "context_overflow", "payload_too_large", "image_too_large",
+        "auth",
+        "auth_permanent",
+        "billing",
+        "rate_limit",
+        "overloaded",
+        "server_error",
+        "timeout",
+        "context_overflow",
+        "payload_too_large",
+        "image_too_large",
         "unknown",
     ):
         s = score_from_failover(reason)
         assert s is not None
         seen.update(s.patterns)
     assert seen.isdisjoint(HEAVY_PATTERNS), (
-        f"Inference patterns must not be heavy; overlap: "
-        f"{seen & HEAVY_PATTERNS}"
+        f"Inference patterns must not be heavy; overlap: {seen & HEAVY_PATTERNS}"
     )
 
 
@@ -154,8 +162,13 @@ def test_override_replaces_specific_reason():
     """Operator-tuned mapping for one persona without forking the table."""
     override = {
         "rate_limit": {
-            "v": 60, "a": 200, "d": 50, "u": 200,
-            "g": 60, "w": 60, "i": 50,
+            "v": 60,
+            "a": 200,
+            "d": 50,
+            "u": 200,
+            "g": 60,
+            "w": 60,
+            "i": 50,
             "patterns": ("MY_CUSTOM_PATTERN",),
         }
     }
@@ -180,7 +193,10 @@ def test_provider_on_inference_failure_ingests(tmp_path):
     assert provider._plugin.snapshot()["mood"] is None
 
     provider.on_inference_failure(
-        "rate_limit", provider="openrouter", model="x", retryable=True,
+        "rate_limit",
+        provider="openrouter",
+        model="x",
+        retryable=True,
     )
 
     snap_after = provider._plugin.snapshot()
@@ -191,8 +207,7 @@ def test_provider_on_inference_failure_ingests(tmp_path):
     soul_v = snap_after["soul"]["v"]
     mood_v = mood[0]
     assert mood_v < soul_v, (
-        f"expected rate_limit to pull mood V below soul V={soul_v}, "
-        f"got mood V={mood_v}"
+        f"expected rate_limit to pull mood V below soul V={soul_v}, got mood V={mood_v}"
     )
 
     provider.shutdown()
