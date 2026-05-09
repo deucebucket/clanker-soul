@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`PendingDeltaConfig.delta_mode` — relative-anchor mode for
+  saturated agents (#73).** New ``Literal["absolute", "relative"]``
+  field on ``PendingDeltaConfig`` (default ``"absolute"`` — preserves
+  v0.15 behavior bit-exact). In ``"relative"`` mode the synthetic
+  ``Score`` ingested for a resolved pending is anchored at the
+  agent's *current* mood for each dim instead of neutral 128, so a
+  positive delta always lands above current mood (positive blend
+  pressure regardless of starting point) and a negative delta always
+  lands below. This fixes a structural issue surfaced by the live
+  pending demo: an agent at high W (172) cannot be lifted by
+  ``acknowledged_fast``'s +4W in absolute mode because the scaled
+  Score W=168 lands below current mood and gets absorbed by blending.
+  Relative mode produces the spec-intended positive lift on
+  saturated dims. Falls back to absolute when ``physics.mood`` is
+  unset (no prior ingest). New ``_to_score_dim(delta, scale, *,
+  anchor=128)`` signature replaces the implicit-128 anchor — the
+  ``anchor`` kwarg is what ``"relative"`` populates per dim. 6 new
+  unit tests cover the default mode, relative anchoring at high mood,
+  bit-exact absolute regression, mood-unset fallback, negative delta
+  direction, and 0/255 clamping in relative mode.
+
 - **`clanker-soul faces` CLI subcommand (#69).** New local-ops command
   for auditing pulse activity from the terminal:
   ``clanker-soul faces --db PATH [--limit N] [--agent ID]
