@@ -1,7 +1,6 @@
 """Personality presets — child / adult / brittle / stoic."""
 from __future__ import annotations
 
-import pytest
 
 from clanker_soul import (
     EmotionalPhysics,

@@ -32,7 +32,6 @@ from clanker_soul import (
     SoulPlugin,
     SoulStore,
     Trigger,
-    VadugwiPredicate,
 )
 from clanker_soul.pulse.corpus import branch_bias
 

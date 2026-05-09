@@ -20,7 +20,7 @@ import importlib
 import logging
 import os
 import threading
-from typing import Any, Awaitable, Callable, Optional, Union
+from typing import Awaitable, Callable, Optional, Union
 
 from clanker_soul import (
     ActionOutcome,

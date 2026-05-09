@@ -52,7 +52,6 @@ from clanker_soul import (  # noqa: E402
     Score,
     SoulPlugin,
     Trigger,
-    VadugwiPredicate,
 )
 
 

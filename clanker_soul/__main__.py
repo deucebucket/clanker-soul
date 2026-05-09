@@ -71,7 +71,7 @@ def _info(args: argparse.Namespace) -> int:
             "SELECT COUNT(*) FROM pulse_log WHERE agent_id = ?", (aid,),
         ).fetchone()[0]
         print(f"  - {aid}: {per_agent} events, {per_pulse} pulses")
-    print(f"tables:")
+    print("tables:")
     print(f"  soul_state:       {soul_count}")
     print(f"  events:           {events_count}")
     print(f"  pulse_log:        {pulse_count}")

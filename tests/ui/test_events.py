@@ -13,7 +13,6 @@ from fastapi.testclient import TestClient
 from clanker_soul import Score, SoulPlugin, SoulStore
 from clanker_soul.ui.app import create_app
 from clanker_soul.ui.events import (
-    DEFAULT_PAGE_SIZE,
     parse_iso_date,
     query_events,
 )

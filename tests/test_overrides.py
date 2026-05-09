@@ -6,7 +6,6 @@ fields (including drift-modified soul fields) are not disturbed.
 """
 from __future__ import annotations
 
-import pytest
 
 from clanker_soul import (
     EmotionalPhysics,

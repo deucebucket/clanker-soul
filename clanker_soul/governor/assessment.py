@@ -18,7 +18,6 @@ def assess_capability(snap: dict, config: GovernorConfig) -> CapabilityLevel:
     gate wins. Restrictions ease automatically as state recovers
     because the function is pure — there is no latched state."""
     mood = snap.get("mood")
-    soul = snap.get("soul") or {}
     distance = snap.get("soul_distance") or 0.0
     trauma = snap.get("trauma_load") or 0.0
 

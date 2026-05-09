@@ -16,9 +16,7 @@ All tests use synthetic dispatchers; no LLM, no network.
 from __future__ import annotations
 
 import importlib
-import os
 import sys
-import threading
 import time
 from pathlib import Path
 from typing import List
@@ -47,7 +45,7 @@ _pkg_spec.loader.exec_module(_pkg)
 ClankerSoulMemoryProvider = _pkg.ClankerSoulMemoryProvider
 PulseRunner = _pkg.PulseRunner
 
-from clanker_soul import (
+from clanker_soul import (  # noqa: E402  -- intentional late import after dynamic loader above
     ActionOutcome,
     PulseAction,
     PulseConfig,

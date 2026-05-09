@@ -25,7 +25,6 @@ from clanker_soul import (
     PulseConfig,
     PulseEngine,
     PulseTarget,
-    Trigger,
 )
 
 

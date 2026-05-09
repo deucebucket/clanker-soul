@@ -19,7 +19,6 @@ import json
 import sys
 from pathlib import Path
 
-import pytest
 
 # Add integrations/hermes/ to the import path so we can load the plugin
 # without symlinking it into a hermes-agent tree.

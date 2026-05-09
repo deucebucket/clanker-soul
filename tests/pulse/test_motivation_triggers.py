@@ -12,14 +12,12 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-import pytest
 
 from clanker_soul import (
     PulseAction,
     PulseConfig,
     PulseEngine,
     PulseTarget,
-    SoulState,
     Trigger,
 )
 from clanker_soul.pulse.engine import _action_kind_for_trigger
