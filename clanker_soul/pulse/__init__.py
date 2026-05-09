@@ -1,9 +1,10 @@
-"""``clanker_soul.pulse`` — host-agnostic mood-driven proactive
-messaging engine.
+"""``clanker_soul.pulse`` — host-agnostic mood-driven motivation engine.
 
 Re-exports the public surface of the five submodules:
   - :py:mod:`.config` — :py:class:`PulseConfig`
-  - :py:mod:`.triggers` — :py:class:`Trigger`, :py:class:`PulseTarget`
+  - :py:mod:`.triggers` — :py:class:`Trigger`, :py:class:`PulseTarget`,
+    :py:class:`PulseAction`, :py:class:`ActionOutcome`,
+    :py:data:`ACTION_KINDS`
   - :py:mod:`.host` — :py:class:`PulseHost` Protocol
   - :py:mod:`.prompt` — :py:func:`compose_self_prompt`
   - :py:mod:`.engine` — :py:class:`PulseEngine`
@@ -13,7 +14,13 @@ from clanker_soul.pulse.config import PulseConfig
 from clanker_soul.pulse.engine import PulseEngine
 from clanker_soul.pulse.host import PulseHost
 from clanker_soul.pulse.prompt import compose_self_prompt
-from clanker_soul.pulse.triggers import PulseTarget, Trigger
+from clanker_soul.pulse.triggers import (
+    ACTION_KINDS,
+    ActionOutcome,
+    PulseAction,
+    PulseTarget,
+    Trigger,
+)
 
 __all__ = [
     "PulseEngine",
@@ -21,5 +28,8 @@ __all__ = [
     "PulseConfig",
     "PulseTarget",
     "Trigger",
+    "PulseAction",
+    "ActionOutcome",
+    "ACTION_KINDS",
     "compose_self_prompt",
 ]
