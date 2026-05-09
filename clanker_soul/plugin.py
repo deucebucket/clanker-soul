@@ -47,6 +47,14 @@ from clanker_soul.physics import (
     PhysicsTick,
     soul_distance,
 )
+from clanker_soul.pending import (
+    InMemoryPendingActionStore,
+    OutcomeClassifier,
+    PendingActionStore,
+    PendingCoordinator,
+    PendingDeltaConfig,
+    SqlitePendingActionStore,
+)
 from clanker_soul.pulse.corpus import PromptCorpus, PromptFace
 from clanker_soul.pulse.corpus_defaults import DEFAULT_FACES
 from clanker_soul.pulse.corpus_store import CorpusStore, PersistentRecencyLog
@@ -225,6 +233,52 @@ class SoulPlugin:
         corpus (also stored on the plugin for ``plugin.corpus``)."""
         self._corpus = PromptCorpus(self._corpus_store.load_faces())
         return self._corpus
+
+    def build_pending_coordinator(
+        self,
+        classifier: OutcomeClassifier,
+        *,
+        store: PendingActionStore | None = None,
+        delta_config: PendingDeltaConfig | None = None,
+        durable: bool = True,
+    ) -> PendingCoordinator:
+        """Construct a :py:class:`PendingCoordinator` wired into this
+        plugin's :py:class:`EmotionalPhysics`.
+
+        ``classifier`` is host-supplied (small LLM prompt or rule-based
+        matcher); this is the only mandatory argument because how to
+        decide "what does this inbound mean for that pending" is
+        domain-specific.
+
+        ``store`` defaults to :py:class:`SqlitePendingActionStore`
+        backed by the plugin's :py:class:`SoulStore` when ``durable=True``,
+        falling back to :py:class:`InMemoryPendingActionStore`
+        otherwise. Hosts that already own a different
+        :py:class:`PendingActionStore` impl pass it directly via the
+        kwarg — this method's defaults are conveniences, not
+        requirements.
+
+        ``delta_config`` lets operators tune the per-status mood
+        deltas (see :py:class:`PendingDeltaConfig`); None uses the
+        documented defaults.
+
+        Returns the live coordinator. Hosts call ``record`` /
+        ``observe`` / ``tick`` against it. Multiple coordinators can
+        coexist for one plugin if a host wants different policies per
+        action kind, but most hosts only need one.
+        """
+        if store is None:
+            if durable:
+                store = SqlitePendingActionStore(self._store)
+            else:
+                store = InMemoryPendingActionStore()
+        return PendingCoordinator(
+            physics=self._physics,
+            store=store,
+            classifier=classifier,
+            delta_config=delta_config,
+            agent_id=self._agent_id,
+        )
 
     def most_recent_face_id(self) -> str | None:
         """Return the face_id of the most recent *delivered* pulse for

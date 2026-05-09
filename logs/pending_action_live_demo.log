@@ -1,0 +1,32 @@
+[2026-05-09T19:10:46.260111+00:00] === PendingAction live demo start (2026-05-09T19:10:46.260105+00:00) ===
+[2026-05-09T19:10:46.260123+00:00] OPENROUTER_API_KEY: present
+[2026-05-09T19:10:46.260272+00:00] DB: /tmp/pending-demo-bbr04aq2/soul.db
+[2026-05-09T19:10:46.260280+00:00] 
+--- Scenario A: Acknowledged fast ---
+[2026-05-09T19:10:46.262911+00:00] A snapshot before: V=144 W=172
+[2026-05-09T19:10:46.262937+00:00] A fired: "Hey, you've been quiet today — wanted to check in. How are things?"
+[2026-05-09T19:10:48.866278+00:00] A inbound: "Hey! Yeah I'm doing okay, just busy. Thanks for checking in."
+[2026-05-09T19:10:48.866298+00:00] A classified: acknowledged → status=acknowledged
+[2026-05-09T19:10:48.866305+00:00] A classifier raw: 'acknowledged'
+[2026-05-09T19:10:48.866339+00:00] A snapshot after: V=157 W=172
+[2026-05-09T19:10:48.866347+00:00] A mood delta: ΔV=+13 ΔW=+0
+[2026-05-09T19:10:48.866480+00:00] 
+--- Scenario B: Ignored ---
+[2026-05-09T19:10:48.868929+00:00] B snapshot before: V=144 W=172
+[2026-05-09T19:10:48.868960+00:00] B fired: 'I noticed something heavy earlier today and wanted to share — got a minute?'
+[2026-05-09T19:10:50.094360+00:00] B inbound: 'Did you see the latest patch notes for the game? They nerfed the warlock again.'
+[2026-05-09T19:10:50.094377+00:00] B classified: ignored → status=ignored
+[2026-05-09T19:10:50.094383+00:00] B classifier raw: 'ignored'
+[2026-05-09T19:10:50.094410+00:00] B snapshot after: V=112 W=140
+[2026-05-09T19:10:50.094417+00:00] B mood delta: ΔV=-32 ΔW=-32
+[2026-05-09T19:10:50.094533+00:00] 
+--- Scenario C: Expired (TTL elapses without inbound) ---
+[2026-05-09T19:10:50.097052+00:00] C snapshot before: V=144 W=172
+[2026-05-09T19:10:50.097077+00:00] C fired with 1s TTL: 'Just thinking about you. No need to reply, just wanted to send the thought.'
+[2026-05-09T19:10:52.097560+00:00] C tick() returned 1 expired pendings
+[2026-05-09T19:10:52.097582+00:00] C outcome=ignored status=expired
+[2026-05-09T19:10:52.097612+00:00] C snapshot after: V=133 W=155
+[2026-05-09T19:10:52.097619+00:00] C mood delta: ΔV=-11 ΔW=-17
+[2026-05-09T19:10:52.097742+00:00] 
+--- Writing evidence ---
+[2026-05-09T19:10:52.097922+00:00] Wrote /var/home/deucebucket/ai-drive/clanker-soul/integrations/hermes/EVIDENCE_PENDING.md

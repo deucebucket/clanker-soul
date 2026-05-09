@@ -44,6 +44,19 @@ from clanker_soul.overrides import (
     OverrideBundle,
     apply_overrides,
 )
+from clanker_soul.pending import (
+    ClassifyOutcome,
+    InMemoryPendingActionStore,
+    KeywordOutcomeClassifier,
+    OutcomeClassifier,
+    PendingAction,
+    PendingActionStore,
+    PendingCoordinator,
+    PendingDeltaConfig,
+    PendingStatus,
+    ResolutionResult,
+    SqlitePendingActionStore,
+)
 from clanker_soul.plugin import SoulPlugin
 from clanker_soul.presets import (
     ADULT,
@@ -153,6 +166,18 @@ __all__ = [
     "ConfigOverrides",
     "OverrideBundle",
     "apply_overrides",
+    # PendingAction tracking (#57)
+    "PendingAction",
+    "PendingStatus",
+    "ClassifyOutcome",
+    "PendingDeltaConfig",
+    "PendingActionStore",
+    "InMemoryPendingActionStore",
+    "SqlitePendingActionStore",
+    "OutcomeClassifier",
+    "KeywordOutcomeClassifier",
+    "PendingCoordinator",
+    "ResolutionResult",
     # Presets
     "Preset",
     "CHILD",
