@@ -18,6 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   v0.1 databases (which only had `soul_state`) in place without data loss.
 - `SoulStore.connection` and `SoulStore.lock` properties so sibling modules can share the
   same SQLite connection and write lock (avoids second-handle contention).
+- **`SoulPlugin` — the documented one-call drop-in entry point** (#6). Wraps physics +
+  storage + event log + overrides into a single class. `pip install clanker-soul` and
+  six lines of code now gets a host a fully-loaded VADUGWI runtime: construct, ingest,
+  tick, snapshot, save, close. Context-manager form auto-saves on exit. `event_log=`
+  accepts `True` (SqliteEventLog), `False` (NullEventLog), or any custom EventLog
+  implementation. `default_soul=` is used only when the agent has no saved row.
+  Direct `EmotionalPhysics` usage is still supported for advanced hosts.
 - **`clanker_soul.presets` module** (#5): four built-in `Preset` bundles bundling a
   `SoulState` + `PhysicsConfig` for distinct agent personalities.
   - `CHILD` — easily influenced; low W/D, high A/I, ungrounded G; faster soul drift
