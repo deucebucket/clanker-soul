@@ -22,7 +22,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -44,6 +44,11 @@ from clanker_soul.ui.events import (
     query_events,
 )
 from clanker_soul.ui.live import build_live_view
+from clanker_soul.ui.simulator import (
+    parse_config as parse_sim_config,
+    parse_soul as parse_sim_soul,
+    replay_events,
+)
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
 _STATIC_DIR = Path(__file__).parent / "static"
@@ -247,6 +252,126 @@ def create_app(
         return templates.TemplateResponse(
             request, "_config_panel.html",
             {"selected_agent": agent_id, "view": view, "presets": PRESETS},
+        )
+
+    @app.get("/simulate", response_class=HTMLResponse)
+    async def simulate_page(
+        request: Request,
+        agent_id: str | None = None,
+    ) -> HTMLResponse:
+        """Render the simulator form. Result fragment is fetched via
+        POST /simulate/run."""
+        agents, selected = _resolve_agent(agent_id)
+        # Pre-populate form fields with the agent's *current* live config
+        # so operators tweak from where they are, not from defaults.
+        from clanker_soul.ui.config import PHYSICS_FIELDS, SOUL_FIELDS
+        prefill_soul = {f.name: 128 for f in SOUL_FIELDS}
+        prefill_physics = {}
+        if selected:
+            from clanker_soul.physics import PhysicsConfig
+            from clanker_soul.soul import SoulState
+            base_soul = SoulState()
+            base_phys = PhysicsConfig()
+            bundle = ConfigOverrides(store).get(selected)
+            for f in SOUL_FIELDS:
+                prefill_soul[f.name] = int(
+                    bundle.soul.get(f.name, getattr(base_soul, f.name))
+                )
+            for f in PHYSICS_FIELDS:
+                prefill_physics[f.name] = float(
+                    bundle.physics.get(f.name, getattr(base_phys, f.name))
+                )
+        ctx = {
+            "db_path": str(db_path),
+            "version": __version__,
+            "agents": agents,
+            "selected_agent": selected,
+            "physics_fields": PHYSICS_FIELDS,
+            "soul_fields": SOUL_FIELDS,
+            "prefill_soul": prefill_soul,
+            "prefill_physics": prefill_physics,
+            "default_n_events": 100,
+        }
+        return templates.TemplateResponse(request, "simulate.html", ctx)
+
+    @app.post("/simulate/run", response_class=HTMLResponse)
+    async def simulate_run(request: Request) -> HTMLResponse:
+        """Run the replay and render the result fragment. POST so big
+        forms don't end up in URLs and so form data parses cleanly."""
+        form = await request.form()
+        form_dict = {k: str(v) for k, v in form.items()}
+        agent_id = form_dict.get("agent_id", "").strip()
+        if not agent_id:
+            raise HTTPException(status_code=400, detail="agent_id is required")
+        try:
+            n_events = int(form_dict.get("n_events", "100"))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="n_events must be an integer")
+        n_events = max(1, min(1000, n_events))
+
+        try:
+            sim_soul = parse_sim_soul(form_dict)
+            sim_config = parse_sim_config(form_dict)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+        from clanker_soul.eventlog import SqliteEventLog
+        log = SqliteEventLog(store)
+        records_desc = log.read_ingest(agent_id, limit=n_events)
+        # read_ingest returns newest-first; replay needs oldest-first.
+        records = list(reversed(records_desc))
+
+        result = replay_events(
+            records, sim_soul, sim_config, agent_id=agent_id,
+        )
+        return templates.TemplateResponse(
+            request, "_simulate_result.html",
+            {
+                "result": result,
+                "selected_agent": agent_id,
+                "no_events": len(records) == 0,
+            },
+        )
+
+    @app.post("/simulate/apply")
+    async def simulate_apply(
+        request: Request,
+        agent_id: str = Form(...),
+    ) -> RedirectResponse:
+        """Take the simulator's submitted soul + physics fields and write
+        them as overrides on the live agent. Explicit operator action —
+        the simulator never auto-applies."""
+        form = await request.form()
+        form_dict = {k: str(v) for k, v in form.items()}
+        try:
+            sim_soul = parse_sim_soul(form_dict)
+            sim_config = parse_sim_config(form_dict)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+        from clanker_soul.physics import PhysicsConfig
+        from clanker_soul.soul import SoulState
+        from clanker_soul.ui.config import PHYSICS_FIELDS
+        base_phys = PhysicsConfig()
+        base_soul = SoulState()
+        # Only persist fields that *differ from defaults* — otherwise we
+        # pollute the override bundle with no-op rows.
+        physics_overrides = {
+            m.name: getattr(sim_config, m.name)
+            for m in PHYSICS_FIELDS
+            if getattr(sim_config, m.name) != getattr(base_phys, m.name)
+        }
+        soul_overrides = {
+            f: getattr(sim_soul, f)
+            for f in ("v", "a", "d", "u", "g", "w", "i")
+            if getattr(sim_soul, f) != getattr(base_soul, f)
+        }
+        overrides = ConfigOverrides(store)
+        overrides.set(agent_id,
+                      physics=physics_overrides, soul=soul_overrides)
+        # Send the operator to /config so they can see what landed.
+        return RedirectResponse(
+            url=f"/config?agent_id={agent_id}", status_code=303,
         )
 
     @app.get("/health")

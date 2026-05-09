@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-05-09
+
+The simulator release. The "what if I had tuned this differently?" tool.
+Replay the agent's recent event history through a hypothetical
+`SoulState` + `PhysicsConfig` and see the resulting trajectory side-by-
+side with reality. Operators can then one-click apply the simulated
+config to the live agent.
+
+### Added
+- **`clanker_soul.ui.simulator`** module (#29): `replay_events(records,
+  soul, config)` returns a `SimResult` with paired real-vs-sim mood per
+  step, end-state soul deviations per dim, and elapsed-ms timing. Pure
+  function; no I/O. Engine sandboxed — no `event_log`, no `overrides`
+  provider — guaranteeing the simulator can never write to the live DB.
+- **`SimStep`**, **`SimResult`**, **`DimDeviation`** dataclasses for the
+  paired trajectory output.
+- **`parse_soul`** / **`parse_config`** form-parsing helpers with strict
+  range validation (delegates to the same `PHYSICS_FIELDS` metadata as
+  the config panel).
+- **`GET /simulate`** route — operator form: agent picker, hypothetical
+  starting `SoulState` sliders (V/A/D/U/G/W/I), hypothetical
+  `PhysicsConfig` sliders (all 13 fields), event count input (1–1000).
+  Form pre-fills with the agent's *current* live config so operators
+  tweak from where they are, not from defaults.
+- **`POST /simulate/run`** route — runs replay, returns the result
+  fragment (HTMX-swapped into the page, no full reload).
+- **`POST /simulate/apply`** route — explicit "apply this config to live
+  agent" button. Writes only fields that *differ from defaults* to the
+  override bundle, then 303-redirects to `/config` so the operator can
+  see what landed.
+- **`templates/{simulate,_simulate_result}.html`** — full page + result
+  fragment. Result includes per-dim SVG sparklines (real polyline in
+  violet, simulated in cyan, soul-baseline as a dashed gray line),
+  end-state soul comparison table with colored deltas, and the apply
+  button with a confirm guard.
+- Decay-timing fidelity: replay backdates `_mood_time` between events
+  using the real recorded `ts` gaps so mood-decay sees the wall-clock
+  delta the agent actually experienced — not the back-to-back replay
+  speed. Soul drift is replayed deterministically via the existing
+  `soul_drift(now_ts=)` injected-clock parameter.
+- Determinism guarantee: `replay_events` normalizes the starting soul's
+  `last_drift_ts` to the first record's `ts` so two runs of the same
+  input produce byte-identical output regardless of when they run.
+- Nav in `base.html` enables the `simulate` link.
+
 ## [0.7.0] — 2026-05-09
 
 The config panel release. The dashboard now lets operators tune every

@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}clanker-soul · simulate · {{ selected_agent or 'pick agent' }}{% endblock %}
+
+{% block content %}
+<section class="space-y-6">
+
+    {# === AGENT PICKER === #}
+    <div class="rounded border border-neutral-800 p-4 bg-neutral-950">
+        <div class="text-xs text-neutral-500 uppercase tracking-wide mb-2">agent</div>
+        {% if agents %}
+            <form method="get" action="/simulate" class="flex items-center gap-3">
+                <select name="agent_id" class="bg-neutral-900 border border-neutral-700 rounded px-3 py-2 text-neutral-100 font-mono"
+                        onchange="this.form.submit()">
+                    {% for aid in agents %}
+                    <option value="{{ aid }}" {% if aid == selected_agent %}selected{% endif %}>{{ aid }}</option>
+                    {% endfor %}
+                </select>
+                <span class="text-xs text-neutral-500 ml-auto">replay-only — never writes to {{ selected_agent or 'agent' }}'s live state</span>
+            </form>
+        {% else %}
+            <p class="text-neutral-500 text-sm">no agents in this database.</p>
+        {% endif %}
+    </div>
+
+    {% if selected_agent %}
+    {# === SIMULATOR FORM === #}
+    <form id="simulate-form"
+          hx-post="/simulate/run"
+          hx-target="#simulate-result"
+          hx-swap="innerHTML"
+          class="space-y-6">
+        <input type="hidden" name="agent_id" value="{{ selected_agent }}">
+
+        <div class="rounded border border-neutral-800 p-4 bg-neutral-950">
+            <div class="text-xs text-neutral-500 uppercase tracking-wide mb-3">replay</div>
+            <div class="flex items-center gap-3">
+                <label class="text-xs text-neutral-400">events to replay</label>
+                <input type="number" name="n_events" value="{{ default_n_events }}"
+                       min="1" max="1000"
+                       class="bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-neutral-100 font-mono w-24">
+                <span class="text-xs text-neutral-600">most recent first; 1–1000</span>
+                <button type="submit"
+                        class="ml-auto bg-cyan-900 hover:bg-cyan-800 border border-cyan-800 rounded px-4 py-2 text-cyan-100 font-mono text-sm">
+                    run replay
+                </button>
+            </div>
+        </div>
+
+        {# === STARTING SOUL === #}
+        <div class="rounded border border-neutral-800 p-4 bg-neutral-950">
+            <div class="text-xs text-neutral-500 uppercase tracking-wide mb-3">hypothetical starting soul</div>
+            {% for f in soul_fields %}
+            <div class="grid grid-cols-12 items-center gap-3 py-2 border-b border-neutral-900 text-xs font-mono">
+                <div class="col-span-3 text-neutral-300">{{ f.name }}</div>
+                <div class="col-span-7 flex items-center gap-3">
+                    <input type="range" name="soul_{{ f.name }}"
+                           min="{{ f.min }}" max="{{ f.max }}" step="{{ f.step }}"
+                           value="{{ prefill_soul[f.name] }}"
+                           oninput="this.nextElementSibling.textContent = this.value"
+                           class="flex-1 accent-violet-400">
+                    <span class="w-16 text-right text-neutral-100 tabular-nums">{{ prefill_soul[f.name] }}</span>
+                </div>
+                <div class="col-span-2 text-right text-neutral-600 text-[11px]" title="{{ f.description }}">[0,255]</div>
+            </div>
+            {% endfor %}
+        </div>
+
+        {# === HYPOTHETICAL PHYSICS === #}
+        <div class="rounded border border-neutral-800 p-4 bg-neutral-950">
+            <div class="text-xs text-neutral-500 uppercase tracking-wide mb-3">hypothetical physics config</div>
+            {% for f in physics_fields %}
+            <div class="grid grid-cols-12 items-center gap-3 py-2 border-b border-neutral-900 text-xs font-mono">
+                <div class="col-span-3 text-neutral-300">{{ f.name }}</div>
+                <div class="col-span-7 flex items-center gap-3">
+                    <input type="range" name="physics_{{ f.name }}"
+                           min="{{ f.min }}" max="{{ f.max }}" step="{{ f.step }}"
+                           value="{{ prefill_physics[f.name] }}"
+                           oninput="this.nextElementSibling.textContent = this.value"
+                           class="flex-1 accent-cyan-400">
+                    <span class="w-20 text-right text-neutral-100 tabular-nums">{{ prefill_physics[f.name] }}</span>
+                </div>
+                <div class="col-span-2 text-right text-neutral-600 text-[11px]" title="{{ f.description }}">[{{ f.min }},{{ f.max }}]</div>
+            </div>
+            {% endfor %}
+        </div>
+    </form>
+
+    {# === RESULT TARGET === #}
+    <div id="simulate-result"></div>
+    {% endif %}
+
+</section>
+{% endblock %}

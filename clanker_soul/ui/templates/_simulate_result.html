@@ -1,0 +1,136 @@
+{# Result fragment for /simulate. Side-by-side trajectory: real vs sim,
+   per-dim sparklines, end-state deviations, "apply this config" button. #}
+
+{% if no_events %}
+<div class="rounded border border-amber-900 bg-amber-950 p-4 text-amber-200 text-sm font-mono">
+    no events for {{ selected_agent }} — nothing to replay.
+</div>
+{% else %}
+{% set dims = ['v', 'a', 'd', 'u', 'g', 'w', 'i'] %}
+{% set step_count = result.steps | length %}
+
+<div class="rounded border border-neutral-800 p-4 bg-neutral-950 space-y-4">
+    <div class="flex items-center gap-3 flex-wrap">
+        <div class="text-xs text-neutral-500 uppercase tracking-wide">replay result</div>
+        <span class="text-[11px] text-neutral-600 font-mono">
+            {{ step_count }} events · {{ result.elapsed_ms }}ms
+        </span>
+        <span class="ml-auto text-[11px] text-neutral-600">
+            cyan = sim · violet = real
+        </span>
+    </div>
+
+    {# === PER-DIM SPARKLINES === #}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {% for dim in dims %}
+        {% set w = 320 %}
+        {% set h = 60 %}
+        {% set dx = w / (step_count if step_count > 1 else 1) %}
+        <div class="rounded border border-neutral-900 bg-neutral-950 p-2">
+            <div class="flex items-baseline justify-between text-[11px] font-mono mb-1">
+                <span class="text-neutral-300 uppercase">{{ dim }}</span>
+                {% set dev = result.mood_deviations | selectattr('name', 'equalto', dim) | first %}
+                <span class="text-neutral-500">
+                    real {{ dev.real_end }} · sim {{ dev.sim_end }}
+                    {% if dev.delta != 0 %}
+                        <span class="{% if dev.delta > 0 %}text-emerald-400{% else %}text-rose-400{% endif %}">
+                            ({{ '+' if dev.delta > 0 else '' }}{{ dev.delta }})
+                        </span>
+                    {% endif %}
+                </span>
+            </div>
+            <svg viewBox="0 0 {{ w }} {{ h }}" width="100%" height="{{ h }}" preserveAspectRatio="none">
+                {# Soul baseline (gray dashed) at the starting soul value #}
+                {% set soul_start_val = result.soul_start | attr(dim) %}
+                {% set baseline_y = h - (soul_start_val / 255 * h) %}
+                <line x1="0" y1="{{ baseline_y }}" x2="{{ w }}" y2="{{ baseline_y }}"
+                      stroke="#3f3f46" stroke-width="0.5" stroke-dasharray="2,3"/>
+
+                {# Real mood polyline #}
+                <polyline fill="none" stroke="#a78bfa" stroke-width="1.5"
+                          points="
+                          {%- for step in result.steps -%}
+                            {%- set v = step.mood_real | attr(dim) -%}
+                            {{ loop.index0 * dx }},{{ h - (v / 255 * h) }}{% if not loop.last %} {% endif %}
+                          {%- endfor -%}
+                          "/>
+
+                {# Sim mood polyline #}
+                <polyline fill="none" stroke="#22d3ee" stroke-width="1.5"
+                          points="
+                          {%- for step in result.steps -%}
+                            {%- set v = step.mood_sim | attr(dim) -%}
+                            {{ loop.index0 * dx }},{{ h - (v / 255 * h) }}{% if not loop.last %} {% endif %}
+                          {%- endfor -%}
+                          "/>
+            </svg>
+        </div>
+        {% endfor %}
+    </div>
+
+    {# === SOUL END-STATE TABLE === #}
+    <div class="rounded border border-neutral-900 bg-neutral-950 p-3">
+        <div class="text-[11px] uppercase tracking-wide text-neutral-500 mb-2">soul end-state — real vs sim</div>
+        <table class="w-full text-xs font-mono">
+            <thead>
+                <tr class="text-neutral-600 border-b border-neutral-900">
+                    <th class="text-left py-1">dim</th>
+                    <th class="text-right py-1">real</th>
+                    <th class="text-right py-1">sim</th>
+                    <th class="text-right py-1">Δ</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for d in result.soul_deviations %}
+                <tr class="border-b border-neutral-900/50">
+                    <td class="py-1 text-neutral-400 uppercase">{{ d.name }}</td>
+                    <td class="py-1 text-right text-neutral-300">{{ d.real_end }}</td>
+                    <td class="py-1 text-right text-neutral-300">{{ d.sim_end }}</td>
+                    <td class="py-1 text-right
+                        {% if d.delta == 0 %}text-neutral-600
+                        {% elif d.delta > 0 %}text-emerald-400
+                        {% else %}text-rose-400{% endif %}">
+                        {{ '+' if d.delta > 0 else '' }}{{ d.delta }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {# === APPLY THIS CONFIG ===
+       Standalone form (no HTMX). Hidden inputs carry the just-simulated
+       soul + config — applying the button writes those exact values, not
+       whatever the operator may be tweaking the sliders to right now. #}
+    <form method="post" action="/simulate/apply"
+          onsubmit="return confirm('apply this hypothetical config + soul to live agent {{ selected_agent }}? this writes to ConfigOverrides.');"
+          class="flex items-center gap-3">
+        <input type="hidden" name="agent_id" value="{{ selected_agent }}">
+        {% for d in ['v', 'a', 'd', 'u', 'g', 'w', 'i'] %}
+            <input type="hidden" name="soul_{{ d }}" value="{{ result.soul_start | attr(d) }}">
+        {% endfor %}
+        {% for dev in result.mood_deviations %}{# unused — intentionally walking config below #}{% endfor %}
+        {% set cfg = result.config %}
+        <input type="hidden" name="physics_blend_alpha" value="{{ cfg.blend_alpha }}">
+        <input type="hidden" name="physics_mood_decay_half_life_base" value="{{ cfg.mood_decay_half_life_base }}">
+        <input type="hidden" name="physics_armor_max" value="{{ cfg.armor_max }}">
+        <input type="hidden" name="physics_dim_resilience_max" value="{{ cfg.dim_resilience_max }}">
+        <input type="hidden" name="physics_mood_prime_factor" value="{{ cfg.mood_prime_factor }}">
+        <input type="hidden" name="physics_soul_drift_per_hour" value="{{ cfg.soul_drift_per_hour }}">
+        <input type="hidden" name="physics_soul_drift_min_distance" value="{{ cfg.soul_drift_min_distance }}">
+        <input type="hidden" name="physics_breach_threshold" value="{{ cfg.breach_threshold }}">
+        <input type="hidden" name="physics_heavy_threshold" value="{{ cfg.heavy_threshold }}">
+        <input type="hidden" name="physics_breach_delta" value="{{ cfg.breach_delta }}">
+        <input type="hidden" name="physics_healing_rate" value="{{ cfg.healing_rate }}">
+        <input type="hidden" name="physics_wounding_rate" value="{{ cfg.wounding_rate }}">
+        <input type="hidden" name="physics_trauma_pressure_floor" value="{{ cfg.trauma_pressure_floor }}">
+        <button type="submit"
+                class="bg-emerald-900 hover:bg-emerald-800 border border-emerald-800 rounded px-4 py-2 text-emerald-100 font-mono text-sm">
+            apply this config to live agent
+        </button>
+        <span class="text-[11px] text-neutral-600">
+            writes only fields that differ from PhysicsConfig() / SoulState() defaults
+        </span>
+    </form>
+</div>
+{% endif %}
