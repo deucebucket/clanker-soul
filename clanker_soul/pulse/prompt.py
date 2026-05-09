@@ -1,20 +1,186 @@
 """``compose_self_prompt`` — builds the synthetic 'note from yourself'
 prompt the agent reasons against when a pulse fires.
 
-Pulled out so hosts that want to override the prompt style can pass
-their own composer to a future engine option, and so the engine
-doesn't carry the prompt strings inline.
+Two modes:
+
+  * **Legacy mode** (no corpus passed) — produces the deterministic
+    one-trigger-one-string output. Backwards-compatible with every
+    pre-M3.2 host.
+  * **Corpus mode** (``corpus`` passed) — rolls the weighted dice
+    described in :py:mod:`clanker_soul.pulse.corpus`. Same trigger fires
+    *different* prompts depending on emotional shape, situation tags,
+    memory anchors, and recency. Falls back to the legacy string when
+    the corpus has no eligible faces — the engine never goes silent
+    just because the corpus has gaps.
+
+Template rendering uses ``str.format`` against a curated namespace:
+``trigger_kind``, ``state_line``, ``idle_min``, ``trauma_load``,
+``nourishment_load``, ``peers``, plus per-dim ``mood_v``, ``soul_v``
+etc. Templates that reference unknown keys silently fall back to the
+legacy string (better to ship the safe-known-good prompt than to ship a
+broken corpus prompt).
 """
 from __future__ import annotations
 
+import logging
+from typing import Callable
+
+from clanker_soul.pulse.corpus import PromptCorpus, PromptFace, RecencyLog
 from clanker_soul.pulse.triggers import Trigger
 
+logger = logging.getLogger(__name__)
 
-def compose_self_prompt(trigger: Trigger) -> str:
-    """Build the synthetic 'note from yourself' prompt the agent
-    reasons against. The agent should produce a natural outgoing
-    message, NOT a meta description of what's happening."""
 
+# ── Public API ──────────────────────────────────────────────────────────
+
+
+def compose_self_prompt(
+    trigger: Trigger,
+    *,
+    corpus: PromptCorpus | None = None,
+    situation_tags: frozenset[str] = frozenset(),
+    memory_topics_present: Callable[[str], bool] | None = None,
+    recency: RecencyLog | None = None,
+    now: float = 0.0,
+    primed: list[int] | None = None,
+) -> str:
+    """Build the synthetic 'note from yourself' prompt the agent reasons
+    against. The agent should produce a natural outgoing message, NOT a
+    meta description of what's happening.
+
+    When ``corpus`` is None, returns the legacy deterministic prompt for
+    the trigger kind — full backward compatibility.
+
+    When ``corpus`` is supplied, samples a :py:class:`PromptFace` and
+    renders its template against the trigger's state. Returns the
+    legacy prompt as fallback if no face is eligible OR if the chosen
+    face's template references unknown keys.
+
+    The face's id (when corpus mode fires) is recorded on the returned
+    string via the secondary :py:func:`compose_self_prompt_with_face`
+    helper if hosts want to log which face fired. ``compose_self_prompt``
+    itself returns the rendered string only, preserving its v0.1
+    signature.
+    """
+    rendered, _face = compose_self_prompt_with_face(
+        trigger,
+        corpus=corpus,
+        situation_tags=situation_tags,
+        memory_topics_present=memory_topics_present,
+        recency=recency,
+        now=now,
+        primed=primed,
+    )
+    return rendered
+
+
+def compose_self_prompt_with_face(
+    trigger: Trigger,
+    *,
+    corpus: PromptCorpus | None = None,
+    situation_tags: frozenset[str] = frozenset(),
+    memory_topics_present: Callable[[str], bool] | None = None,
+    recency: RecencyLog | None = None,
+    now: float = 0.0,
+    primed: list[int] | None = None,
+) -> tuple[str, PromptFace | None]:
+    """Same as :py:func:`compose_self_prompt`, but also returns the
+    sampled :py:class:`PromptFace` (or None if legacy fallback fired).
+    Hosts that want to log "which face produced this prompt" use this
+    variant; the engine uses it to record face ids in the pulse log.
+    """
+    if corpus is None:
+        return _legacy_static_prompt(trigger), None
+
+    face = corpus.sample(
+        trigger, situation_tags, memory_topics_present, recency, now,
+        primed=primed,
+    )
+    if face is None:
+        # Empty corpus / fully filtered out → safe fallback.
+        return _legacy_static_prompt(trigger), None
+
+    namespace = _render_namespace(trigger)
+    try:
+        rendered = face.template.format(**namespace)
+    except (KeyError, IndexError, ValueError) as exc:
+        logger.warning(
+            "PromptFace(id=%r) template render failed (%s); falling "
+            "back to legacy prompt for trigger=%s",
+            face.id, exc, trigger.kind,
+        )
+        return _legacy_static_prompt(trigger), None
+    return rendered, face
+
+
+# ── Render namespace ────────────────────────────────────────────────────
+
+
+def _render_namespace(trigger: Trigger) -> dict:
+    """Curated keys available to face templates.
+
+    Adding a key here is a public API change — templates in third-party
+    corpora may rely on it. Removing one breaks them. So keep this
+    list disciplined; fields cover the dimensions the legacy prompts
+    already used plus per-dim mood/soul accessors for richer templates.
+    """
+    metrics = trigger.metrics or {}
+    soul = trigger.soul or {}
+    mood = trigger.mood
+
+    state_line = ""
+    if mood:
+        state_line = (
+            f"current_mood V={mood[0]} W={mood[5]} G={mood[4]}; "
+            f"soul V={soul.get('v', '?')} "
+            f"W={soul.get('w', '?')} "
+            f"G={soul.get('g', '?')}"
+        )
+
+    peers = metrics.get("peers", [])
+    peer_str = ", ".join(peers) if peers else "another agent"
+
+    ns: dict = {
+        "trigger_kind": trigger.kind,
+        "state_line": state_line,
+        "idle_min": int(metrics.get("idle_seconds", 0) or 0) // 60,
+        "idle_seconds": int(metrics.get("idle_seconds", 0) or 0),
+        "trauma_load": metrics.get("trauma_load", 0),
+        "nourishment_load": metrics.get("nourishment_load", 0),
+        "peers": peer_str,
+    }
+    # Per-dim accessors. Mood may be None; in that case the keys are
+    # absent and any template using mood_v / mood_w / etc. will fall
+    # back to legacy via KeyError.
+    if mood:
+        ns.update({
+            "mood_v": mood[0], "mood_a": mood[1], "mood_d": mood[2],
+            "mood_u": mood[3], "mood_g": mood[4], "mood_w": mood[5],
+            "mood_i": mood[6],
+        })
+    ns.update({
+        "soul_v": soul.get("v", "?"),
+        "soul_a": soul.get("a", "?"),
+        "soul_d": soul.get("d", "?"),
+        "soul_u": soul.get("u", "?"),
+        "soul_g": soul.get("g", "?"),
+        "soul_w": soul.get("w", "?"),
+        "soul_i": soul.get("i", "?"),
+    })
+    return ns
+
+
+# ── Legacy static prompts (preserved verbatim) ──────────────────────────
+
+
+def _legacy_static_prompt(trigger: Trigger) -> str:
+    """The pre-M3.2 deterministic prompt for each trigger kind.
+
+    This is what hosts see when they don't pass a corpus, and what the
+    corpus mode falls back to when no face is eligible. Don't change
+    these strings without considering the v0.1 contract — many existing
+    hosts pin their golden tests against this exact wording.
+    """
     state_line = ""
     if trigger.mood:
         state_line = (
@@ -116,7 +282,7 @@ def compose_self_prompt(trigger: Trigger) -> str:
             "topic — what is your attention actually pulled toward?"
         )
 
-    # long_silence (existing)
+    # long_silence (existing default)
     idle_min = trigger.metrics.get("idle_seconds", 0) // 60
     return (
         "[INTERNAL PULSE — long silence]\n"
@@ -126,4 +292,4 @@ def compose_self_prompt(trigger: Trigger) -> str:
     )
 
 
-__all__ = ["compose_self_prompt"]
+__all__ = ["compose_self_prompt", "compose_self_prompt_with_face"]

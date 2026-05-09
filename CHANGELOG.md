@@ -9,6 +9,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **M3.2 — corpus wiring + baseline default corpus.** `compose_self_prompt`
+  now accepts an optional `corpus`, `situation_tags`, `memory_topics_present`,
+  `recency`, `now`, and `primed` — when a corpus is supplied the engine
+  rolls a weighted die over eligible faces and renders the chosen
+  template via `str.format` against a curated namespace
+  (`trigger_kind`, `state_line`, `idle_min`, `trauma_load`,
+  `nourishment_load`, `peers`, plus per-dim `mood_v` / `soul_v` etc.).
+  Falls back to the legacy deterministic prompt when no face is eligible
+  OR when a template references unknown keys — the engine never goes
+  silent because the corpus has gaps. New `compose_self_prompt_with_face`
+  variant returns the sampled face alongside the rendered string for
+  hosts that want to log which face fired.
+- **`clanker_soul.pulse.corpus_defaults`** — ships 49 baseline faces
+  (`DEFAULT_FACES`) covering all 12 trigger kinds × four motifs ×
+  major situational gradients. `build_default_corpus(rng=, extra=,
+  replace=)` factory lets hosts append their own faces (carl phone
+  curiosity, persona-specific responses) or replace the baseline
+  entirely. Face ids follow the `core.<trigger>.<motif>.<handle>`
+  convention so host-extended ids (e.g. `carl.phone.curiosity.scroll`)
+  never collide.
+- **`PulseEngine` corpus + recency wiring.** New `corpus=` constructor
+  kwarg; engine threads `situation_tags` through, calls the optional
+  host hooks `situation_tags(trigger)` and `memory_topics_present(topic)`
+  via `getattr` (existing `PulseHost` implementations are unaffected),
+  records each delivered face fire in an in-memory `RecencyLog` so
+  cooldowns apply within the session. SQLite-backed recency persistence
+  lands in M3.3. The engine stamps `extra={"face_id": ...}` on every
+  `PulseAction` so consequence/audit logs can correlate model output
+  back to the face that produced it.
+- **Live LLM evidence.** `integrations/hermes/scripts/m3_2_live_demo.py`
+  drives a real `SoulPlugin` through five emotional states, samples
+  the default corpus, and sends one prompt per state through DeepSeek
+  V3 Flash via OpenRouter. The captured run is committed at
+  `integrations/hermes/EVIDENCE_M3.2.md` (alongside the existing M2
+  `EVIDENCE.md`); `logs/m3_2_live_demo.log` carries the raw terminal
+  log of the same run.
 - **`clanker_soul.pulse.corpus`** (M3.1) — pure in-memory `PromptCorpus`
   + sampler. Replaces the static `compose_self_prompt(trigger)` mapping
   with a weighted dice over candidate `PromptFace`s, each tagged with
