@@ -18,6 +18,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   v0.1 databases (which only had `soul_state`) in place without data loss.
 - `SoulStore.connection` and `SoulStore.lock` properties so sibling modules can share the
   same SQLite connection and write lock (avoids second-handle contention).
+- **`clanker_soul.presets` module** (#5): four built-in `Preset` bundles bundling a
+  `SoulState` + `PhysicsConfig` for distinct agent personalities.
+  - `CHILD` — easily influenced; low W/D, high A/I, ungrounded G; faster soul drift
+  - `ADULT` — package defaults; competent and settled
+  - `BRITTLE` — feels every event; armor cap turned WAY down, low breach threshold
+  - `STOIC` — slow to move; high armor cap, low blend, fast mood decay
+  - `Preset.apply(overrides, agent_id)` writes the full physics + personality-soul
+    bundle (excluding bookkeeping fields) so switching presets is a clean replacement,
+    not a merge.
+  - `clanker_soul.PRESETS` exposes all four by name for UI dropdowns.
 - **`clanker_soul.overrides` module** (#4): live-tunable `PhysicsConfig` + `SoulState`
   surface for the UI. `OverrideBundle` is a frozen partial-fields dataclass; `ConfigOverrides`
   reads/writes the v0.2 `config_overrides` table; `apply_overrides()` is a pure merge
