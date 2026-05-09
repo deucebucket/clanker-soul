@@ -659,19 +659,27 @@ class PendingCoordinator:
         else:
             return None
 
-        # Translate deltas (signed) into a Score on the [0, 255] scale
-        # by adding to neutral 128. The physics ingestion blends mood
-        # against this, so a +6 delta on V → V=134 reads as a moderate
-        # positive event, which is what the spec calls for.
+        # Translate deltas (signed) into a Score on the [0, 255] scale.
+        # Naively adding to neutral 128 would give too-mild values: when
+        # the agent's current mood is far from neutral, blending a "+6"
+        # Score (V=134) against a current V=144 actually pulls mood
+        # DOWN toward the Score. To get the delta to read as the spec
+        # intends — a real positive bump — we scale up the magnitude so
+        # the synthetic Score lands meaningfully past the agent's
+        # current mood. The 10× multiplier was tuned against the live
+        # demo: at K=10 a +6 delta yields a synthetic V=188 which
+        # consistently lifts a mid-range mood by roughly the spec's
+        # intended movement after physics blending.
+        delta_scale = 10
         v, a, d, u, g, w, i = deltas
         score = Score(
-            v=_to_score_dim(v),
-            a=_to_score_dim(a),
-            d=_to_score_dim(d),
-            u=_to_score_dim(u),
-            g=_to_score_dim(g),
-            w=_to_score_dim(w),
-            i=_to_score_dim(i),
+            v=_to_score_dim(v, delta_scale),
+            a=_to_score_dim(a, delta_scale),
+            d=_to_score_dim(d, delta_scale),
+            u=_to_score_dim(u, delta_scale),
+            g=_to_score_dim(g, delta_scale),
+            w=_to_score_dim(w, delta_scale),
+            i=_to_score_dim(i, delta_scale),
             patterns=patterns,
             direction="OBSERVATION",
             source=f"pending:{pending.kind}",
@@ -687,9 +695,18 @@ class PendingCoordinator:
         return score
 
 
-def _to_score_dim(delta: int) -> int:
-    """Map a signed delta in [-127, 127] to a Score dim in [0, 255]."""
-    return max(0, min(255, 128 + int(delta)))
+def _to_score_dim(delta: int, scale: int = 1) -> int:
+    """Map a signed delta to a Score dim in ``[0, 255]``.
+
+    With ``scale=1``, ``delta`` is interpreted as a direct shift around
+    neutral 128 — useful for callers that already know the absolute
+    Score value they want. With ``scale > 1``, the delta is multiplied
+    so the resulting Score lands further from neutral, which matters
+    when the result will be ingested into physics: blending toward a
+    Score only-slightly-past-neutral tends to fight the intended
+    direction when current mood is also past neutral.
+    """
+    return max(0, min(255, 128 + int(delta) * int(scale)))
 
 
 __all__ = [
