@@ -22,6 +22,12 @@ pytest -k breach                                         # by name pattern
 
 Python 3.10+. **Zero runtime dependencies** — stdlib only. Don't add any without a strong reason; this is a deliberate constraint.
 
+## Recommended entry point
+
+`SoulPlugin(agent_id, db_path)` (`clanker_soul/plugin.py`) is the documented one-call drop-in. It wires `EmotionalPhysics` + `SoulStore` + `SqliteEventLog` + `ConfigOverrides` together so plugin authors don't compose four modules by hand. Direct use of `EmotionalPhysics` is still supported and unchanged — that path is "advanced usage" now, not the default story.
+
+The `with SoulPlugin(...) as plugin:` form auto-saves on exit. `plugin.tick()` does both `reload_overrides()` and `soul_drift()` — call it once per agent tick.
+
 ## Architecture
 
 The three layers, in order of timescale:
@@ -47,6 +53,14 @@ Score (per event) ──► Mood (minutes-hours) ──► Soul (days-weeks, per
 
 `soul_drift()` is the slow bookkeeping pass — call periodically (e.g. from `PulseHost.slow_drift_tick`). Idempotent via `last_drift_ts`; skips work under 3min elapsed.
 
+**`clanker_soul/eventlog.py`** — `IngestRecord` and `PulseRecord` are frozen dataclasses; `EventLog` is a runtime-checkable Protocol. `SqliteEventLog(store)` writes via the shared `SoulStore.connection` + `SoulStore.lock` — no second handle. `NullEventLog` is the noop default. **Soft-fail invariant:** writes that fail (DB locked, disk full, connection closed mid-tick) MUST log a warning and continue; they MUST NOT raise into the caller. Physics catches sink exceptions in addition to `SqliteEventLog`'s own catch — defense in depth for custom impls.
+
+**`clanker_soul/overrides.py`** — `OverrideBundle` is a frozen `(physics: dict, soul: dict)` partial-fields dataclass. `ConfigOverrides(store)` reads/writes the v0.2 `config_overrides` table. `apply_overrides()` is a pure merge function. **Partial-merge semantics:** only fields explicitly present in the bundle are overridden. Removing a previously-overridden field reverts that field to its **constructor** value (not the dataclass default — the value the agent was constructed with). Soul fields that were *never* overridden are left alone, so drift accumulated since construction is preserved across `reload_overrides()` calls. Unknown override keys are logged at WARNING and ignored — forward-compat with future `PhysicsConfig` fields and survives a v0.2/v0.3 schema skew between agent and UI processes.
+
+**`clanker_soul/presets.py`** — `Preset` is a frozen `(name, description, soul, config)` dataclass. The four built-ins (`CHILD`, `ADULT`, `BRITTLE`, `STOIC`) are **tuples, not subclasses** — anyone can construct their own. `Preset.apply(overrides, agent_id)` writes ALL physics fields and the personality soul fields (V/A/D/U/G/W/I) — **bookkeeping fields** (`last_drift_ts`, `last_save_ts`) **are intentionally excluded** since they're runtime state, not personality. Switching presets uses `ConfigOverrides.set` (replace), not `update` (merge), so stale knobs from the previous preset don't linger.
+
+**`clanker_soul/__main__.py`** — CLI subcommands `info` / `prune` / `ui`. The `ui` subcommand uses `try: from clanker_soul.ui import launch` to dispatch — Phase 2 just adds the module, no CLI changes needed.
+
 **`clanker_soul/pulse.py`** — `PulseEngine` is **host-agnostic**. It never invents recipients, never knows about your message dataclass, and never imports your channel layer. Hosts implement the `PulseHost` protocol (`snapshot`, `slow_drift_tick`, `most_recent_target`, `dispatch_pulse`, `due_reminders`, `deliver_reminder`). Each host hook may be sync or async; the engine uses `asyncio.iscoroutine()` rather than wrapping. Triggers: `distress`, `elation`, `trauma_pressure`, `gratitude`, `long_silence`. Cooldown is `min_quiet_seconds` since *any* outbound (call `note_outbound()` on reactive replies, not just pulses).
 
 ## Design invariants worth knowing
@@ -60,6 +74,10 @@ These are deliberate and easy to break by accident:
 - **Failures are loud in physics, soft in storage.** Physics raises on bad input. `SoulStore.save` catches and logs a warning so a transient SQLite hiccup doesn't desync mood from disk forever — but corruption on `load` falls back to defaults rather than crashing the agent. Don't add silent excepts to physics; don't add hard raises to the store.
 - **`HEAVY_PATTERNS` and `POSITIVE_PATTERNS` are frozensets defined in `physics.py`.** Hosts using a different scoring engine extend these by **replacing the constant** before constructing `EmotionalPhysics`, or by subclassing. Pattern matching is upper-cased.
 - **The breach mechanic only mutates V, W, G.** Other dims drift through `soul_drift` only. Keep it that way — wholesale soul rewrite from a single event is a bug, not a feature.
+- **Event log writes are soft-fail.** A logging failure (DB locked, disk full, connection closed mid-tick) MUST warn and continue, never raise into physics. `SqliteEventLog` catches; `EmotionalPhysics` and `PulseEngine` also catch as defense-in-depth for custom sinks. Don't add `raise` into a logging path.
+- **`config_overrides` are partial-merge, not full-replace.** `reload_overrides()` only touches fields explicitly in the bundle. Soul fields that were never overridden are left alone — drift is preserved across reloads. The `_active_*_overrides` sets on `EmotionalPhysics` track which fields are *currently* overridden so removing one cleanly reverts it to the constructor value without clobbering everything else.
+- **`SoulPlugin` is the recommended entry point but not the only one.** Direct `EmotionalPhysics(...)` construction works exactly as it did in v0.1 — opt-in `event_log=` and `overrides=` kwargs are the only additions. Don't deprecate the low-level path; advanced hosts (test rigs, custom persistence) need it.
+- **Presets are tuples, not subclasses.** `Preset(name, description, soul, config)` is a frozen dataclass. Custom presets are constructed, not inherited from. `Preset.apply` excludes `last_drift_ts` and `last_save_ts` because those are runtime state — overriding them would reset drift cadence on every preset switch.
 
 ## Hosts
 
