@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Refactor: split monolithic modules into focused subpackages** (#21). `physics.py`,
+  `pulse.py`, `soul.py`, and `eventlog.py` are now subpackages with one concept per file:
+  - `physics/{config,math,tick,engine}.py`
+  - `pulse/{config,triggers,host,prompt,engine}.py`
+  - `soul/{state,reservoirs,store}.py`
+  - `eventlog/{records,protocol,sqlite}.py`
+  Public API preserved exactly through re-export `__init__.py` files — `from
+  clanker_soul.physics import EmotionalPhysics` and `from clanker_soul.soul import SoulState`
+  keep working unchanged. No behavior changes; pure file reorganization. All 124 existing
+  tests pass without modification.
+
 ### Added
 - `CLAUDE.md` — guidance for Claude Code agents working in this repo.
 - `CHANGELOG.md` — this file.
