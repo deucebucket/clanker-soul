@@ -67,12 +67,17 @@ from clanker_soul.physics import (
 from clanker_soul.pulse import (
     ACTION_KINDS,
     ActionOutcome,
+    PromptCorpus,
+    PromptFace,
     PulseAction,
     PulseConfig,
     PulseEngine,
     PulseHost,
     PulseTarget,
+    RecencyLog,
     Trigger,
+    VadugwiPredicate,
+    default_tags_from_metrics,
 )
 from clanker_soul.score import Score
 from clanker_soul.soul import (
@@ -116,6 +121,12 @@ __all__ = [
     "PulseAction",
     "ActionOutcome",
     "ACTION_KINDS",
+    # Prompt corpus / sampler (M3.1; engine-wired in M3.2)
+    "PromptCorpus",
+    "PromptFace",
+    "VadugwiPredicate",
+    "RecencyLog",
+    "default_tags_from_metrics",
     # Event log
     "EventLog",
     "IngestRecord",

@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`clanker_soul.pulse.corpus`** (M3.1) — pure in-memory `PromptCorpus`
+  + sampler. Replaces the static `compose_self_prompt(trigger)` mapping
+  with a weighted dice over candidate `PromptFace`s, each tagged with
+  trigger eligibility, AND-combined `VadugwiPredicate` constraints
+  (mood / soul / primed layers), situational tags (any-of or all-of),
+  optional memory anchors, and recency cooldown. Selection weight is
+  `base_weight × vadugwi_affinity × novelty × motif_bias`. Four motifs
+  (`informational`, `relational`, `exploratory`, `regulatory`) up-weight
+  the right kind of prompt for the agent's current shape — relational
+  comfort wins over informational explanation when the agent is shaken
+  with low W. New types exported from `clanker_soul`: `PromptCorpus`,
+  `PromptFace`, `VadugwiPredicate`, `RecencyLog`,
+  `default_tags_from_metrics`. **No engine wiring yet** — `compose_self_prompt`
+  still produces fixed strings; M3.2 wires the corpus through the engine
+  with a baseline default corpus and falls back to legacy when no corpus
+  is supplied. M3.3 adds SQLite persistence; M3.4 adds branch trees +
+  memory-anchor `PulseHost` callbacks.
 - **`integrations/hermes/inference_health.py`** —
   `score_from_failover(reason, *, provider, override)` maps hermes-agent's
   structured `FailoverReason` taxonomy (`auth`, `billing`, `rate_limit`,
