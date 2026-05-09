@@ -154,13 +154,23 @@ class _Host:
         return True
 
 
-def _build_engine(plugin: SoulPlugin, host: _Host, *, corpus: PromptCorpus) -> PulseEngine:
+def _build_engine(
+    plugin: SoulPlugin, host: _Host, *, corpus: PromptCorpus | None = None
+) -> PulseEngine:
+    """Build a PulseEngine bound to the plugin's persisted corpus.
+
+    The default ``corpus=None`` path uses ``plugin.corpus`` so faces
+    flow through the persistence layer and ``faces`` CLI surfaces
+    their motif via the prompt_corpus LEFT JOIN. Pass an explicit
+    ``corpus=`` only for advanced/transient flows (e.g. distribution
+    sampling) where persistence is undesired.
+    """
     return PulseEngine(
         host,
         PulseConfig(min_quiet_seconds=0, startup_grace_s=0),
         event_log=plugin.event_log,
         agent_id=plugin.agent_id,
-        corpus=corpus,
+        corpus=corpus if corpus is not None else plugin.corpus,
         recency=plugin.recency,
         physics=plugin.physics,
         previous_face_id=plugin.most_recent_face_id(),
@@ -266,16 +276,37 @@ def main() -> int:
 
     summary: list[dict] = []
 
-    # ── Scenario A: Branch trees ────────────────────────────────────────
-    log("\n--- Scenario A: Branch trees — parent → child wins more often ---")
-
+    # One shared SoulPlugin / one DB / one agent across all four fires
+    # (#74) — closer to how a real hermes deploy operates. Combined
+    # corpus passed via extra_corpus= so every face gets persisted to
+    # prompt_corpus and `clanker-soul faces` surfaces the motif column
+    # via the LEFT JOIN (#75).
     branch_corpus = _branch_corpus()
+    anchored_corpus = _anchored_corpus()
+    combined_faces = list(branch_corpus.faces) + list(anchored_corpus.faces)
 
-    # Step A1 — fire the parent face.
-    with SoulPlugin(agent_id="m34a", db_path=db_path) as plugin:
+    with SoulPlugin(
+        agent_id="m34demo",
+        db_path=db_path,
+        replace_corpus=True,
+        extra_corpus=combined_faces,
+    ) as plugin:
+        # ── Scenario A: Branch trees ────────────────────────────────────
+        log("\n--- Scenario A: Branch trees — parent → child wins more often ---")
+
+        # Step A1 — fire the parent face. Lock the scenario-B faces
+        # into cooldown so the dice rolls between {parent, child,
+        # sibling}; parent's 10× base_weight then dominates
+        # deterministically. Without this lock-out the dice
+        # occasionally rolls a 1×-weight face just from sample noise,
+        # which works as physics but breaks the narrative
+        # (A1 → parent → A3 → child via branch bias).
+        scenario_a_now = datetime.now(timezone.utc).timestamp()
+        for face_id in ("m34.demo.anchored", "m34.demo.plain"):
+            plugin.recency.note_fired(face_id, now=scenario_a_now)
         _drive_distress(plugin)
         host_a1 = _Host(plugin.snapshot())
-        engine_a1 = _build_engine(plugin, host_a1, corpus=branch_corpus)
+        engine_a1 = _build_engine(plugin, host_a1)
         engine_a1.note_outbound()
         asyncio.run(engine_a1.tick())
         assert host_a1.dispatched, "A1 should have fired"
@@ -289,91 +320,78 @@ def main() -> int:
             llm_a1 = "[LLM-SKIPPED]"
         log(f"A1 model response: {llm_a1[:160]}...")
 
-    # Step A2 — sample 200 follow-up rolls from the corpus to demonstrate
-    # the branch bias. Doesn't need LLM calls; show the distribution shift.
-    trigger = Trigger(
-        kind="distress",
-        soul={"v": 145, "a": 110, "d": 160, "u": 80, "g": 130, "w": 175, "i": 135},
-        mood=[80, 130, 110, 70, 100, 110, 100],
-        metrics={},
-    )
-    counts_with_parent = {"m34.demo.child": 0, "m34.demo.sibling": 0}
-    counts_no_parent = {"m34.demo.child": 0, "m34.demo.sibling": 0}
-    # Use a fresh corpus per sampling pass so cooldowns from the parent
-    # firing don't leak in. Both passes draw from the same dice.
-    corpus_for_with = PromptCorpus(branch_corpus.faces, rng=random.Random(13))
-    corpus_for_no = PromptCorpus(branch_corpus.faces, rng=random.Random(13))
-    # Filter parent out via cooldown so the dice rolls between child + sibling.
-    trigger_no_parent_eligible = trigger
-    N = 200
-    for _ in range(N):
-        # We need recency to suppress the parent (it's high-weight) for
-        # both passes. Simplest: a fresh recency log per call with the
-        # parent's id pre-fired so it's in cooldown. Cooldown of parent
-        # is 600s so a fresh log + now=0 puts it into novelty=0.0.
-        from clanker_soul import RecencyLog
-
-        rec = RecencyLog()
-        rec.note_fired("m34.demo.parent", now=0.0)
-        face = corpus_for_with.sample(
-            trigger_no_parent_eligible,
-            recency=rec,
-            now=10.0,
-            previous_face_id="m34.demo.parent",
+        # Step A2 — sample 200 follow-up rolls from the corpus to
+        # demonstrate the branch bias. Doesn't need LLM calls; show the
+        # distribution shift. Uses throwaway in-memory PromptCorpus +
+        # RecencyLog instances so the sampling exploration doesn't
+        # mutate plugin.recency or land in pulse_log.
+        trigger = Trigger(
+            kind="distress",
+            soul={"v": 145, "a": 110, "d": 160, "u": 80, "g": 130, "w": 175, "i": 135},
+            mood=[80, 130, 110, 70, 100, 110, 100],
+            metrics={},
         )
-        if face and face.id in counts_with_parent:
-            counts_with_parent[face.id] += 1
-        face2 = corpus_for_no.sample(
-            trigger_no_parent_eligible,
-            recency=rec,
-            now=10.0,
-            previous_face_id=None,
-        )
-        if face2 and face2.id in counts_no_parent:
-            counts_no_parent[face2.id] += 1
-    log(f"A2 distribution with previous_face_id='m34.demo.parent' (N={N}): {counts_with_parent}")
-    log(f"A2 distribution with previous_face_id=None (N={N}): {counts_no_parent}")
-    branch_observed = counts_with_parent["m34.demo.child"] > counts_with_parent["m34.demo.sibling"]
-    log(f"A2 BRANCH-BIAS-OBSERVED: {branch_observed}")
-    summary.append(
-        {
-            "step": "A1 — parent face fires",
-            "face_id": face_id_a1,
-            "prompt": action_a1.prompt,
-            "model_response": llm_a1,
-        }
-    )
-    summary.append(
-        {
-            "step": "A2 — branch bias swings child distribution",
-            "with_parent": counts_with_parent,
-            "no_parent": counts_no_parent,
-            "branch_observed": branch_observed,
-            "N": N,
-        }
-    )
+        counts_with_parent = {"m34.demo.child": 0, "m34.demo.sibling": 0}
+        counts_no_parent = {"m34.demo.child": 0, "m34.demo.sibling": 0}
+        corpus_for_with = PromptCorpus(branch_corpus.faces, rng=random.Random(13))
+        corpus_for_no = PromptCorpus(branch_corpus.faces, rng=random.Random(13))
+        N = 200
+        for _ in range(N):
+            from clanker_soul import RecencyLog
 
-    # Step A3 — engine fires next pulse with previous_face_id seeded.
-    # Reset DB for this step so we have a fresh recency.
-    db_path_a3 = tmp / "soul_a3.db"
-    with SoulPlugin(agent_id="m34a3", db_path=db_path_a3) as plugin:
+            rec = RecencyLog()
+            rec.note_fired("m34.demo.parent", now=0.0)
+            face = corpus_for_with.sample(
+                trigger,
+                recency=rec,
+                now=10.0,
+                previous_face_id="m34.demo.parent",
+            )
+            if face and face.id in counts_with_parent:
+                counts_with_parent[face.id] += 1
+            face2 = corpus_for_no.sample(
+                trigger,
+                recency=rec,
+                now=10.0,
+                previous_face_id=None,
+            )
+            if face2 and face2.id in counts_no_parent:
+                counts_no_parent[face2.id] += 1
+        log(
+            f"A2 distribution with previous_face_id='m34.demo.parent' (N={N}): {counts_with_parent}"
+        )
+        log(f"A2 distribution with previous_face_id=None (N={N}): {counts_no_parent}")
+        branch_observed = (
+            counts_with_parent["m34.demo.child"] > counts_with_parent["m34.demo.sibling"]
+        )
+        log(f"A2 BRANCH-BIAS-OBSERVED: {branch_observed}")
+        summary.append(
+            {
+                "step": "A1 — parent face fires",
+                "face_id": face_id_a1,
+                "prompt": action_a1.prompt,
+                "model_response": llm_a1,
+            }
+        )
+        summary.append(
+            {
+                "step": "A2 — branch bias swings child distribution",
+                "with_parent": counts_with_parent,
+                "no_parent": counts_no_parent,
+                "branch_observed": branch_observed,
+                "N": N,
+            }
+        )
+
+        # Step A3 — engine fires next pulse. A1's parent firing already
+        # advanced parent's recency, but parent's 600s cooldown is
+        # longer than the seconds we wait between steps; explicitly
+        # locking it out keeps the dice between child + sibling so the
+        # branch-bias hint can show its effect.
+        plugin.recency.note_fired("m34.demo.parent", now=datetime.now(timezone.utc).timestamp())
         _drive_distress(plugin)
-        # Seed the engine's previous_face_id directly (simulates "the
-        # parent fired in a previous run").
         host_a3 = _Host(plugin.snapshot())
-        engine_a3 = PulseEngine(
-            host_a3,
-            PulseConfig(min_quiet_seconds=0, startup_grace_s=0),
-            event_log=plugin.event_log,
-            agent_id=plugin.agent_id,
-            corpus=branch_corpus,
-            recency=plugin.recency,
-            physics=plugin.physics,
-            previous_face_id="m34.demo.parent",
-        )
-        # Pre-fire parent in the recency to lock it out, simulating "we
-        # already fired the parent recently."
-        engine_a3._recency.note_fired("m34.demo.parent", now=datetime.now(timezone.utc).timestamp())
+        engine_a3 = _build_engine(plugin, host_a3)
         engine_a3.note_outbound()
         asyncio.run(engine_a3.tick())
         assert host_a3.dispatched, "A3 should have fired"
@@ -386,35 +404,29 @@ def main() -> int:
         else:
             llm_a3 = "[LLM-SKIPPED]"
         log(f"A3 model response: {llm_a3[:160]}...")
-    summary.append(
-        {
-            "step": "A3 — engine fires follow-up with branch hint",
-            "face_id": face_id_a3,
-            "prompt": action_a3.prompt,
-            "model_response": llm_a3,
-        }
-    )
-
-    # ── Scenario B: Memory anchors ──────────────────────────────────────
-    log("\n--- Scenario B: Memory anchors ---")
-    anchored_corpus = _anchored_corpus()
-
-    # Step B1 — host has NO memory of topic.x → anchored face filtered out.
-    db_path_b = tmp / "soul_b.db"
-    with SoulPlugin(
-        agent_id="m34b1", db_path=db_path_b, replace_corpus=True, extra_corpus=anchored_corpus.faces
-    ) as plugin:
-        _drive_distress(plugin)
-        host_b1 = _Host(plugin.snapshot(), memory_topics=set())  # no topic
-        engine_b1 = PulseEngine(
-            host_b1,
-            PulseConfig(min_quiet_seconds=0, startup_grace_s=0),
-            event_log=plugin.event_log,
-            agent_id="m34b1",
-            corpus=plugin.corpus,
-            recency=plugin.recency,
-            physics=plugin.physics,
+        summary.append(
+            {
+                "step": "A3 — engine fires follow-up with branch hint",
+                "face_id": face_id_a3,
+                "prompt": action_a3.prompt,
+                "model_response": llm_a3,
+            }
         )
+
+        # ── Scenario B: Memory anchors ──────────────────────────────────
+        log("\n--- Scenario B: Memory anchors ---")
+
+        # Lock the branch corpus out so the anchored / plain pair
+        # gets the dice — emulates "different trigger context, branch
+        # faces aren't relevant right now" without switching agents.
+        now_ts = datetime.now(timezone.utc).timestamp()
+        for face_id in ("m34.demo.parent", "m34.demo.child", "m34.demo.sibling"):
+            plugin.recency.note_fired(face_id, now=now_ts)
+
+        # Step B1 — host has NO memory of topic.x → anchored face filtered out.
+        _drive_distress(plugin)
+        host_b1 = _Host(plugin.snapshot(), memory_topics=set())
+        engine_b1 = _build_engine(plugin, host_b1)
         engine_b1.note_outbound()
         asyncio.run(engine_b1.tick())
         action_b1 = host_b1.dispatched[0]
@@ -427,35 +439,24 @@ def main() -> int:
         else:
             llm_b1 = "[LLM-SKIPPED]"
         log(f"B1 model response: {llm_b1[:160]}...")
-    summary.append(
-        {
-            "step": "B1 — anchored face filtered when host has no memory",
-            "face_id": face_id_b1,
-            "prompt": action_b1.prompt,
-            "model_response": llm_b1,
-            "anchored_filtered": anchored_filtered,
-        }
-    )
+        summary.append(
+            {
+                "step": "B1 — anchored face filtered when host has no memory",
+                "face_id": face_id_b1,
+                "prompt": action_b1.prompt,
+                "model_response": llm_b1,
+                "anchored_filtered": anchored_filtered,
+            }
+        )
 
-    # Step B2 — host HAS memory of topic.x → anchored face wins (high weight).
-    db_path_b2 = tmp / "soul_b2.db"
-    with SoulPlugin(
-        agent_id="m34b2",
-        db_path=db_path_b2,
-        replace_corpus=True,
-        extra_corpus=anchored_corpus.faces,
-    ) as plugin:
+        # Step B2 — host HAS memory of topic.x → anchored face wins.
+        # Plain just fired in B1 — push it into cooldown so the dice
+        # rolls cleanly between (anchored, ...) and the anchored face's
+        # 10× weight + memory match dominates.
+        plugin.recency.note_fired("m34.demo.plain", now=now_ts)
         _drive_distress(plugin)
         host_b2 = _Host(plugin.snapshot(), memory_topics={"topic.x"})
-        engine_b2 = PulseEngine(
-            host_b2,
-            PulseConfig(min_quiet_seconds=0, startup_grace_s=0),
-            event_log=plugin.event_log,
-            agent_id="m34b2",
-            corpus=plugin.corpus,
-            recency=plugin.recency,
-            physics=plugin.physics,
-        )
+        engine_b2 = _build_engine(plugin, host_b2)
         engine_b2.note_outbound()
         asyncio.run(engine_b2.tick())
         action_b2 = host_b2.dispatched[0]

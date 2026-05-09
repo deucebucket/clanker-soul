@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **M3.4 live demo consolidated to a single SoulPlugin / single DB
+  (#74, #75).** Previously the demo created four separate
+  ``SoulPlugin`` instances over four separate temp DB files (one per
+  scenario step), passed branch-corpus faces via the engine-only
+  ``corpus=`` kwarg (in-memory, not persisted), and required pointing
+  ``clanker-soul faces`` at four DBs to see all four fires. Now: one
+  shared ``SoulPlugin(agent_id="m34demo",
+  extra_corpus=combined_faces, replace_corpus=True)`` covers every
+  step. Branch + anchored faces are persisted to ``prompt_corpus`` so
+  ``clanker-soul faces --db <demo.db>`` lists all four fires with the
+  ``motif`` column populated for every row. Closer to how a real
+  hermes deploy operates and teaches the right mental model.
+  ``_build_engine`` defaults ``corpus=`` to ``plugin.corpus`` so all
+  engines automatically use the persisted set; the ``corpus=``
+  override is preserved for transient sampling flows. Cooldown
+  management between steps is explicit
+  (``plugin.recency.note_fired(...)``) rather than implicit via DB
+  switching. EVIDENCE_M3.4.md regenerated against the consolidated
+  run.
+
 ### Added
 
 - **`PendingDeltaConfig.delta_mode` — relative-anchor mode for
