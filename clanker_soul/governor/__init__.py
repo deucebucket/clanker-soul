@@ -23,11 +23,23 @@ underlying functions directly for advanced use)."""
 from clanker_soul.governor.assessment import assess_capability
 from clanker_soul.governor.context import compose_state_context
 from clanker_soul.governor.crisis import CrisisDiagnosis, crisis_signal
-from clanker_soul.governor.levels import CapabilityLevel, GovernorConfig
+from clanker_soul.governor.gate import CapabilityGate, GateDecision
+from clanker_soul.governor.levels import (
+    DEFAULT_CAPABILITY_PROFILES,
+    STRICT_CAPABILITY_PROFILES,
+    CapabilityLevel,
+    CapabilityProfile,
+    GovernorConfig,
+)
 
 __all__ = [
     "CapabilityLevel",
+    "CapabilityProfile",
+    "DEFAULT_CAPABILITY_PROFILES",
+    "STRICT_CAPABILITY_PROFILES",
     "GovernorConfig",
+    "CapabilityGate",
+    "GateDecision",
     "CrisisDiagnosis",
     "assess_capability",
     "crisis_signal",

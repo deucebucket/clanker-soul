@@ -7,6 +7,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-05-09
+
+Third of four PRs implementing M1 (#45). Per-level configurable
+capability gating + public-action rate limiter. Defaults are
+**permissive** per the learning-tool framing; \`STRICT_CAPABILITY_PROFILES\`
+ships as the conservative opt-in alternative.
+
+### Added
+
+- **`CapabilityProfile`** frozen dataclass — what an agent can do at
+  one capability level. Fields: \`allowed_action_kinds\`,
+  \`allowed_tool_names\` (None = all), \`public_action_rate_limit_per_hour\`,
+  \`user_message_allowed\`, \`description\`. Every cell operator-overridable.
+- **\`DEFAULT_CAPABILITY_PROFILES\`** — permissive profiles for all 5
+  levels. Every level allows every action kind, every tool, no rate
+  limit. The agent acts on impulses; consequences feed back into the
+  soul; that IS the learning loop.
+- **\`STRICT_CAPABILITY_PROFILES\`** — conservative alternative for
+  production-style deployments. Levels 1+ progressively restrict
+  public actions, tools, and (at level 4) the user-message channel.
+- **\`GovernorConfig.capability_profiles\`** — operator overrides any
+  cell of the matrix. Default factory returns DEFAULT_ (permissive).
+- **\`GovernorConfig.enable_public_action_lockout\`** — default-OFF.
+  Reserved flag for production overlays.
+- **\`CapabilityGate\`** — runtime enforcement class. Owns the
+  rate-limit bucket. Thread-safe. \`evaluate(action_kind, level, *,
+  tool_name=None, is_user_message=False) -> GateDecision\`.
+- **\`GateDecision\`** — \`permitted\`, \`reason\` (one of \`ok\` /
+  \`action_kind_blocked\` / \`rate_limited\` / \`tool_blocked\` /
+  \`user_message_blocked\`), \`profile\`. Callers can introspect why
+  an action was denied for logging or substitution.
+- **\`PulseEngine(gate=...)\`** kwarg — optional. When provided, every
+  action passes through \`gate.evaluate\` before dispatch. Gated
+  actions are logged but not delivered. When absent, behavior is
+  unchanged from v0.12.0 (default permissive).
+
+### Backwards compatibility
+
+- \`GovernorConfig()\` defaults to permissive profiles — no behavior
+  change for existing users
+- \`PulseEngine(...)\` without \`gate=\` kwarg works exactly as before
+- All 11 existing pulse tests + 13 M1.1 tests + 23 M1.2 tests +
+  16 new M1.3 tests pass alongside each other
+
+### Tests
+
+16 new tests in \`tests/governor/test_capability_gate.py\` covering:
+- Default permissiveness at every level for every action kind
+- Strict-profile spec compliance (the conservative table)
+- Operator override of any cell (whole-dict and per-level)
+- Rate-limit bucket: under cap allows, over cap denies, isolated to
+  public action kinds, zero means unlimited
+- Tool-name gating via \`allowed_tool_names\`
+- User-message blocking at CRISIS_LOCKOUT
+- Engine integration: gated actions don't dispatch; ungated do;
+  no-gate path preserves v0.12.0 behavior
+
+Full suite: 315 passed, 1 skipped (was 299 + 16 new).
+
 ## [0.12.0] — 2026-05-09
 
 Second of four PRs implementing M1 (#45). The motivation engine grows
