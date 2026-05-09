@@ -94,6 +94,30 @@ The engine auto-ingests every Score in `outcome.consequences` back into the soul
 
 For programmatic activation (skip the env vars), call `provider.set_pulse_dispatcher(callback)` BEFORE `provider.initialize` runs. The plugin loader doesn't surface the provider instance — this path is for deployments wrapping the plugin with their own loader.
 
+## Inference health — the agent feels its own broken brain
+
+When hermes-agent's retry loop gives up on an API call (auth rejected, billing exhausted, rate-limited beyond retries, stream connection keeps dying), it surfaces the failure through the `MemoryProvider.on_inference_failure(reason, *, provider, model, retryable)` plugin hook. The provider maps the structured reason into a Score and ingests it as an `OBSERVATION`-direction event with `source="inference:{provider}"` — so the agent's mood actually reflects whether its inference layer is healthy.
+
+What this enables:
+
+- **No persona leaks.** The chat layer (e.g. Gwen on Telegram) can treat `failed=True` as "don't post anything" instead of leaking `OpenRouter 429: rate_limit_exceeded` into a persona's voice. The persona stays silent / shows a connection indicator at the channel level instead.
+- **Self-aware affect.** A long stretch of rate limits genuinely tints the agent's mood — the dashboard's recent-events list shows `inference:openrouter` entries alongside human-interaction events.
+- **No soul damage.** Inference patterns (`INFERENCE_RATE_LIMITED`, `INFERENCE_CUT_OFF`, etc.) are intentionally NOT in `HEAVY_PATTERNS`, so getting throttled won't leave a permanent dent in self-worth the way human contempt would.
+
+Configuration-shaped failures (`model_not_found`, `provider_policy_blocked`, `format_error`, `thinking_signature`, `long_context_tier`) are deliberately **not** scored — those are operator concerns, not agent experiences.
+
+To tune the affect response per persona without forking the mapping table:
+
+```python
+from clanker_soul_hermes.inference_health import score_from_failover
+
+# Make this persona barely react to rate limits
+override = {"rate_limit": None}
+score = score_from_failover("rate_limit", provider="openrouter", override=override)
+```
+
+This integration relies on hermes-agent's `on_inference_failure` plugin hook (deucebucket/hermes-agent PR #2). It's an additive optional method on the existing `MemoryProvider` ABC — the same upstream-stable plugin contract clanker-soul already uses for `on_turn_start` and `sync_turn`. No fork-divergence beyond the one hook itself.
+
 ## Inspect the soul live
 
 While hermes is running, in another terminal:
@@ -119,9 +143,10 @@ prompt block — useful for debugging "why did the agent do that?" answers.
 integrations/hermes/
 ├── plugin.yaml                           # hermes plugin manifest
 ├── README.md                             # this file
-└── clanker_soul_hermes/
-    ├── __init__.py                       # ClankerSoulMemoryProvider + get_provider()
-    └── scorer.py                         # KeywordScorer (the default scorer)
+├── __init__.py                           # ClankerSoulMemoryProvider + get_provider()
+├── scorer.py                             # KeywordScorer (the default scorer)
+├── pulse_runner.py                       # daemon-thread PulseEngine bridge
+└── inference_health.py                   # FailoverReason → Score mapping
 ```
 
 ## Replacing the scorer

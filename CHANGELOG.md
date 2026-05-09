@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`integrations/hermes/inference_health.py`** —
+  `score_from_failover(reason, *, provider, override)` maps hermes-agent's
+  structured `FailoverReason` taxonomy (`auth`, `billing`, `rate_limit`,
+  `timeout`, `context_overflow`, ...) to ingestable VADUGWI `Score`s. The
+  agent's *own* connection breakdowns are real experiences — getting
+  rate-limited is a brief frustration, getting cut off for billing is
+  stronger. Configuration-shaped failures (`model_not_found`,
+  `provider_policy_blocked`, `format_error`, `thinking_signature`,
+  `long_context_tier`) return `None` because they're operator concerns,
+  not agent experiences. All emitted patterns are intentionally distinct
+  from `HEAVY_PATTERNS` so inference failures cannot trigger the breach
+  mechanic. Operators can per-persona-tune via the `override` argument
+  without forking the table.
+- **`ClankerSoulMemoryProvider.on_inference_failure`** — hooks the new
+  `MemoryProvider.on_inference_failure` plugin contract introduced in
+  hermes-agent. When hermes's retry loop gives up on an API call, the
+  classified reason flows into the soul as an `OBSERVATION`-direction
+  Score with `source="inference:{provider}"`. The chat layer can then
+  decide to stay silent on `failed=True` rather than leak raw provider
+  errors into the persona's voice — and the agent's affect tracks its
+  own inference health across sessions. Soft-fails: a fault here is
+  logged and swallowed so a plugin issue never escalates an inference
+  failure into a session abort.
+
 ## [0.14.0] — 2026-05-09
 
 The autonomous-outreach release. Hermes plugin now wires the

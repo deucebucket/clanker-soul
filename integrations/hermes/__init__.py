@@ -37,10 +37,12 @@ try:
     # When loaded as a hermes plugin, we're a package and relative imports work.
     from .scorer import KeywordScorer
     from .pulse_runner import PulseRunner
+    from .inference_health import score_from_failover
 except ImportError:
     # When the dir is on sys.path directly (test rigs), fall back.
     from scorer import KeywordScorer  # type: ignore[no-redef]
     from pulse_runner import PulseRunner  # type: ignore[no-redef]
+    from inference_health import score_from_failover  # type: ignore[no-redef]
 
 logger = logging.getLogger(__name__)
 
@@ -229,6 +231,44 @@ class ClankerSoulMemoryProvider(MemoryProvider):  # type: ignore[misc,valid-type
         # ships, doubling up on the user.
         if self._pulse_runner is not None:
             self._pulse_runner.note_outbound()
+
+    def on_inference_failure(
+        self,
+        reason: str,
+        *,
+        provider: str = "",
+        model: str = "",
+        retryable: bool = False,
+    ) -> None:
+        """Ingest an unrecoverable API failure as a soul event.
+
+        Hermes calls this on the unrecoverable-failure paths in its
+        retry loop (see ``MemoryProvider.on_inference_failure``). The
+        agent's *own* connection breakdowns are real experiences —
+        we score them through ``score_from_failover`` and ingest, so
+        the soul can react (and so the chat layer can decide to
+        stay silent rather than leak ``"OpenRouter 429: ..."`` into
+        the persona's voice).
+
+        Soft-fails: any error here is logged and swallowed so that a
+        plugin issue never crashes the agent or escalates an inference
+        failure into a session abort.
+        """
+        if self._plugin is None or not self._enabled:
+            return
+        try:
+            score = score_from_failover(reason, provider=provider)
+            if score is None:
+                return
+            self._plugin.ingest(score)
+            # No tick() here — this fires from a failure path, not a
+            # turn boundary. Drift will catch up on the next on_turn_start.
+        except Exception:
+            logger.exception(
+                "clanker-soul: on_inference_failure ingestion failed "
+                "(reason=%s provider=%s model=%s)",
+                reason, provider, model,
+            )
 
     # ---- tool exposure ------------------------------------------------------
 
