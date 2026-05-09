@@ -7,6 +7,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-05-09
+
+The motivation-engine foundation release. First of four PRs implementing
+the M1 milestone (#45) — clanker-soul reframed from \"emotional state
+runtime\" to **emotional learning tool for AI agents.**
+
+This PR ships the protocol expansion only — no new triggers yet (those
+are M1.2). Backwards compatibility is preserved: every existing
+\`PulseHost\` implementation continues to work unchanged via an internal
+shim.
+
+### Added
+- **`PulseAction`** frozen dataclass — the unit of motivation. Six
+  kinds: \`direct_message\`, \`post_public\`, \`comment_reply\`,
+  \`browse_topic\`, \`withdraw\`, \`tool_invocation\`. \`__post_init__\`
+  validates kind against the new \`ACTION_KINDS\` constant.
+- **`ActionOutcome`** frozen dataclass — what the host reports back.
+  Has \`delivered\`, \`consequences: tuple[Score, ...]\`, \`note\`. The
+  \`consequences\` field carries the **learning signal** — Score events
+  the host generated from the real-world result of the action.
+- **`PulseHost.dispatch_action(action) -> ActionOutcome`** Protocol
+  hook (sync OR async). Modern alternative to \`dispatch_pulse\`. Hosts
+  that implement it can serve all six action kinds and report
+  consequences for the soul to learn from.
+- **`PulseEngine(physics=...)`** kwarg — optional reference to the
+  agent's \`EmotionalPhysics\`. When provided, the engine
+  auto-ingests every Score in \`outcome.consequences\` after each
+  successful action, closing the impulse → action → consequence →
+  soul-update learning loop.
+- **`ACTION_KINDS`** frozenset constant exported at package root.
+- New module-level docstring on \`pulse/__init__.py\` reflecting the
+  motivation-engine framing.
+
+### Changed
+- \`PulseEngine._fire_pulse\` now routes through a unified internal
+  \`_dispatch_action_via_host\` helper that prefers
+  \`dispatch_action\` and falls back to \`dispatch_pulse\` for legacy
+  hosts. Legacy DM flow goes through a default-built
+  \`PulseAction(kind=\"direct_message\", ...)\`.
+
+### Backwards compatibility
+- Every existing \`PulseHost\` implementation (defining only
+  \`dispatch_pulse\`) continues to work unchanged. Engine wraps
+  legacy boolean returns in \`ActionOutcome(delivered=..., consequences=())\`.
+- Existing \`PulseEngine\` constructions without \`physics=\` still
+  work; consequences from non-empty outcomes are dropped with a single
+  warning.
+- All 13 new tests in \`tests/pulse/test_action_protocol.py\` pass
+  alongside 11 unchanged existing pulse tests.
+
+### Hosts: how to upgrade
+- Keep using \`dispatch_pulse\` and you get exactly the v0.10.0
+  behavior. No changes required.
+- Switch to \`dispatch_action\` if you want to (a) handle action kinds
+  beyond DMs (post_public / comment_reply / browse_topic) and/or
+  (b) feed action consequences back into the soul as Score events.
+  Pass \`physics=plugin.physics\` (or your EmotionalPhysics ref) at
+  engine construction to enable auto-ingest.
+
 ## [0.10.0] — 2026-05-09
 
 The proven-on-a-real-LLM release. clanker-soul now ships a first-class

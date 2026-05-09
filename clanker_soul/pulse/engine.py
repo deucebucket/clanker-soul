@@ -26,10 +26,15 @@ from typing import TYPE_CHECKING
 from clanker_soul.pulse.config import PulseConfig
 from clanker_soul.pulse.host import PulseHost
 from clanker_soul.pulse.prompt import compose_self_prompt
-from clanker_soul.pulse.triggers import Trigger
+from clanker_soul.pulse.triggers import (
+    ActionOutcome,
+    PulseAction,
+    Trigger,
+)
 
 if TYPE_CHECKING:
     from clanker_soul.eventlog import EventLog
+    from clanker_soul.physics import EmotionalPhysics
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +57,7 @@ class PulseEngine:
         *,
         event_log: "EventLog | None" = None,
         agent_id: str | None = None,
+        physics: "EmotionalPhysics | None" = None,
     ) -> None:
         if event_log is not None and not agent_id:
             raise ValueError(
@@ -66,6 +72,12 @@ class PulseEngine:
         self._last_outbound_ts: float = 0.0
         self._event_log = event_log
         self._agent_id = agent_id
+        # Optional physics ref for the action-outcome learning loop.
+        # When provided, ActionOutcome.consequences are auto-ingested
+        # back into the soul. When None, consequences are warned-and-
+        # dropped — the engine still works but the loop is open.
+        self._physics = physics
+        self._consequences_warned: bool = False
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -247,7 +259,14 @@ class PulseEngine:
         self, trigger: Trigger,
     ) -> tuple[bool, str | None, bool]:
         """Returns ``(fired, prompt, target_present)`` so the caller
-        can log a complete outcome regardless of which path we took."""
+        can log a complete outcome regardless of which path we took.
+
+        Wraps the legacy DM dispatch in the new action-based flow:
+        builds a ``direct_message`` :py:class:`PulseAction`, calls
+        :py:meth:`_dispatch_action_via_host` (which prefers
+        ``dispatch_action`` and falls back to ``dispatch_pulse`` for
+        legacy hosts), then auto-ingests outcome consequences.
+        """
         try:
             target = self._host.most_recent_target()
         except Exception:
@@ -261,22 +280,110 @@ class PulseEngine:
             return False, None, False
 
         prompt = compose_self_prompt(trigger)
+        action = PulseAction(
+            kind="direct_message",
+            trigger=trigger,
+            target=target,
+            prompt=prompt,
+        )
+
+        outcome = await self._dispatch_action_via_host(action)
+        if outcome is None:
+            return False, prompt, True
+
+        self._absorb_consequences(outcome)
+
+        if outcome.delivered:
+            self._last_pulse_ts = datetime.now(timezone.utc).timestamp()
+            self._last_outbound_ts = self._last_pulse_ts
+            logger.info("Pulse fired (%s)", trigger.kind)
+        return outcome.delivered, prompt, True
+
+    async def _dispatch_action_via_host(
+        self, action: PulseAction,
+    ) -> ActionOutcome | None:
+        """Try ``host.dispatch_action`` first; fall back to
+        ``host.dispatch_pulse`` for legacy hosts.
+
+        Returns ``None`` only when both paths raised — every successful
+        return (even ``ActionOutcome(delivered=False)``) yields a real
+        outcome the caller can log + absorb.
+        """
+        # Prefer the modern hook if the host implements it.
+        modern = getattr(self._host, "dispatch_action", None)
+        if callable(modern):
+            try:
+                result = modern(action)
+                if asyncio.iscoroutine(result):
+                    outcome = await result
+                else:
+                    outcome = result
+                if not isinstance(outcome, ActionOutcome):
+                    logger.warning(
+                        "dispatch_action(%s) returned %r, expected ActionOutcome",
+                        action.kind, type(outcome).__name__,
+                    )
+                    return None
+                return outcome
+            except NotImplementedError:
+                # Host explicitly declared dispatch_action unimplemented.
+                # Fall through to the legacy path.
+                pass
+            except Exception:
+                logger.exception("dispatch_action failed")
+                return None
+
+        # Legacy path. Only direct_message actions can be served here.
+        if action.kind != "direct_message":
+            logger.warning(
+                "host has no dispatch_action and action.kind=%r is not "
+                "direct_message — cannot dispatch",
+                action.kind,
+            )
+            return ActionOutcome(delivered=False, note="legacy_host_no_action_support")
+
+        target = action.target
+        if target is None:
+            return ActionOutcome(delivered=False, note="no_target")
 
         try:
-            result = self._host.dispatch_pulse(target, trigger, prompt)
+            result = self._host.dispatch_pulse(target, action.trigger, action.prompt)
             if asyncio.iscoroutine(result):
                 fired = await result
             else:
                 fired = bool(result)
+            return ActionOutcome(delivered=fired)
         except Exception:
             logger.exception("dispatch_pulse failed")
-            return False, prompt, True
+            return None
 
-        if fired:
-            self._last_pulse_ts = datetime.now(timezone.utc).timestamp()
-            self._last_outbound_ts = self._last_pulse_ts
-            logger.info("Pulse fired (%s)", trigger.kind)
-        return fired, prompt, True
+    def _absorb_consequences(self, outcome: ActionOutcome) -> None:
+        """Feed :py:attr:`ActionOutcome.consequences` back into physics.
+
+        This is the learning loop. Without an injected ``physics`` ref
+        at engine construction, consequences are warned-and-dropped
+        (once) and the loop stays open."""
+        if not outcome.consequences:
+            return
+        if self._physics is None:
+            if not self._consequences_warned:
+                logger.warning(
+                    "ActionOutcome had %d consequences but PulseEngine was "
+                    "constructed without physics= — dropping. Pass physics=plugin.physics "
+                    "(or your EmotionalPhysics instance) to close the learning loop.",
+                    len(outcome.consequences),
+                )
+                self._consequences_warned = True
+            return
+        for score in outcome.consequences:
+            try:
+                self._physics.ingest(score)
+            except Exception:
+                # Soft-fail: a single bad consequence must not crash the engine.
+                logger.exception(
+                    "Failed to ingest consequence Score (patterns=%s) — skipping",
+                    score.patterns,
+                )
 
     def _log_pulse_outcome(
         self, *, snap: dict, trigger_kind: str | None,

@@ -8,12 +8,34 @@ implement these methods; the engine calls them.
 All methods may be sync or async. Async hooks are awaited; sync hooks
 are called directly. (The engine uses :func:`asyncio.iscoroutine`
 discipline rather than wrapping in ``asyncio.run``.)
+
+**Action vs message dispatch:** there are two dispatch hooks, and
+hosts implement at most one of them:
+
+- :py:meth:`dispatch_action` — the **modern** path. Receives a full
+  :py:class:`PulseAction` (kind / trigger / target / prompt / extra)
+  and returns an :py:class:`ActionOutcome` carrying the consequences
+  for the soul to learn from. This is how you get the impulse →
+  action → consequence → soul-update learning loop.
+- :py:meth:`dispatch_pulse` — the **backwards-compatible** path
+  preserved from clanker-soul v0.1. Equivalent to a host that only
+  handles ``direct_message`` actions and never reports consequences.
+  Existing implementations work unchanged via an internal shim.
+
+If a host implements both, the engine prefers ``dispatch_action`` for
+non-DM actions and the explicit ``dispatch_pulse`` for legacy DM
+flow.
 """
 from __future__ import annotations
 
 from typing import Awaitable, Protocol, runtime_checkable
 
-from clanker_soul.pulse.triggers import PulseTarget, Trigger
+from clanker_soul.pulse.triggers import (
+    ActionOutcome,
+    PulseAction,
+    PulseTarget,
+    Trigger,
+)
 
 
 @runtime_checkable
@@ -41,11 +63,38 @@ class PulseHost(Protocol):
 
     def dispatch_pulse(self, target: PulseTarget, trigger: Trigger,
                       prompt: str) -> Awaitable[bool] | bool:
-        """Deliver a pulse: run the synthetic prompt through the agent
-        pipeline and send the response. Return True on successful
-        delivery, False if dispatch was aborted (no recipient, channel
-        down, etc.). Raised exceptions are caught and logged by the
-        engine."""
+        """**Backwards-compatible.** Deliver a direct-message pulse:
+        run the synthetic prompt through the agent pipeline and send
+        the response. Return True on successful delivery, False if
+        dispatch was aborted. Raised exceptions are caught and logged.
+
+        Hosts that want to receive non-DM action kinds (``post_public``,
+        ``comment_reply``, ``browse_topic``, etc.) or want to feed
+        consequences back into the soul should implement
+        :py:meth:`dispatch_action` instead.
+        """
+        ...
+
+    def dispatch_action(
+        self, action: PulseAction,
+    ) -> "Awaitable[ActionOutcome] | ActionOutcome":
+        """Enact a :py:class:`PulseAction` against the real world and
+        return what happened.
+
+        The host inspects ``action.kind`` and routes to the appropriate
+        real-world effect — Twitter for ``post_public``, the chat
+        channel for ``direct_message``, a search tool for
+        ``browse_topic``, no-op for ``withdraw``, etc.
+
+        The returned :py:class:`ActionOutcome.consequences` tuple is
+        the **learning signal**. Score events generated from the
+        real-world result (a post that got praise, a comment that got
+        ratio'd, a DM that got ignored) are auto-ingested by the
+        engine so the soul learns from its own actions.
+
+        Hosts that only need legacy DM behavior can leave this method
+        unimplemented and use :py:meth:`dispatch_pulse` instead.
+        """
         ...
 
     def due_reminders(self) -> list[dict]:

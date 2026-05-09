@@ -60,6 +60,9 @@ from clanker_soul.physics import (
     soul_distance,
 )
 from clanker_soul.pulse import (
+    ACTION_KINDS,
+    ActionOutcome,
+    PulseAction,
     PulseConfig,
     PulseEngine,
     PulseHost,
@@ -76,7 +79,7 @@ from clanker_soul.soul import (
     TraumaReservoir,
 )
 
-__version__ = "0.10.0"
+__version__ = "0.11.0"
 
 __all__ = [
     # Conversational layer
@@ -99,12 +102,15 @@ __all__ = [
     "dim_resilience",
     "POSITIVE_PATTERNS",
     "HEAVY_PATTERNS",
-    # Pulse
+    # Pulse / motivation
     "PulseEngine",
     "PulseHost",
     "PulseConfig",
     "PulseTarget",
     "Trigger",
+    "PulseAction",
+    "ActionOutcome",
+    "ACTION_KINDS",
     # Event log
     "EventLog",
     "IngestRecord",
