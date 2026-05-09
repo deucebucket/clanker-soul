@@ -191,7 +191,27 @@ class SoulStore:
         db_path.parent.mkdir(parents=True, exist_ok=True)
         self._db = sqlite3.connect(str(db_path), check_same_thread=False)
         self._db_lock = threading.Lock()
-        self._db.execute(
+        self._init_schema()
+
+    @property
+    def connection(self) -> sqlite3.Connection:
+        """Underlying SQLite connection. Exposed so sibling modules
+        (EventLog, ConfigOverrides) can share the same connection +
+        lock instead of opening a second handle."""
+        return self._db
+
+    @property
+    def lock(self) -> threading.Lock:
+        return self._db_lock
+
+    def _init_schema(self) -> None:
+        """Create all v0.2 tables idempotently. Safe to run on:
+        - a fresh database (creates everything)
+        - a v0.1 database (only soul_state) — adds the new tables
+        - a v0.2 database (everything already there) — no-op
+        """
+        c = self._db
+        c.execute(
             """
             CREATE TABLE IF NOT EXISTS soul_state (
                 agent_id TEXT PRIMARY KEY,
@@ -202,7 +222,67 @@ class SoulStore:
             )
             """
         )
-        self._db.commit()
+        c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts REAL NOT NULL,
+                agent_id TEXT NOT NULL,
+                raw_score TEXT NOT NULL,
+                primed_score TEXT,
+                mood_before TEXT,
+                mood_after TEXT NOT NULL,
+                soul_before TEXT NOT NULL,
+                soul_after TEXT NOT NULL,
+                weight_raw REAL NOT NULL,
+                armor REAL NOT NULL,
+                weight_effective REAL NOT NULL,
+                breached INTEGER NOT NULL,
+                breach_delta REAL NOT NULL,
+                patterns TEXT NOT NULL,
+                classification TEXT,
+                why TEXT NOT NULL
+            )
+            """
+        )
+        c.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_events_agent_ts
+                ON events (agent_id, ts DESC)
+            """
+        )
+        c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS config_overrides (
+                agent_id TEXT PRIMARY KEY,
+                physics_config_overrides TEXT NOT NULL DEFAULT '{}',
+                soul_overrides TEXT NOT NULL DEFAULT '{}',
+                last_modified REAL NOT NULL
+            )
+            """
+        )
+        c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS pulse_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts REAL NOT NULL,
+                agent_id TEXT NOT NULL,
+                snap TEXT NOT NULL,
+                trigger_kind TEXT,
+                suppressed_reason TEXT,
+                target_present INTEGER NOT NULL,
+                dispatched INTEGER NOT NULL,
+                prompt_text TEXT
+            )
+            """
+        )
+        c.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_pulse_log_agent_ts
+                ON pulse_log (agent_id, ts DESC)
+            """
+        )
+        c.commit()
 
     @classmethod
     def get(cls, db_path: Path | str) -> "SoulStore":
