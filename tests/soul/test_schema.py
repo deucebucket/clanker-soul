@@ -78,6 +78,7 @@ def test_fresh_db_has_all_v02_tables(tmp_path) -> None:
     SoulStore(db)
     assert _table_names(db) == {
         "soul_state", "events", "config_overrides", "pulse_log",
+        "prompt_corpus", "face_recency",
     }
 
 
@@ -116,8 +117,73 @@ def test_pulse_log_table_has_documented_columns(tmp_path) -> None:
         "id", "ts", "agent_id", "snap",
         "trigger_kind", "suppressed_reason",
         "target_present", "dispatched", "prompt_text",
+        # M3.3 — face attribution.
+        "face_id",
     }
     assert expected <= set(cols)
+
+
+def test_prompt_corpus_table_has_documented_columns(tmp_path) -> None:
+    db = tmp_path / "pc.db"
+    SoulStore(db)
+    cols = _columns(db, "prompt_corpus")
+    expected = {
+        "id", "trigger_kinds", "vadugwi_predicates",
+        "situation_tags", "situation_match", "memory_anchor",
+        "cooldown_seconds", "base_weight", "motif", "template",
+        "branch_keys", "source", "created_at", "retired_at",
+    }
+    assert expected <= set(cols)
+
+
+def test_face_recency_table_has_documented_columns(tmp_path) -> None:
+    db = tmp_path / "fr.db"
+    SoulStore(db)
+    cols = _columns(db, "face_recency")
+    expected = {"agent_id", "face_id", "last_fired_at", "fire_count"}
+    assert expected <= set(cols)
+
+
+def test_v02_db_gains_face_id_column_on_open(tmp_path) -> None:
+    """A v0.2 pulse_log without face_id must gain the column when opened
+    by the M3.3 SoulStore — agents that ran before M3.3 keep working."""
+    db = tmp_path / "legacy_v02.db"
+    conn = sqlite3.connect(str(db))
+    try:
+        conn.execute(
+            """
+            CREATE TABLE pulse_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts REAL NOT NULL,
+                agent_id TEXT NOT NULL,
+                snap TEXT NOT NULL,
+                trigger_kind TEXT,
+                suppressed_reason TEXT,
+                target_present INTEGER NOT NULL,
+                dispatched INTEGER NOT NULL,
+                prompt_text TEXT
+            )
+            """
+        )
+        conn.execute(
+            "INSERT INTO pulse_log "
+            "(ts, agent_id, snap, target_present, dispatched) "
+            "VALUES (1.0, 'pre-m33', '{}', 0, 0)",
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    SoulStore(db)
+    cols = _columns(db, "pulse_log")
+    assert "face_id" in cols, f"face_id missing after upgrade: {cols}"
+    # Pre-existing row survives upgrade.
+    conn = sqlite3.connect(str(db))
+    try:
+        n = conn.execute("SELECT COUNT(*) FROM pulse_log").fetchone()[0]
+    finally:
+        conn.close()
+    assert n == 1
 
 
 # ---------------------------------------------------------------------------
@@ -153,6 +219,7 @@ def test_reopening_db_is_idempotent(tmp_path) -> None:
     SoulStore(db)
     assert _table_names(db) == {
         "soul_state", "events", "config_overrides", "pulse_log",
+        "prompt_corpus", "face_recency",
     }
 
 
@@ -205,6 +272,7 @@ def test_v01_db_upgrades_without_losing_soul_state(tmp_path) -> None:
     # And all v0.2 tables now exist.
     assert _table_names(db) == {
         "soul_state", "events", "config_overrides", "pulse_log",
+        "prompt_corpus", "face_recency",
     }
 
 

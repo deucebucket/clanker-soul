@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **M3.3 — corpus persistence + cross-restart cooldown.** New
+  `clanker_soul.pulse.corpus_store.CorpusStore` wraps the
+  `SoulStore` connection and provides face CRUD (`save_face`,
+  `save_faces`, `load_faces`, `retire_face`, `replace_all`,
+  `count_faces`) plus per-agent recency upserts (`note_fired`,
+  `load_recency`). New `PersistentRecencyLog(corpus_store, agent_id)`
+  is a drop-in replacement for the in-memory `RecencyLog` that
+  preloads from disk on construction so face cooldowns survive
+  process restart. The schema gains two tables — `prompt_corpus`
+  (faces, source-tagged + soft-deletable via `retired_at`) and
+  `face_recency` ((agent_id, face_id) primary key with
+  `last_fired_at` + `fire_count`). The existing `pulse_log` gains a
+  `face_id` column via in-place `ALTER TABLE` — agents that ran on
+  v0.2 keep working unchanged. `SoulPlugin` learns two new kwargs
+  (`extra_corpus=Iterable[PromptFace]`, `replace_corpus: bool`) and
+  exposes `plugin.corpus`, `plugin.corpus_store`, `plugin.recency`
+  properties. First-run plugins seed `DEFAULT_FACES`; subsequent
+  opens preserve operator edits and retirements. New types exported
+  from `clanker_soul`: `CorpusStore`, `PersistentRecencyLog`. New
+  `PulseEngine` kwarg `recency=RecencyLog | None` lets hosts inject
+  the persistent variant. `PulseRecord.face_id` is now stamped on
+  every dispatched pulse so log analysis can answer "which faces
+  actually fire" without reparsing prompt text.
+
 - **M3.2 — corpus wiring + baseline default corpus.** `compose_self_prompt`
   now accepts an optional `corpus`, `situation_tags`, `memory_topics_present`,
   `recency`, `now`, and `primed` — when a corpus is supplied the engine
