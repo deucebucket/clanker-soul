@@ -26,6 +26,14 @@ def _clamp_byte(x: int) -> int:
     return int(x)
 
 
+DIRECTION_VALUES = frozenset({
+    "SELF_DIRECTED",     # input is aimed AT the agent (insults, support, attacks)
+    "EXTERNAL_REPORT",   # input describes a real external state/event
+    "ATMOSPHERIC",       # ambient mood — environmental, not directed
+    "OBSERVATION",       # agent's own observation; neutral attribution
+})
+
+
 @dataclass(frozen=True)
 class Score:
     """A scored emotional reading on the 7 VADUGWI dimensions.
@@ -44,6 +52,31 @@ class Score:
     (e.g. ["SELF_NULLIFY", "ABANDONMENT"]) used by breach detection and
     the trauma/nourishment reservoirs. Hosts whose engine doesn't
     produce patterns can leave it empty.
+
+    ``direction`` (optional) tells the safety governor what the score
+    is *about* — input directed at the agent vs. a report about the
+    external world vs. ambient atmospheric mood. Values:
+      - ``SELF_DIRECTED``    — aimed at the agent (insults, support)
+      - ``EXTERNAL_REPORT``  — describes a real external state/event
+      - ``ATMOSPHERIC``      — ambient mood, not directed
+      - ``OBSERVATION``      — agent's own neutral observation
+      - None                 — unspecified; governor falls back to
+                               heuristics (lossy)
+
+    Direction is what lets the governor distinguish "agent is being
+    attacked, this is an emotional spike" from "the world is on fire,
+    this is a real emergency."
+
+    ``source`` (optional) is a free-form provenance string — where
+    this score originated. Hosts can use a URL, a channel id
+    (``"telegram:chat:12345"``), or a category (``"x.com"``,
+    ``"internal_observation"``, ``"calendar"``). Used by the
+    governor's state-context generator so the agent can articulate
+    *why* it feels what it feels: "I'm down because of [source]."
+    Cross-context: a Score from browsing X carries through to a
+    Telegram conversation because the agent's mood is shared across
+    channels (one Soul per agent_id). Source attribution is what
+    lets the agent EXPLAIN that to the user.
     """
 
     v: int = 128
@@ -54,6 +87,8 @@ class Score:
     w: int = 128
     i: int = 128
     patterns: tuple[str, ...] = field(default_factory=tuple)
+    direction: str | None = None
+    source: str | None = None
 
     def __post_init__(self) -> None:
         # Clamp + freeze patterns as a tuple for hashability and
@@ -67,6 +102,15 @@ class Score:
         object.__setattr__(self, "i", _clamp_byte(self.i))
         if not isinstance(self.patterns, tuple):
             object.__setattr__(self, "patterns", tuple(self.patterns or ()))
+        # Validate direction if provided
+        if self.direction is not None:
+            normalized = self.direction.upper()
+            if normalized not in DIRECTION_VALUES:
+                raise ValueError(
+                    f"direction must be one of {sorted(DIRECTION_VALUES)} "
+                    f"or None; got {self.direction!r}"
+                )
+            object.__setattr__(self, "direction", normalized)
 
     def as_tuple(self) -> tuple[int, int, int, int, int, int, int]:
         return (self.v, self.a, self.d, self.u, self.g, self.w, self.i)
@@ -84,4 +128,4 @@ class Score:
         return cls(v=v, a=a, d=d, u=u, g=g, w=w, i=i, patterns=tuple(patterns))
 
 
-__all__ = ["Score"]
+__all__ = ["Score", "DIRECTION_VALUES"]

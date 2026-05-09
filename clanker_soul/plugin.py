@@ -25,8 +25,17 @@ from pathlib import Path
 
 from clanker_soul.eventlog import (
     EventLog,
+    IngestRecord,
     NullEventLog,
     SqliteEventLog,
+)
+from clanker_soul.governor import (
+    CapabilityLevel,
+    CrisisDiagnosis,
+    GovernorConfig,
+    assess_capability,
+    compose_state_context,
+    crisis_signal,
 )
 from clanker_soul.overrides import ConfigOverrides
 from clanker_soul.physics import (
@@ -68,6 +77,10 @@ class SoulPlugin:
       ``event_log``    — bool. Default True wires a :py:class:`SqliteEventLog`
                          that writes every ingest + pulse to the v0.2
                          tables. Set False for a fully quiet plugin.
+      ``governor_config`` — optional :py:class:`GovernorConfig` for
+                         the safety governor (capability gating +
+                         crisis discrimination). Defaults to
+                         standard thresholds.
     """
 
     def __init__(
@@ -78,6 +91,7 @@ class SoulPlugin:
         config: PhysicsConfig | None = None,
         default_soul: SoulState | None = None,
         event_log: bool | EventLog = True,
+        governor_config: GovernorConfig | None = None,
     ) -> None:
         self._agent_id = agent_id
         self._db_path = Path(db_path)
@@ -117,6 +131,7 @@ class SoulPlugin:
             overrides=self._overrides,
             agent_id=agent_id,
         )
+        self._governor_config = governor_config or GovernorConfig()
         self._closed = False
 
     # ------------------------------------------------------------------
@@ -182,6 +197,91 @@ class SoulPlugin:
             "trauma_load": self._physics.trauma.load(),
             "nourishment_load": self._physics.nourishment.load(),
         }
+
+    # ------------------------------------------------------------------
+    # Safety governor — capability gating + crisis discrimination
+    # ------------------------------------------------------------------
+
+    @property
+    def governor_config(self) -> GovernorConfig:
+        return self._governor_config
+
+    def capability_level(self) -> CapabilityLevel:
+        """Return the agent's current operational restriction level
+        based on mood/soul/trauma state. Lower = freer; higher = more
+        restricted. Hosts use this to filter which tools to expose."""
+        return assess_capability(self.snapshot(), self._governor_config)
+
+    def crisis_signal(
+        self, *, recent_events: list[IngestRecord] | None = None,
+    ) -> CrisisDiagnosis:
+        """Discriminate emotional spike vs real-world emergency.
+
+        ``recent_events`` defaults to the most-recent significant
+        events from the event log (negative-classification or
+        breached, capped at ``GovernorConfig.crisis_window_events``).
+        Hosts can pass their own list — e.g. only events from the
+        last 30 minutes — for custom windowing."""
+        if recent_events is None:
+            recent_events = self._fetch_recent_significant_events()
+        return crisis_signal(recent_events, self._governor_config)
+
+    def state_context(
+        self, *,
+        level: CapabilityLevel | None = None,
+        recent_events: list[IngestRecord] | None = None,
+        crisis: CrisisDiagnosis | None = None,
+    ) -> str:
+        """Produce the system-prompt-ready string the agent reads to
+        understand its own current operational state. The host
+        prepends this to the agent's system prompt each turn so the
+        agent knows:
+
+          - what restriction level it's at and why
+          - what's still allowed (always: messaging the user)
+          - which numbers must recover for restrictions to ease
+          - what recent significant events were and where they came from
+          - whether this looks like an emergency or a spike
+
+        Empty string when level is UNRESTRICTED with no notable recent
+        events — no need to chatter at the agent in normal operation.
+
+        Defaults to computing level/recent_events/crisis fresh; pass
+        them in if you've already computed them this turn (avoids
+        re-querying)."""
+        snap = self.snapshot()
+        if level is None:
+            level = assess_capability(snap, self._governor_config)
+        if recent_events is None:
+            recent_events = self._fetch_recent_significant_events()
+        if crisis is None:
+            crisis = crisis_signal(recent_events, self._governor_config)
+        return compose_state_context(
+            level, snap, self._governor_config,
+            recent_events=recent_events, crisis=crisis,
+        )
+
+    def _fetch_recent_significant_events(self) -> list[IngestRecord]:
+        """Pull recent negative-classification or breached events from
+        the log. Returns an empty list when no event log is wired
+        (NullEventLog) — graceful degradation."""
+        if not isinstance(self._event_log, SqliteEventLog):
+            return []
+        # Read more than the window so we can filter for significance
+        # and still have enough left.
+        candidates = self._event_log.read_ingest(
+            self._agent_id,
+            limit=self._governor_config.crisis_window_events * 5,
+        )
+        significant = [
+            ev for ev in candidates
+            if ev.classification == "negative" or ev.breached
+        ]
+        return significant[: self._governor_config.crisis_window_events]
+
+    # ------------------------------------------------------------------
+    # Persistence
+    # ------------------------------------------------------------------
 
     def save(self) -> None:
         """Flush soul + reservoirs to disk. Idempotent — call as often

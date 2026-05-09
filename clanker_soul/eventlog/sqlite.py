@@ -29,6 +29,8 @@ def _score_to_json(score: Score) -> str:
         "v": score.v, "a": score.a, "d": score.d, "u": score.u,
         "g": score.g, "w": score.w, "i": score.i,
         "patterns": list(score.patterns),
+        "direction": score.direction,
+        "source": score.source,
     })
 
 
@@ -40,6 +42,8 @@ def _score_from_json(blob: str | None) -> Score | None:
         v=d["v"], a=d["a"], d=d["d"], u=d["u"],
         g=d["g"], w=d["w"], i=d["i"],
         patterns=tuple(d.get("patterns", ())),
+        direction=d.get("direction"),
+        source=d.get("source"),
     )
 
 

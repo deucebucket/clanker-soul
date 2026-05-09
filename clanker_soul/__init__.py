@@ -28,6 +28,11 @@ from clanker_soul.eventlog import (
     PulseRecord,
     SqliteEventLog,
 )
+from clanker_soul.governor import (
+    CapabilityLevel,
+    CrisisDiagnosis,
+    GovernorConfig,
+)
 from clanker_soul.overrides import (
     ConfigOverrides,
     OverrideBundle,
@@ -71,7 +76,7 @@ from clanker_soul.soul import (
     TraumaReservoir,
 )
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
     # Conversational layer
@@ -119,6 +124,10 @@ __all__ = [
     "PRESETS",
     # One-call plugin
     "SoulPlugin",
+    # Safety governor
+    "CapabilityLevel",
+    "CrisisDiagnosis",
+    "GovernorConfig",
     # Meta
     "__version__",
 ]
