@@ -33,6 +33,7 @@ from clanker_soul.overrides import (
     OverrideBundle,
     apply_overrides,
 )
+from clanker_soul.plugin import SoulPlugin
 from clanker_soul.presets import (
     ADULT,
     ALL as PRESETS,
@@ -116,6 +117,8 @@ __all__ = [
     "BRITTLE",
     "STOIC",
     "PRESETS",
+    # One-call plugin
+    "SoulPlugin",
     # Meta
     "__version__",
 ]
