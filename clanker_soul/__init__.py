@@ -28,6 +28,11 @@ from clanker_soul.eventlog import (
     PulseRecord,
     SqliteEventLog,
 )
+from clanker_soul.overrides import (
+    ConfigOverrides,
+    OverrideBundle,
+    apply_overrides,
+)
 from clanker_soul.physics import (
     EmotionalPhysics,
     HEAVY_PATTERNS,
@@ -92,6 +97,10 @@ __all__ = [
     "PulseRecord",
     "NullEventLog",
     "SqliteEventLog",
+    # Live-tunable overrides
+    "ConfigOverrides",
+    "OverrideBundle",
+    "apply_overrides",
     # Meta
     "__version__",
 ]
