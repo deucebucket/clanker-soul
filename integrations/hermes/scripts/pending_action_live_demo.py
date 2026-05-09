@@ -45,6 +45,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(_REPO_ROOT))
 
 from clanker_soul import (  # noqa: E402
+    LLMOutcomeClassifier,
     OutcomeClassifier,
     PendingAction,
     SoulPlugin,
@@ -99,48 +100,20 @@ def _call_model(api_key: str, system_prompt: str, user_prompt: str) -> str:
         return f"[LLM-ERROR: {type(e).__name__}: {e}]"
 
 
-# ── LLM-backed classifier ──────────────────────────────────────────────
+# ── Main demo ──────────────────────────────────────────────────────────
 
 
-class LLMOutcomeClassifier:
-    """Real-LLM classifier for the demo. Asks DeepSeek V3 Flash to
-    decide ack/ignore/mixed/unrelated for a (pending, observation) pair.
-
-    Production hosts would wrap their own model — this exists to prove
-    the OutcomeClassifier protocol works against a real LLM, not just
-    keyword matching.
+def _build_llm_classifier(api_key: str) -> LLMOutcomeClassifier:
+    """Wrap our OpenRouter / DeepSeek call as the call_model callable
+    that LLMOutcomeClassifier expects. The classifier itself ships with
+    the project; this just adapts our specific HTTP transport to the
+    `(system, user) -> str` signature.
     """
 
-    SYSTEM_PROMPT = (
-        "You are a conversation-outcome classifier. Given a message that "
-        "an AI agent sent to a human ('the agent's message') and the "
-        "human's reply ('the inbound'), decide whether the inbound:\n"
-        "  - acknowledges the agent's message (engages with it directly, "
-        "    even briefly)\n"
-        "  - ignores it (changes the subject completely or dismisses)\n"
-        "  - mixed (partially engages, partially deflects)\n"
-        "  - unrelated (didn't see the agent's message at all)\n"
-        "Respond with EXACTLY ONE WORD from: acknowledged, ignored, mixed, "
-        "unrelated. No punctuation, no explanation, no other text."
-    )
+    def call_model(system: str, user: str) -> str:
+        return _call_model(api_key, system, user)
 
-    def __init__(self, api_key: str):
-        self._api_key = api_key
-        self.last_raw_response: str | None = None
-
-    def classify(self, pending: PendingAction, observation: dict):
-        body = pending.body or "(no body)"
-        text = observation.get("text", "")
-        user_prompt = f"Agent's message: {body!r}\nInbound: {text!r}\nClassification:"
-        raw = _call_model(self._api_key, self.SYSTEM_PROMPT, user_prompt).lower().strip()
-        self.last_raw_response = raw
-        for label in ("acknowledged", "ignored", "mixed", "unrelated"):
-            if label in raw:
-                return label
-        return "unrelated"
-
-
-# ── Main demo ──────────────────────────────────────────────────────────
+    return LLMOutcomeClassifier(call_model=call_model)
 
 
 def main() -> int:
@@ -162,7 +135,7 @@ def main() -> int:
 
         classifier: OutcomeClassifier = KeywordOutcomeClassifier()
     else:
-        classifier = LLMOutcomeClassifier(api_key)
+        classifier = _build_llm_classifier(api_key)
 
     tmp = Path(tempfile.mkdtemp(prefix="pending-demo-"))
     db = tmp / "soul.db"

@@ -64,6 +64,8 @@ import uuid
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 from typing import (
+    Callable,
+    ClassVar,
     Literal,
     Protocol,
     runtime_checkable,
@@ -491,6 +493,101 @@ def _label_to_outcome(label: str) -> ClassifyOutcome:
     return "unrelated"
 
 
+@dataclass
+class LLMOutcomeClassifier:
+    """LLM-backed :py:class:`OutcomeClassifier` reference impl.
+
+    Asks an external model to decide acknowledged / ignored / mixed /
+    unrelated for a (pending, observation) pair. The model call is
+    abstracted behind a host-supplied callable so this class isn't
+    coupled to any specific provider — pass an OpenRouter wrapper, an
+    Anthropic SDK call, an Ollama call, or a stub for tests.
+
+    Why ship this rather than leave it to hosts: the live demo at
+    ``integrations/hermes/scripts/pending_action_live_demo.py`` proved
+    the prompt + parsing logic on real DeepSeek V3 Flash output. Every
+    host that wants LLM-based classification would otherwise rewrite
+    the same prompt and parser. Promoting it here makes the right path
+    the easy path.
+
+    ``call_model`` signature: ``Callable[[str, str], str]`` —
+    ``(system_prompt, user_prompt) -> assistant_text``. May be sync
+    only (the classifier is sync). Async hosts can wrap with
+    ``asyncio.run`` or use a sync wrapper.
+
+    Robustness:
+
+      * Bad model output (empty, error sentinel, no recognised label)
+        → returns ``"unrelated"`` so the pending stays open and no
+        spurious mood delta lands. Matches the soft-fail invariant.
+      * The classifier accepts label words in any case and ignores
+        leading/trailing whitespace; it walks
+        ``("acknowledged", "ignored", "mixed", "unrelated")`` in priority
+        order and returns the first one substring-present in the
+        response.
+
+    Customising the system prompt: pass ``system_prompt=`` to override
+    the default. The default works on the demo's models; hosts may
+    want to tighten or loosen it for their model.
+    """
+
+    DEFAULT_SYSTEM_PROMPT: ClassVar[str] = (
+        "You are a conversation-outcome classifier. Given a message that "
+        "an AI agent sent to a human ('the agent's message') and the "
+        "human's reply ('the inbound'), decide whether the inbound:\n"
+        "  - acknowledges the agent's message (engages with it directly, "
+        "    even briefly)\n"
+        "  - ignores it (changes the subject completely or dismisses)\n"
+        "  - mixed (partially engages, partially deflects)\n"
+        "  - unrelated (didn't see the agent's message at all)\n"
+        "Respond with EXACTLY ONE WORD from: acknowledged, ignored, mixed, "
+        "unrelated. No punctuation, no explanation, no other text."
+    )
+
+    call_model: Callable[[str, str], str]
+    system_prompt: str = field(default="")
+    label_priority: tuple[str, ...] = (
+        "acknowledged",
+        "ignored",
+        "mixed",
+        "unrelated",
+    )
+    last_raw_response: str | None = field(default=None, repr=False)
+
+    def __post_init__(self) -> None:
+        if not self.system_prompt:
+            # Use object.__setattr__ via type ignore not needed — dataclass is mutable.
+            self.system_prompt = self.DEFAULT_SYSTEM_PROMPT
+
+    def classify(
+        self,
+        pending: PendingAction,
+        observation: dict,
+    ) -> ClassifyOutcome:
+        body = pending.body or "(no body)"
+        text = observation.get("text", "")
+        user_prompt = f"Agent's message: {body!r}\nInbound: {text!r}\nClassification:"
+        try:
+            raw = self.call_model(self.system_prompt, user_prompt) or ""
+        except Exception:
+            logger.exception(
+                "LLMOutcomeClassifier.call_model raised; treating as unrelated",
+            )
+            self.last_raw_response = None
+            return "unrelated"
+        self.last_raw_response = raw
+        # An error-sentinel return like "[LLM-ERROR: ...]" should land
+        # at "unrelated" — substring matching against label_priority
+        # naturally fails for those.
+        normalized = raw.lower().strip()
+        for label in self.label_priority:
+            if label in normalized:
+                # All four label_priority entries are valid
+                # ClassifyOutcome strings — type-checker is happy.
+                return label  # type: ignore[return-value]
+        return "unrelated"
+
+
 # ── Coordinator ────────────────────────────────────────────────────────
 
 
@@ -756,6 +853,7 @@ __all__ = [
     "SqlitePendingActionStore",
     "OutcomeClassifier",
     "KeywordOutcomeClassifier",
+    "LLMOutcomeClassifier",
     "PendingCoordinator",
     "ResolutionResult",
 ]
