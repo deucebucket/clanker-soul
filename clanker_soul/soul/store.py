@@ -137,6 +137,51 @@ class SoulStore:
                 ON pulse_log (agent_id, ts DESC)
             """
         )
+        # M3.3 — pulse_log gets a face_id column. Add it idempotently
+        # via PRAGMA table_info so v0.2 databases upgrade in place.
+        existing_pulse_cols = {
+            row[1] for row in c.execute("PRAGMA table_info(pulse_log)").fetchall()
+        }
+        if "face_id" not in existing_pulse_cols:
+            c.execute("ALTER TABLE pulse_log ADD COLUMN face_id TEXT")
+        # M3.3 — corpus persistence + per-agent face recency.
+        c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS prompt_corpus (
+                id TEXT PRIMARY KEY,
+                trigger_kinds TEXT NOT NULL,
+                vadugwi_predicates TEXT NOT NULL,
+                situation_tags TEXT NOT NULL,
+                situation_match TEXT NOT NULL,
+                memory_anchor TEXT,
+                cooldown_seconds INTEGER NOT NULL,
+                base_weight REAL NOT NULL,
+                motif TEXT NOT NULL,
+                template TEXT NOT NULL,
+                branch_keys TEXT NOT NULL,
+                source TEXT NOT NULL,
+                created_at REAL NOT NULL,
+                retired_at REAL
+            )
+            """
+        )
+        c.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_prompt_corpus_active
+                ON prompt_corpus (retired_at)
+            """
+        )
+        c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS face_recency (
+                agent_id TEXT NOT NULL,
+                face_id TEXT NOT NULL,
+                last_fired_at REAL NOT NULL,
+                fire_count INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (agent_id, face_id)
+            )
+            """
+        )
         c.commit()
 
     @classmethod

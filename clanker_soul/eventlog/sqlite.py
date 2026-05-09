@@ -103,8 +103,8 @@ class SqliteEventLog:
                     """
                     INSERT INTO pulse_log (
                         ts, agent_id, snap, trigger_kind, suppressed_reason,
-                        target_present, dispatched, prompt_text
-                    ) VALUES (?,?,?,?,?,?,?,?)
+                        target_present, dispatched, prompt_text, face_id
+                    ) VALUES (?,?,?,?,?,?,?,?,?)
                     """,
                     (
                         record.ts, record.agent_id,
@@ -113,6 +113,7 @@ class SqliteEventLog:
                         1 if record.target_present else 0,
                         1 if record.dispatched else 0,
                         record.prompt,
+                        record.face_id,
                     ),
                 )
                 self._store.connection.commit()
@@ -164,7 +165,7 @@ class SqliteEventLog:
         """Return pulse records for ``agent_id``, most recent first."""
         sql = (
             "SELECT ts, agent_id, snap, trigger_kind, suppressed_reason, "
-            "       target_present, dispatched, prompt_text "
+            "       target_present, dispatched, prompt_text, face_id "
             "FROM pulse_log WHERE agent_id = ? "
             "ORDER BY ts DESC, id DESC"
         )
@@ -181,6 +182,7 @@ class SqliteEventLog:
                 trigger_kind=row[3], suppressed_reason=row[4],
                 target_present=bool(row[5]), dispatched=bool(row[6]),
                 prompt=row[7],
+                face_id=row[8],
             )
             for row in rows
         ]

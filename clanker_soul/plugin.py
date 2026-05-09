@@ -23,6 +23,8 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from typing import Iterable
+
 from clanker_soul.eventlog import (
     EventLog,
     IngestRecord,
@@ -44,6 +46,9 @@ from clanker_soul.physics import (
     PhysicsTick,
     soul_distance,
 )
+from clanker_soul.pulse.corpus import PromptCorpus, PromptFace
+from clanker_soul.pulse.corpus_defaults import DEFAULT_FACES
+from clanker_soul.pulse.corpus_store import CorpusStore, PersistentRecencyLog
 from clanker_soul.score import Score
 from clanker_soul.soul import SoulState, SoulStore
 
@@ -92,6 +97,8 @@ class SoulPlugin:
         default_soul: SoulState | None = None,
         event_log: bool | EventLog = True,
         governor_config: GovernorConfig | None = None,
+        extra_corpus: Iterable[PromptFace] | None = None,
+        replace_corpus: bool = False,
     ) -> None:
         self._agent_id = agent_id
         self._db_path = Path(db_path)
@@ -132,6 +139,32 @@ class SoulPlugin:
             agent_id=agent_id,
         )
         self._governor_config = governor_config or GovernorConfig()
+
+        # M3.3 — corpus persistence. The CorpusStore wraps the same
+        # SoulStore connection, so we don't open a second handle.
+        self._corpus_store = CorpusStore(self._store)
+        extras = tuple(extra_corpus) if extra_corpus else ()
+        if replace_corpus:
+            # Operator wants ONLY their faces — clear default + any
+            # accumulated rows, install extras.
+            self._corpus_store.replace_all(extras, source="host")
+        else:
+            # Seed defaults on first run (empty DB). On subsequent
+            # constructions leave the existing rows alone — operator
+            # edits/retirements are preserved across restart. Always
+            # upsert the extras so a host can roll out new host faces
+            # without manual DB ops.
+            if self._corpus_store.count_faces() == 0:
+                self._corpus_store.save_faces(DEFAULT_FACES, source="default")
+            if extras:
+                self._corpus_store.save_faces(extras, source="host")
+
+        # Build the live corpus from whatever now lives on disk.
+        self._corpus = PromptCorpus(self._corpus_store.load_faces())
+        # Persistent recency log — preloads agent's last-fired
+        # timestamps so cooldowns survive restart.
+        self._recency = PersistentRecencyLog(self._corpus_store, agent_id)
+
         self._closed = False
 
     # ------------------------------------------------------------------
@@ -161,6 +194,34 @@ class SoulPlugin:
     @property
     def store(self) -> SoulStore:
         return self._store
+
+    @property
+    def corpus(self) -> PromptCorpus:
+        """The live :py:class:`PromptCorpus` rebuilt from disk at
+        construction. Pass to :py:class:`PulseEngine(corpus=...)`."""
+        return self._corpus
+
+    @property
+    def corpus_store(self) -> CorpusStore:
+        """The durable :py:class:`CorpusStore`. Hosts use this for
+        runtime CRUD: ``plugin.corpus_store.save_face(...)``,
+        ``plugin.corpus_store.retire_face(face_id)``, etc."""
+        return self._corpus_store
+
+    @property
+    def recency(self) -> PersistentRecencyLog:
+        """The live :py:class:`PersistentRecencyLog`. Pass to
+        :py:class:`PulseEngine(recency=...)` so cooldowns survive
+        process restart."""
+        return self._recency
+
+    def reload_corpus(self) -> PromptCorpus:
+        """Rebuild the in-memory corpus from disk. Useful when an
+        operator UI has just edited rows and the agent needs to pick up
+        the change without a process restart. Returns the freshly-built
+        corpus (also stored on the plugin for ``plugin.corpus``)."""
+        self._corpus = PromptCorpus(self._corpus_store.load_faces())
+        return self._corpus
 
     # ------------------------------------------------------------------
     # Core operations

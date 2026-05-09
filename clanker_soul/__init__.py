@@ -68,6 +68,8 @@ from clanker_soul.pulse import (
     ACTION_KINDS,
     ActionOutcome,
     DEFAULT_FACES,
+    CorpusStore,
+    PersistentRecencyLog,
     PromptCorpus,
     PromptFace,
     PulseAction,
@@ -132,6 +134,9 @@ __all__ = [
     # Default baseline corpus (M3.2)
     "DEFAULT_FACES",
     "build_default_corpus",
+    # Corpus persistence (M3.3)
+    "CorpusStore",
+    "PersistentRecencyLog",
     # Event log
     "EventLog",
     "IngestRecord",

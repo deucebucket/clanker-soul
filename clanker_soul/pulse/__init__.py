@@ -25,6 +25,10 @@ from clanker_soul.pulse.corpus_defaults import (
     DEFAULT_FACES,
     build_default_corpus,
 )
+from clanker_soul.pulse.corpus_store import (
+    CorpusStore,
+    PersistentRecencyLog,
+)
 from clanker_soul.pulse.engine import PulseEngine
 from clanker_soul.pulse.host import PulseHost
 from clanker_soul.pulse.prompt import (
@@ -59,4 +63,7 @@ __all__ = [
     # Default baseline corpus (M3.2)
     "DEFAULT_FACES",
     "build_default_corpus",
+    # Corpus persistence (M3.3)
+    "CorpusStore",
+    "PersistentRecencyLog",
 ]

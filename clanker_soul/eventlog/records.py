@@ -48,7 +48,13 @@ class PulseRecord:
     of ``"cooldown"``, ``"no_target"``, ``"dispatch_failed"``,
     ``"no_trigger"``, or None when a pulse actually dispatched.
     ``prompt`` is the synthetic self-prompt text — None when no pulse
-    was attempted."""
+    was attempted.
+
+    ``face_id`` is the corpus face that authored the prompt — None when
+    the engine had no corpus configured or the legacy fallback path
+    fired. Recorded in M3.3 so log analysis can answer "which faces
+    actually fire" without reparsing the prompt text.
+    """
 
     ts: float
     agent_id: str
@@ -58,6 +64,7 @@ class PulseRecord:
     target_present: bool
     dispatched: bool
     prompt: str | None
+    face_id: str | None = None
 
 
 __all__ = ["IngestRecord", "PulseRecord"]

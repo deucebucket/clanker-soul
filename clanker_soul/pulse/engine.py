@@ -99,6 +99,7 @@ class PulseEngine:
         physics: "EmotionalPhysics | None" = None,
         gate: "CapabilityGate | None" = None,
         corpus: PromptCorpus | None = None,
+        recency: RecencyLog | None = None,
     ) -> None:
         if event_log is not None and not agent_id:
             raise ValueError(
@@ -129,7 +130,11 @@ class PulseEngine:
         # to the legacy deterministic prompt — every pre-M3.2 host keeps
         # working unchanged.
         self._corpus = corpus
-        self._recency: RecencyLog = RecencyLog()
+        # Optional injected recency log (M3.3). When the host has a
+        # PersistentRecencyLog (or any other RecencyLog subclass) it
+        # passes it in here so cooldowns survive restart. Default is
+        # the in-memory recency log used by M3.2.
+        self._recency: RecencyLog = recency if recency is not None else RecencyLog()
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -185,6 +190,7 @@ class PulseEngine:
                 snap=log_snap, trigger_kind=None,
                 suppressed_reason="no_trigger",
                 target_present=False, dispatched=False, prompt=None,
+                face_id=None,
             )
             return None
 
@@ -196,16 +202,18 @@ class PulseEngine:
                 snap=log_snap, trigger_kind=trigger.kind,
                 suppressed_reason="cooldown",
                 target_present=False, dispatched=False, prompt=None,
+                face_id=None,
             )
             return None
 
-        fired, prompt, target_present = await self._fire_pulse(trigger)
+        fired, prompt, target_present, face_id = await self._fire_pulse(trigger)
         if not fired:
             reason = "no_target" if not target_present else "dispatch_failed"
             self._log_pulse_outcome(
                 snap=log_snap, trigger_kind=trigger.kind,
                 suppressed_reason=reason,
                 target_present=target_present, dispatched=False, prompt=prompt,
+                face_id=face_id,
             )
             return None
 
@@ -213,6 +221,7 @@ class PulseEngine:
             snap=log_snap, trigger_kind=trigger.kind,
             suppressed_reason=None,
             target_present=True, dispatched=True, prompt=prompt,
+            face_id=face_id,
         )
         return trigger
 
@@ -504,9 +513,10 @@ class PulseEngine:
 
     async def _fire_pulse(
         self, trigger: Trigger,
-    ) -> tuple[bool, str | None, bool]:
-        """Returns ``(fired, prompt, target_present)`` so the caller
-        can log a complete outcome regardless of which path we took.
+    ) -> tuple[bool, str | None, bool, str | None]:
+        """Returns ``(fired, prompt, target_present, face_id)`` so the
+        caller can log a complete outcome including the corpus face
+        attribution.
 
         Wraps the legacy DM dispatch in the new action-based flow:
         builds a ``direct_message`` :py:class:`PulseAction`, calls
@@ -527,14 +537,14 @@ class PulseEngine:
         except Exception:
             logger.exception("most_recent_target failed")
             if target_required:
-                return False, None, False
+                return False, None, False, None
 
         if target_required and target is None:
             logger.debug(
                 "Pulse trigger=%s requires target (action=%s) — staying quiet",
                 trigger.kind, action_kind,
             )
-            return False, None, False
+            return False, None, False, None
 
         situation_tags = self._situation_tags_for(trigger)
         memory_topics = self._memory_topics_callback()
@@ -547,6 +557,7 @@ class PulseEngine:
             recency=self._recency,
             now=now_ts,
         )
+        face_id = face.id if face is not None else None
         action = PulseAction(
             kind=action_kind,
             trigger=trigger,
@@ -564,11 +575,11 @@ class PulseEngine:
                 "Pulse trigger=%s action=%s suppressed by capability gate",
                 trigger.kind, action.kind,
             )
-            return False, prompt, True
+            return False, prompt, True, face_id
 
         outcome = await self._dispatch_action_via_host(action)
         if outcome is None:
-            return False, prompt, True
+            return False, prompt, True, face_id
 
         self._absorb_consequences(outcome)
 
@@ -578,7 +589,8 @@ class PulseEngine:
             # Record the corpus face firing for recency tracking. We
             # only note delivered fires — suppressed/undelivered
             # attempts shouldn't bump cooldowns or the agent gets
-            # silenced by failed attempts.
+            # silenced by failed attempts. PersistentRecencyLog
+            # subclasses flush this to SQLite for cross-restart cooldown.
             if face is not None:
                 self._recency.note_fired(face.id, self._last_pulse_ts)
             logger.info(
@@ -586,7 +598,7 @@ class PulseEngine:
                 trigger.kind,
                 f" face={face.id}" if face is not None else "",
             )
-        return outcome.delivered, prompt, True
+        return outcome.delivered, prompt, True, face_id
 
     async def _dispatch_action_via_host(
         self, action: PulseAction,
@@ -713,6 +725,7 @@ class PulseEngine:
         self, *, snap: dict, trigger_kind: str | None,
         suppressed_reason: str | None,
         target_present: bool, dispatched: bool, prompt: str | None,
+        face_id: str | None = None,
     ) -> None:
         """Build a PulseRecord and ship it to the configured sink.
 
@@ -732,6 +745,7 @@ class PulseEngine:
                 target_present=target_present,
                 dispatched=dispatched,
                 prompt=prompt,
+                face_id=face_id,
             )
             self._event_log.log_pulse(rec)
         except Exception:
