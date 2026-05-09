@@ -29,6 +29,7 @@ from clanker_soul.pulse.prompt import compose_self_prompt
 from clanker_soul.pulse.triggers import (
     ActionOutcome,
     PulseAction,
+    PulseTarget,
     Trigger,
 )
 
@@ -37,6 +38,42 @@ if TYPE_CHECKING:
     from clanker_soul.physics import EmotionalPhysics
 
 logger = logging.getLogger(__name__)
+
+
+# Default trigger → action_kind mapping. Hosts that want to override
+# can subclass PulseEngine or wrap dispatch_action and re-route.
+_DEFAULT_TRIGGER_TO_ACTION: dict[str, str] = {
+    # Existing 5 — all DM (preserves v0.1 behavior).
+    "distress": "direct_message",
+    "elation": "direct_message",
+    "trauma_pressure": "direct_message",
+    "gratitude": "direct_message",
+    "long_silence": "direct_message",
+    # M1.2 — most stay DM, two get their own kinds.
+    "share_impulse": "direct_message",
+    "argue_impulse": "comment_reply",
+    "connect_impulse": "direct_message",
+    "reflective_impulse": "direct_message",
+    "caretake_impulse": "direct_message",
+    "withdraw_impulse": "withdraw",
+    "restless_curiosity": "browse_topic",
+}
+
+
+def _action_kind_for_trigger(trigger_kind: str) -> str:
+    """Map a trigger kind to its default action kind. Unknown triggers
+    fall back to direct_message (the safest default — hosts at least
+    know how to send a DM)."""
+    return _DEFAULT_TRIGGER_TO_ACTION.get(trigger_kind, "direct_message")
+
+
+# Action kinds that NEED a recipient. Other kinds (withdraw,
+# browse_topic, post_public, tool_invocation) can dispatch with
+# target=None.
+_TARGET_REQUIRED_ACTIONS: frozenset[str] = frozenset({
+    "direct_message",
+    "comment_reply",
+})
 
 
 class PulseEngine:
@@ -194,26 +231,40 @@ class PulseEngine:
             return None
 
     def _evaluate_trigger(self, snap: dict) -> Trigger | None:
+        """Evaluate triggers in priority order. First match wins.
+
+        Priority rationale:
+        - long_silence is a force-fire ceiling — always first
+        - distress / withdraw are highest-need
+        - elation / share / argue are emotionally charged
+        - caretake / connect are relational
+        - trauma_pressure / reflective are slow-burn
+        - gratitude is a steady-state acknowledgement
+        - restless_curiosity is the lowest-priority \"nothing else fits\"
+        """
+        cfg = self._cfg
         soul: dict = snap.get("soul") or {}
         mood: list[int] | None = snap.get("mood")
         distance: float = snap.get("soul_distance") or 0.0
         trauma: float = snap.get("trauma_load") or 0.0
         nourishment: float = snap.get("nourishment_load") or 0.0
 
-        # Force-fire on long silence
         now = datetime.now(timezone.utc).timestamp()
         idle = now - max(self._last_pulse_ts, self._last_outbound_ts)
-        if idle > self._cfg.max_quiet_seconds:
+
+        # 1. Force-fire on long silence (existing).
+        if idle > cfg.max_quiet_seconds:
             return Trigger(
                 kind="long_silence",
                 soul=soul, mood=mood,
                 metrics={"idle_seconds": int(idle)},
             )
 
-        if mood and distance > self._cfg.distance_trigger:
+        # 2. distress (existing) — highest urgency. Mood far below soul.
+        if mood and distance > cfg.distance_trigger:
             v_drop = soul.get("v", 128) - mood[0]
             w_drop = soul.get("w", 128) - mood[5]
-            if v_drop > self._cfg.distress_v_drop or w_drop > self._cfg.distress_w_drop:
+            if v_drop > cfg.distress_v_drop or w_drop > cfg.distress_w_drop:
                 return Trigger(
                     kind="distress",
                     soul=soul, mood=mood,
@@ -223,16 +274,103 @@ class PulseEngine:
                     },
                 )
 
+        # 3. withdraw_impulse (NEW) — high trauma + low W → \"need to be alone.\"
+        # Special: produces a no-op action; the agent declines to engage.
+        # Checked before all other engagement triggers so the agent can
+        # actually withdraw instead of being pulled toward outreach.
+        if (
+            mood
+            and trauma > cfg.withdraw_trauma_min
+            and mood[5] < cfg.withdraw_w_max
+        ):
+            return Trigger(
+                kind="withdraw_impulse",
+                soul=soul, mood=mood,
+                metrics={
+                    "trauma_load": round(trauma, 1),
+                    "w_mood": mood[5],
+                },
+            )
+
+        # 4. elation (existing) — full peak. Mood far above soul on V+I.
+        if mood and distance > cfg.distance_trigger:
             v_lift = mood[0] - soul.get("v", 128)
             i_lift = mood[6] - soul.get("i", 128)
-            if v_lift > self._cfg.elation_v_lift and i_lift > self._cfg.elation_i_lift:
+            if v_lift > cfg.elation_v_lift and i_lift > cfg.elation_i_lift:
                 return Trigger(
                     kind="elation",
                     soul=soul, mood=mood,
                     metrics={"distance": round(distance, 1), "v_lift": v_lift},
                 )
 
-        if trauma > self._cfg.trauma_load_trigger and trauma > nourishment * 1.5:
+        # 5. share_impulse (NEW) — moderate V/I lift + arousal +
+        # nourishment. \"I have to tell someone\" without full elation.
+        if (
+            mood
+            and (mood[0] - soul.get("v", 128)) > cfg.share_v_lift
+            and mood[1] > cfg.share_arousal_min
+            and nourishment > cfg.share_nourishment_floor
+        ):
+            return Trigger(
+                kind="share_impulse",
+                soul=soul, mood=mood,
+                metrics={
+                    "v_lift": mood[0] - soul.get("v", 128),
+                    "arousal": mood[1],
+                    "nourishment_load": round(nourishment, 1),
+                },
+            )
+
+        # 6. argue_impulse (NEW) — frustration (V drop + arousal) + intent.
+        # The agent isn't crashing (would have hit distress), just irritated
+        # and inclined to act on it.
+        if (
+            mood
+            and (soul.get("v", 128) - mood[0]) > cfg.argue_v_drop
+            and mood[1] > cfg.argue_arousal_min
+            and mood[6] > cfg.argue_intent_min
+        ):
+            return Trigger(
+                kind="argue_impulse",
+                soul=soul, mood=mood,
+                metrics={
+                    "v_drop": soul.get("v", 128) - mood[0],
+                    "arousal": mood[1],
+                    "intent": mood[6],
+                },
+            )
+
+        # 7. caretake_impulse (NEW) — perceived distress in another agent
+        # via host-supplied peer signals. Optional hook — if host doesn't
+        # implement peer_distress_signals, this trigger never fires.
+        if mood and mood[5] > cfg.caretake_self_w_min:
+            peer_signals = self._peer_distress_signals()
+            if peer_signals:
+                return Trigger(
+                    kind="caretake_impulse",
+                    soul=soul, mood=mood,
+                    metrics={
+                        "peer_count": len(peer_signals),
+                        "peers": [s.get("agent_id", "?") for s in peer_signals[:3]],
+                    },
+                )
+
+        # 8. connect_impulse (NEW) — warmth + extended quiet + low trauma.
+        # \"I miss them\" / \"want company.\"
+        if (
+            mood
+            and mood[0] > cfg.connect_v_min
+            and idle > cfg.connect_idle_min_seconds
+            and trauma < cfg.connect_max_trauma
+        ):
+            return Trigger(
+                kind="connect_impulse",
+                soul=soul, mood=mood,
+                metrics={"idle_seconds": int(idle), "trauma_load": round(trauma, 1)},
+            )
+
+        # 9. trauma_pressure (existing).
+        if trauma > cfg.trauma_load_trigger and trauma > nourishment * 1.5:
             return Trigger(
                 kind="trauma_pressure",
                 soul=soul, mood=mood,
@@ -242,14 +380,62 @@ class PulseEngine:
                 },
             )
 
-        if nourishment > self._cfg.nourishment_thank_trigger and nourishment > trauma * 2:
+        # 10. reflective_impulse (NEW) — extended quiet + sustained mood
+        # off baseline + not heavy trauma. Want to write it down.
+        if (
+            mood
+            and idle > cfg.reflective_idle_min_seconds
+            and distance > cfg.reflective_distance_min
+            and trauma < cfg.reflective_max_trauma
+        ):
+            return Trigger(
+                kind="reflective_impulse",
+                soul=soul, mood=mood,
+                metrics={
+                    "idle_seconds": int(idle),
+                    "distance": round(distance, 1),
+                },
+            )
+
+        # 11. gratitude (existing).
+        if nourishment > cfg.nourishment_thank_trigger and nourishment > trauma * 2:
             return Trigger(
                 kind="gratitude",
                 soul=soul, mood=mood,
                 metrics={"nourishment_load": round(nourishment, 1)},
             )
 
+        # 12. restless_curiosity (NEW) — high arousal + close to baseline +
+        # idle for a bit. Lowest priority — only fires when nothing heavier
+        # has anything to say.
+        if (
+            mood
+            and mood[1] > cfg.curiosity_arousal_min
+            and distance < cfg.curiosity_distance_max
+            and idle > cfg.curiosity_idle_min_seconds
+        ):
+            return Trigger(
+                kind="restless_curiosity",
+                soul=soul, mood=mood,
+                metrics={"arousal": mood[1], "idle_seconds": int(idle)},
+            )
+
         return None
+
+    def _peer_distress_signals(self) -> list[dict]:
+        """Read peer distress signals from the host if it implements
+        the optional ``peer_distress_signals`` hook. Returns an empty
+        list otherwise — the caretake_impulse trigger never fires when
+        the host isn't peer-aware."""
+        hook = getattr(self._host, "peer_distress_signals", None)
+        if not callable(hook):
+            return []
+        try:
+            signals = hook()
+            return list(signals) if signals else []
+        except Exception:
+            logger.exception("peer_distress_signals failed — treating as empty")
+            return []
 
     # ------------------------------------------------------------------
     # Execution
@@ -267,21 +453,31 @@ class PulseEngine:
         ``dispatch_action`` and falls back to ``dispatch_pulse`` for
         legacy hosts), then auto-ingests outcome consequences.
         """
+        action_kind = _action_kind_for_trigger(trigger.kind)
+        target_required = action_kind in _TARGET_REQUIRED_ACTIONS
+
+        # Always TRY to fetch a target — even target-optional actions
+        # benefit from one if the host provides it (logging,
+        # cross-references). Only error out if the action requires one
+        # and we couldn't get it.
+        target: "PulseTarget | None" = None
         try:
             target = self._host.most_recent_target()
         except Exception:
             logger.exception("most_recent_target failed")
-            return False, None, False
-        if target is None:
+            if target_required:
+                return False, None, False
+
+        if target_required and target is None:
             logger.debug(
-                "Pulse trigger=%s but no recent target — staying quiet",
-                trigger.kind,
+                "Pulse trigger=%s requires target (action=%s) — staying quiet",
+                trigger.kind, action_kind,
             )
             return False, None, False
 
         prompt = compose_self_prompt(trigger)
         action = PulseAction(
-            kind="direct_message",
+            kind=action_kind,
             trigger=trigger,
             target=target,
             prompt=prompt,
