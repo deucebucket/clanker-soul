@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-05-09
+
+The config panel release. The dashboard now lets operators tune every
+`PhysicsConfig` field and every `SoulState` personality dim live, with
+preset bundles for one-click personality reshapes. Every slider writes
+immediately through the existing `ConfigOverrides` from #4 — this is
+just the operator-facing surface for that engine.
+
+### Added
+- **`clanker_soul.ui.config`** module (#28): `FieldMeta` (per-slider
+  range/step/description), `FieldRow`, `ConfigView` view dataclasses,
+  plus `build_config_view(overrides, agent_id)`,
+  `apply_field_override(...)`, `clear_field_override(...)`, and
+  `coerce_value(meta, raw)` with strict range validation.
+- **`PHYSICS_FIELDS`** (13 entries) and **`SOUL_FIELDS`** (V/A/D/U/G/W/I)
+  field-metadata tuples. New physics fields auto-render once added to
+  this tuple — no template churn.
+- **`GET /config`** route — full operator page: agent picker, presets
+  bar (`child` / `adult` / `brittle` / `stoic`), physics section with
+  13 sliders, soul section with 7 sliders, override badges, per-field
+  reset, and a `reset all` confirm-protected wipe.
+- **`POST /config/override`** (HTMX, fires on slider `change`) — updates
+  one field, validates range, returns the freshly rendered panel.
+- **`POST /config/clear`** — drops one field if `section`+`field` given,
+  or wipes the whole bundle if not.
+- **`POST /config/preset`** — applies a named preset bundle.
+- **`templates/{config,_config_panel}.html`** — full page + panel
+  partial. Sliders show the current value, default value, override
+  state, and (on hover) the field description.
+- Nav in `base.html` enables the `config` link.
+
 ## [0.6.0] — 2026-05-09
 
 The events log release. Forensic view of every ingest event the agent
