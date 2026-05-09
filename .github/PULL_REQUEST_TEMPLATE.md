@@ -17,6 +17,7 @@ Closes #
 ## Backward compatibility
 <!-- Does this break the existing API? If so, why is that acceptable? -->
 
-## Changelog
-<!-- Confirm CHANGELOG.md [Unreleased] was updated. -->
-- [ ] `CHANGELOG.md` updated under `[Unreleased]`
+## Changelog & versioning
+<!-- Every user-visible change must land in CHANGELOG.md under [Unreleased]. -->
+- [ ] `CHANGELOG.md` updated under `[Unreleased]` (`### Added`/`### Changed`/`### Fixed`/`### Removed`)
+- [ ] If this PR cuts a release: `pyproject.toml` `version` and `clanker_soul/__init__.py` `__version__` are bumped and match; `[Unreleased]` heading renamed to `[X.Y.Z] — YYYY-MM-DD`

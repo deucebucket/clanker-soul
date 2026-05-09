@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-05-09
+
+The drop-in plugin release. `pip install clanker-soul` + six lines of code now gets any
+agent framework a fully-wired VADUGWI runtime with persistent soul, durable event log,
+live-tunable knobs, and personality presets.
+
 ### Changed
 - **Refactor: split monolithic modules into focused subpackages** (#21). `physics.py`,
   `pulse.py`, `soul.py`, and `eventlog.py` are now subpackages with one concept per file:
@@ -97,5 +103,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Host-agnostic `PulseEngine` driven by a `PulseHost` protocol.
 - Test suite covering physics, soul, score, and pulse triggers.
 
-[Unreleased]: https://github.com/deucebucket/clanker-soul/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/deucebucket/clanker-soul/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/deucebucket/clanker-soul/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/deucebucket/clanker-soul/releases/tag/v0.1.0
