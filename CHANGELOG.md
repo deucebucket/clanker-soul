@@ -18,6 +18,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   v0.1 databases (which only had `soul_state`) in place without data loss.
 - `SoulStore.connection` and `SoulStore.lock` properties so sibling modules can share the
   same SQLite connection and write lock (avoids second-handle contention).
+- **`clanker_soul.overrides` module** (#4): live-tunable `PhysicsConfig` + `SoulState`
+  surface for the UI. `OverrideBundle` is a frozen partial-fields dataclass; `ConfigOverrides`
+  reads/writes the v0.2 `config_overrides` table; `apply_overrides()` is a pure merge
+  function. `EmotionalPhysics` accepts an optional `overrides=` kwarg and gains a
+  `reload_overrides()` method that applies bundle deltas in-place. Field-level reversion:
+  removing a previously-overridden field restores it to its constructor value, while
+  fields that were never overridden (and may have drifted) are left alone — drift is
+  preserved across reload calls. Unknown override keys are logged at WARNING and ignored
+  for forward-compat.
 - **EventLog wiring** (#3): `EmotionalPhysics` and `PulseEngine` now accept optional
   `event_log` + `agent_id` constructor kwargs. When provided, every `ingest()` call emits
   one `IngestRecord` (with `mood_before`/`mood_after`, `soul_before`/`soul_after`,

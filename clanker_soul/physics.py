@@ -30,7 +30,7 @@ from __future__ import annotations
 import logging
 import math
 import time
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field, fields as dc_fields, replace
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
@@ -43,6 +43,7 @@ from clanker_soul.soul import (
 
 if TYPE_CHECKING:
     from clanker_soul.eventlog import EventLog, IngestRecord
+    from clanker_soul.overrides import ConfigOverrides
 
 logger = logging.getLogger(__name__)
 
@@ -289,12 +290,13 @@ class EmotionalPhysics:
         config: PhysicsConfig | None = None,
         *,
         event_log: "EventLog | None" = None,
+        overrides: "ConfigOverrides | None" = None,
         agent_id: str | None = None,
     ) -> None:
-        if event_log is not None and not agent_id:
+        if (event_log is not None or overrides is not None) and not agent_id:
             raise ValueError(
-                "agent_id is required when event_log is provided "
-                "(log rows are scoped per-agent)"
+                "agent_id is required when event_log or overrides is provided "
+                "(rows are scoped per-agent)"
             )
         self.soul = soul
         self.trauma = trauma if trauma is not None else TraumaReservoir()
@@ -305,6 +307,70 @@ class EmotionalPhysics:
         self._last_tick: PhysicsTick | None = None
         self._event_log = event_log
         self._agent_id = agent_id
+        self._overrides_provider = overrides
+        # Snapshot constructor values so removing an override can revert
+        # cleanly. We track which fields are *currently* overridden so
+        # un-overridden soul fields (which may have drifted) aren't
+        # clobbered.
+        self._original_config: dict[str, object] = {
+            f.name: getattr(self.config, f.name)
+            for f in dc_fields(self.config)
+        }
+        self._original_soul: dict[str, object] = {
+            f.name: getattr(self.soul, f.name)
+            for f in dc_fields(self.soul)
+        }
+        self._active_physics_overrides: set[str] = set()
+        self._active_soul_overrides: set[str] = set()
+
+    def reload_overrides(self) -> None:
+        """Pull the current override bundle for this agent and apply
+        deltas in-place to ``self.config`` and ``self.soul``.
+
+        Field-level reversion: when a field that was previously
+        overridden is no longer in the bundle, that field is restored
+        to its constructor value. Soul fields that were *never*
+        overridden are left alone — drift is preserved.
+
+        No-op if no overrides provider was supplied at construction.
+        Cheap enough to call at the start of every tick."""
+        if self._overrides_provider is None or not self._agent_id:
+            return
+        bundle = self._overrides_provider.get(self._agent_id)
+
+        # PHYSICS CONFIG
+        new_physics_keys = set(bundle.physics.keys())
+        physics_field_names = {f.name for f in dc_fields(self.config)}
+        # Revert fields that were overridden but no longer are.
+        for field_name in (self._active_physics_overrides - new_physics_keys):
+            if field_name in self._original_config:
+                setattr(self.config, field_name,
+                        self._original_config[field_name])
+        # Apply current overrides.
+        for field_name, value in bundle.physics.items():
+            if field_name not in physics_field_names:
+                logger.warning(
+                    "ignoring unknown PhysicsConfig override: %r", field_name,
+                )
+                continue
+            setattr(self.config, field_name, value)
+        self._active_physics_overrides = new_physics_keys & physics_field_names
+
+        # SOUL
+        new_soul_keys = set(bundle.soul.keys())
+        soul_field_names = {f.name for f in dc_fields(self.soul)}
+        for field_name in (self._active_soul_overrides - new_soul_keys):
+            if field_name in self._original_soul:
+                setattr(self.soul, field_name,
+                        self._original_soul[field_name])
+        for field_name, value in bundle.soul.items():
+            if field_name not in soul_field_names:
+                logger.warning(
+                    "ignoring unknown SoulState override: %r", field_name,
+                )
+                continue
+            setattr(self.soul, field_name, value)
+        self._active_soul_overrides = new_soul_keys & soul_field_names
 
     @property
     def mood(self) -> Score | None:
