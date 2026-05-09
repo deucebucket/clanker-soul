@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-05-09
+
+The runnable-examples release. Cuts time-to-first-event from "read 400
+lines of docs" to "run one script."
+
+### Added
+- **`examples/`** directory (#39) with four self-contained scripts:
+  - `01_minimal.py` — the smallest possible integration. `SoulPlugin`,
+    a few hand-built `Score`s, print the state-context block.
+  - `02_async_host.py` — async ticker calling `plugin.tick()` on a
+    loop. Demonstrates that the same context-manager API works in
+    async code without a separate surface.
+  - `03_custom_event_sink.py` — implementing the `EventLog` Protocol
+    from scratch as an ndjson file sink. Demonstrates the soft-fail
+    invariant pattern (logging failures must not raise into ingest).
+    Uses the lower-level `EmotionalPhysics(...)` constructor directly,
+    not `SoulPlugin`.
+  - `04_pulse_host.py` — minimum `PulseHost`: stdout-only host that
+    satisfies all six protocol hooks. Drives mood far below soul to
+    fire a `distress` pulse and prints the synthetic self-prompt.
+- **`examples/README.md`** — index + patterns-worth-copying section.
+- **`tests/test_examples.py`** — CI smoke-test that runs each example
+  as a subprocess and asserts exit 0. If an example breaks (API drift,
+  removed kwarg, forgotten import), CI catches it before an adopter
+  copies broken code from the docs.
+- README "Examples" section linking to the four scripts.
+
 ## [0.8.2] — 2026-05-09
 
 CI hotfix release. The `[ui]` extra was silently relying on a transitive
