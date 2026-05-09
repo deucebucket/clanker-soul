@@ -180,6 +180,22 @@ clanker-soul prune --db ./soul.db --before 2026-01-01 --agent-id alice -y
 clanker-soul ui    --db ./soul.db   # requires [ui] extra
 ```
 
+## Examples
+
+Runnable wire-up samples in [`examples/`](examples/README.md):
+
+- [`01_minimal.py`](examples/01_minimal.py) — the smallest working integration
+- [`02_async_host.py`](examples/02_async_host.py) — async ticker calling `plugin.tick()`
+- [`03_custom_event_sink.py`](examples/03_custom_event_sink.py) — implementing the `EventLog` Protocol with an ndjson sink
+- [`04_pulse_host.py`](examples/04_pulse_host.py) — minimum `PulseHost` that fires a distress pulse to stdout
+
+```bash
+pip install -e ".[ui]"
+python examples/01_minimal.py
+```
+
+CI smoke-tests every example on every PR — if you copy from one and your version stops working, please file an issue.
+
 ## Advanced usage
 
 If you need to bypass persistence or compose your own event log, use `EmotionalPhysics` directly:

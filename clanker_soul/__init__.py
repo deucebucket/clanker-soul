@@ -76,7 +76,7 @@ from clanker_soul.soul import (
     TraumaReservoir,
 )
 
-__version__ = "0.8.2"
+__version__ = "0.9.0"
 
 __all__ = [
     # Conversational layer
