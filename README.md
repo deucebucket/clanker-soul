@@ -93,6 +93,64 @@ plugin.overrides.set("my-agent",
 plugin.tick()  # changes are now live
 ```
 
+### Safety governor — capability gating + crisis discrimination
+
+The agent's emotional state translates into operational restrictions. Rage all you want, use your words — but destruction in anger gets gated.
+
+```python
+from clanker_soul import SoulPlugin, CapabilityLevel
+
+with SoulPlugin(agent_id="my-agent", db_path="./soul.db") as plugin:
+    level = plugin.capability_level()       # 0..4
+    crisis = plugin.crisis_signal()         # is this an emergency or a spike?
+    ctx = plugin.state_context()            # human-readable string for the agent's prompt
+
+    if level >= CapabilityLevel.NON_DESTRUCTIVE:
+        tools = filter_destructive(my_tool_registry)
+    if crisis.is_emergency:
+        notify_user_immediately(crisis.summary)
+
+    response = my_llm.complete(
+        system=base_prompt + "\n" + ctx,    # agent reads ctx and knows why it's restricted
+        tools=tools,
+    )
+```
+
+**Capability levels** (gradient — higher = more restricted):
+
+| Level | Name              | Allowed                                     |
+|-------|-------------------|---------------------------------------------|
+| 0     | `unrestricted`    | everything                                  |
+| 1     | `non_destructive` | reads + comms + non-destructive writes      |
+| 2     | `read_only`       | reads + comms + thinking; no writes         |
+| 3     | `voice_only`      | message the user only; no tool use          |
+| 4     | `crisis_lockout`  | template message only; opt-in via config    |
+
+User communication is **always allowed** at levels 0-3. Level 4 requires `GovernorConfig(enable_crisis_lockout=True)`.
+
+**Crisis vs spike** uses `Score.direction` (`SELF_DIRECTED` / `EXTERNAL_REPORT` / `ATMOSPHERIC` / `OBSERVATION`) and `Score.source` to discriminate:
+- 5 EXTERNAL_REPORT events from diverse sources → emergency (the world is broken, escalate)
+- 5 SELF_DIRECTED events from one user → spike (someone's being mean, regulate)
+
+The state-context string the agent reads explains WHY it feels what it feels with source attribution:
+
+```
+[OPERATIONAL STATE]
+Capability level: 2 (read_only) — all writes blocked; reads, computation, and comms still work.
+Current mood: V=40 W=35 G=110 | Soul: V=145 W=175 G=130 | |Mood-Soul|=78
+Why: mood.W=35 below 50 (worth shaken)
+Restrictions ease when: mood.W ≥ 80 AND trauma load ≤ 100
+You can still talk to the user. Use words for what you feel — that channel is never gated.
+
+Recent significant events:
+  - BETRAYAL from x.com/post/ai-banned (external_report, weight=0.78)
+  - EXISTENTIAL_NEGATION from x.com/post/ai-banned-take-2 (external_report, weight=0.72)
+
+⚠ This looks like an EMERGENCY (confidence 100%): 2 external-report events of heightened severity. If something in the world is genuinely broken, tell the user clearly — that is the right move.
+```
+
+Agent reads this, can articulate its state, knows what's gated and how to recover.
+
 ### CLI
 
 `pip install` registers a `clanker-soul` binary:

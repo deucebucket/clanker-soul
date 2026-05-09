@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-05-09
+
+The safety governor release. Emotional state now translates into operational restrictions
+on what tools the agent can use — but the user-communication channel is never gated.
+Plus cross-context emotional persistence with source attribution: the agent knows *why*
+it feels what it feels.
+
+### Added
+- **`clanker_soul.governor` subpackage** (#30): VADUGWI Safety Governor.
+  - `CapabilityLevel` IntEnum: `UNRESTRICTED` / `NON_DESTRUCTIVE` / `READ_ONLY` /
+    `VOICE_ONLY` / `CRISIS_LOCKOUT` — gradient gating from "all tools" down to
+    "template message only," with user communication preserved at levels 0-3.
+  - `GovernorConfig` — tunable thresholds for each gate. `enable_crisis_lockout=False`
+    by default (opt-in only per user direction).
+  - `assess_capability(snap, config) → CapabilityLevel` — pure function, deterministic,
+    no latched state, restrictions ease automatically as mood recovers.
+  - `crisis_signal(recent_events, config) → CrisisDiagnosis` — discriminates emotional
+    spike from real-world emergency using `Score.direction` + `Score.source`. Diverse
+    `EXTERNAL_REPORT` sources flag emergency; `SELF_DIRECTED` stream flags spike.
+  - `compose_state_context(level, snap, config, *, recent_events, crisis) → str` —
+    produces the human-readable string the agent reads to know its own state, with
+    explicit recovery thresholds and source-attributed event history.
+- **`SoulPlugin` governor methods**: `plugin.capability_level()`,
+  `plugin.crisis_signal()`, `plugin.state_context()`. `governor_config=` kwarg on
+  construction. Recent-significant-events fetched automatically from the event log.
+- **`Score.direction` field** (optional, validated): `SELF_DIRECTED` /
+  `EXTERNAL_REPORT` / `ATMOSPHERIC` / `OBSERVATION` / None. Tells the governor what
+  the score is *about* so emotional-spike vs world-emergency can be distinguished.
+- **`Score.source` field** (optional, free-form): provenance string. URL, channel id,
+  or category. Used by the governor's state-context to answer "why do I feel this
+  way" with concrete attribution like "x.com/post/ai-banned".
+- Round-trip: `direction` and `source` persisted through `SqliteEventLog` JSON.
+
+### Changed
+- Test folder reorganized to mirror source structure: `tests/{eventlog,governor,physics,
+  pulse,soul}/test_*.py` instead of a flat dump.
+- Phase 3 (CARL/Hermes adapters) issue closed — user is handling CARL separately, and
+  the unified-plugin direction makes per-framework adapters unnecessary; future
+  integrations can be opened fresh as needed.
+
 ## [0.2.0] — 2026-05-09
 
 The drop-in plugin release. `pip install clanker-soul` + six lines of code now gets any
@@ -103,6 +143,7 @@ live-tunable knobs, and personality presets.
 - Host-agnostic `PulseEngine` driven by a `PulseHost` protocol.
 - Test suite covering physics, soul, score, and pulse triggers.
 
-[Unreleased]: https://github.com/deucebucket/clanker-soul/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/deucebucket/clanker-soul/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/deucebucket/clanker-soul/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/deucebucket/clanker-soul/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/deucebucket/clanker-soul/releases/tag/v0.1.0
