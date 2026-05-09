@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`LLMOutcomeClassifier` — first-class LLM-backed classifier (#64).**
+  Promotes the inline LLM classifier from the #57 live demo into a
+  shipped `clanker_soul.pending.LLMOutcomeClassifier`. Generic
+  `call_model: Callable[[str, str], str]` callable so the classifier
+  isn't coupled to any specific provider — pass an OpenRouter wrapper,
+  Anthropic SDK call, Ollama call, or a stub for tests. Ships the
+  validated system prompt from the demo. Falls back to `unrelated`
+  on parse failure or `call_model` exception (matches the
+  `OutcomeClassifier` soft-fail invariant). Substring-matches the
+  four label words in priority order so robust to padded responses
+  like "I'd say that's acknowledged.". Last raw response is captured
+  on the instance for debugging. New type exported from
+  `clanker_soul`: `LLMOutcomeClassifier`. The hermes pending demo
+  (`integrations/hermes/scripts/pending_action_live_demo.py`) now
+  uses this shipped class via a tiny adapter that wraps OpenRouter
+  HTTP into the `(system, user) -> str` shape — proves the same
+  classifier works against real DeepSeek V3 Flash inference. 12 new
+  unit tests using stub `call_model` callables (no network).
+
 ## [0.15.0] — 2026-05-09
 
 ### Added

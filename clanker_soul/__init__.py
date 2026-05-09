@@ -48,6 +48,7 @@ from clanker_soul.pending import (
     ClassifyOutcome,
     InMemoryPendingActionStore,
     KeywordOutcomeClassifier,
+    LLMOutcomeClassifier,
     OutcomeClassifier,
     PendingAction,
     PendingActionStore,
@@ -176,6 +177,7 @@ __all__ = [
     "SqlitePendingActionStore",
     "OutcomeClassifier",
     "KeywordOutcomeClassifier",
+    "LLMOutcomeClassifier",
     "PendingCoordinator",
     "ResolutionResult",
     # Presets

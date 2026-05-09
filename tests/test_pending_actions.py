@@ -21,6 +21,7 @@ from clanker_soul import (
     EmotionalPhysics,
     InMemoryPendingActionStore,
     KeywordOutcomeClassifier,
+    LLMOutcomeClassifier,
     OutcomeClassifier,
     PendingAction,
     PendingCoordinator,
@@ -220,6 +221,124 @@ class TestSqliteStore:
         assert got.id == "a"
         # And pending_on still finds it.
         assert len(s2.pending_on(("ch", "u"))) == 1
+
+
+# ---------------------------------------------------------------------------
+# LLMOutcomeClassifier — uses a stub callable so tests stay hermetic
+# ---------------------------------------------------------------------------
+
+
+class TestLLMClassifier:
+    def _pending(self) -> PendingAction:
+        return PendingAction.new(
+            kind="direct_message",
+            surface_key=("c",),
+            body="Hey, you OK?",
+            soul_snapshot={},
+            expected_response="(LLM-classified, expected_response unused)",
+            fired_at=_now(0),
+        )
+
+    def test_acknowledged(self):
+        calls = []
+
+        def stub(system: str, user: str) -> str:
+            calls.append((system, user))
+            return "acknowledged"
+
+        clf = LLMOutcomeClassifier(call_model=stub)
+        out = clf.classify(self._pending(), {"text": "I'm fine, thanks."})
+        assert out == "acknowledged"
+        # System prompt + user prompt both reached the model.
+        assert len(calls) == 1
+        assert "classifier" in calls[0][0].lower()
+        assert "Hey, you OK?" in calls[0][1]
+        # Last raw response captured.
+        assert clf.last_raw_response == "acknowledged"
+
+    def test_ignored(self):
+        clf = LLMOutcomeClassifier(call_model=lambda s, u: "ignored")
+        assert clf.classify(self._pending(), {"text": "anything"}) == "ignored"
+
+    def test_mixed(self):
+        clf = LLMOutcomeClassifier(call_model=lambda s, u: "mixed")
+        assert clf.classify(self._pending(), {"text": "anything"}) == "mixed"
+
+    def test_unrelated(self):
+        clf = LLMOutcomeClassifier(call_model=lambda s, u: "unrelated")
+        assert clf.classify(self._pending(), {"text": "anything"}) == "unrelated"
+
+    def test_label_in_longer_response(self):
+        # Some models prefix or pad. The classifier substring-matches.
+        clf = LLMOutcomeClassifier(
+            call_model=lambda s, u: "I'd say that's acknowledged.",
+        )
+        assert clf.classify(self._pending(), {"text": "x"}) == "acknowledged"
+
+    def test_label_priority_acknowledged_beats_ignored(self):
+        # If a confused model emits both labels, label_priority order
+        # decides — acknowledged wins by default.
+        clf = LLMOutcomeClassifier(
+            call_model=lambda s, u: "acknowledged or ignored, not sure",
+        )
+        assert clf.classify(self._pending(), {"text": "x"}) == "acknowledged"
+
+    def test_no_recognised_label_returns_unrelated(self):
+        clf = LLMOutcomeClassifier(call_model=lambda s, u: "I don't know.")
+        assert clf.classify(self._pending(), {"text": "x"}) == "unrelated"
+
+    def test_empty_response_returns_unrelated(self):
+        clf = LLMOutcomeClassifier(call_model=lambda s, u: "")
+        assert clf.classify(self._pending(), {"text": "x"}) == "unrelated"
+
+    def test_call_model_raises_returns_unrelated(self):
+        def boom(s, u):
+            raise RuntimeError("model down")
+
+        clf = LLMOutcomeClassifier(call_model=boom)
+        # Must not raise.
+        assert clf.classify(self._pending(), {"text": "x"}) == "unrelated"
+        # last_raw_response cleared on exception path.
+        assert clf.last_raw_response is None
+
+    def test_error_sentinel_string_returns_unrelated(self):
+        clf = LLMOutcomeClassifier(
+            call_model=lambda s, u: "[LLM-ERROR: Timeout: read timed out]",
+        )
+        assert clf.classify(self._pending(), {"text": "x"}) == "unrelated"
+
+    def test_custom_system_prompt(self):
+        captured = {}
+
+        def stub(system: str, user: str) -> str:
+            captured["system"] = system
+            return "acknowledged"
+
+        clf = LLMOutcomeClassifier(
+            call_model=stub,
+            system_prompt="custom: just decide ack or ignore",
+        )
+        clf.classify(self._pending(), {"text": "x"})
+        assert captured["system"] == "custom: just decide ack or ignore"
+
+    def test_pending_with_no_body(self):
+        p = PendingAction.new(
+            kind="withdraw",
+            surface_key=("c",),
+            body=None,
+            soul_snapshot={},
+            expected_response="(unused)",
+        )
+        captured = {}
+
+        def stub(system: str, user: str) -> str:
+            captured["user"] = user
+            return "unrelated"
+
+        clf = LLMOutcomeClassifier(call_model=stub)
+        clf.classify(p, {"text": "anything"})
+        # User prompt must include a body placeholder rather than crash.
+        assert "(no body)" in captured["user"]
 
 
 # ---------------------------------------------------------------------------
