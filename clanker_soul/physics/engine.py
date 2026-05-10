@@ -44,6 +44,7 @@ from clanker_soul.physics.math import (
     soul_armor,
     soul_distance,
 )
+from clanker_soul.physics.contemplation import ContemplationResult
 from clanker_soul.physics.tick import PhysicsTick
 from clanker_soul.score import Score
 from clanker_soul.soul import (
@@ -55,6 +56,7 @@ from clanker_soul.soul import (
 if TYPE_CHECKING:
     from clanker_soul.eventlog import EventLog
     from clanker_soul.overrides import ConfigOverrides
+    from clanker_soul.pulse.corpus import PromptFace
 
 logger = logging.getLogger(__name__)
 
@@ -347,6 +349,101 @@ class EmotionalPhysics:
             "drifted_dims": moved,
             "soul_now": self.soul.to_dict(),
         }
+
+    def contemplate(
+        self,
+        face: "PromptFace",
+        *,
+        weight_scale: float = 1.0,
+    ) -> ContemplationResult:
+        """Ingest a face's ``vadugwi_affinity`` as a synthetic mood-shift.
+
+        Distinct from :py:meth:`ingest`: contemplation is the M4
+        primitive for "the agent thought about a thing." It updates
+        Mood (so cascade layers can route off the delta) but does NOT
+        update soul reservoirs, trigger breach, or write an event-log
+        IngestRecord — a thought is not an event.
+
+        ``weight_scale`` (default ``1.0``) attenuates how strongly the
+        affinity blends in. Use ``< 1.0`` for fleeting thoughts and
+        ``> 1.0`` for charged ones; values outside ``[0.0, 5.0]`` are
+        clamped.
+
+        Mood-anchoring: the blend starts from current mood (or the
+        Soul-anchored fallback for first-ever contemplation), so the
+        affinity acts as a *target* the mood drifts toward, not an
+        absolute jump. A high-W agent contemplating a heavy-G face
+        moves less than a low-W agent contemplating the same face —
+        the existing ``soul_armor`` × ``dim_resilience`` machinery
+        keeps personality load-bearing here too.
+
+        Raises ``ValueError`` if ``face.vadugwi_affinity is None`` —
+        contemplation needs an explicit affinity, not a guess.
+        """
+        if face.vadugwi_affinity is None:
+            raise ValueError(
+                f"PromptFace(id={face.id!r}).vadugwi_affinity is None — "
+                "cannot contemplate a face without a 7-tuple affinity"
+            )
+
+        ws = max(0.0, min(5.0, weight_scale))
+        cfg = self.config
+        affinity = face.vadugwi_affinity
+        score = Score(
+            v=_clamp(affinity[0]),
+            a=_clamp(affinity[1]),
+            d=_clamp(affinity[2]),
+            u=_clamp(affinity[3]),
+            g=_clamp(affinity[4]),
+            w=_clamp(affinity[5]),
+            i=_clamp(affinity[6]),
+            patterns=("CONTEMPLATION",),
+        )
+
+        pre = (
+            self._apply_mood_decay(self._mood, self._mood_time)
+            if self._mood is not None
+            else self._mood_anchor()
+        )
+
+        if ws == 0.0:
+            # Zero weight = "I didn't actually think about it." No-op:
+            # mood unchanged, no decay update, but report a result so
+            # callers can still observe pre/post symmetry.
+            return ContemplationResult(
+                pre_mood=pre.as_tuple(),
+                post_mood=pre.as_tuple(),
+                delta=(0, 0, 0, 0, 0, 0, 0),
+                score=score,
+            )
+
+        weight = event_weight(score) * ws
+        armor = soul_armor(self.soul)
+        w_eff = weight * (1.0 - armor * cfg.armor_max)
+        alpha = min(0.95, cfg.blend_alpha * (0.4 + w_eff))
+
+        blended = self._blend(pre, score, alpha)
+        post = self._apply_dim_resilience(blended, event_weight=weight)
+
+        self._mood = post
+        self._mood_time = time.perf_counter()
+
+        delta = (
+            post.v - pre.v,
+            post.a - pre.a,
+            post.d - pre.d,
+            post.u - pre.u,
+            post.g - pre.g,
+            post.w - pre.w,
+            post.i - pre.i,
+        )
+
+        return ContemplationResult(
+            pre_mood=pre.as_tuple(),
+            post_mood=post.as_tuple(),
+            delta=delta,
+            score=score,
+        )
 
     # ------------------------------------------------------------------
     # Internals

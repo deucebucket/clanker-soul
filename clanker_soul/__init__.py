@@ -68,6 +68,7 @@ from clanker_soul.presets import (
     STOIC,
 )
 from clanker_soul.physics import (
+    ContemplationResult,
     EmotionalPhysics,
     HEAVY_PATTERNS,
     POSITIVE_PATTERNS,
@@ -126,6 +127,7 @@ __all__ = [
     "EmotionalPhysics",
     "PhysicsConfig",
     "PhysicsTick",
+    "ContemplationResult",
     "event_weight",
     "soul_armor",
     "soul_distance",

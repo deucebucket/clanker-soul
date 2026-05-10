@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **M4 contemplation primitive (#80).** New
+  ``EmotionalPhysics.contemplate(face, *, weight_scale=1.0)`` ingests
+  a ``PromptFace.vadugwi_affinity`` as a synthetic mood-shift —
+  *without* updating soul reservoirs, triggering breach, or writing
+  an event-log ``IngestRecord``. A thought is not an event: only mood
+  moves. Returns a frozen ``ContemplationResult(pre_mood, post_mood,
+  delta, score)`` so downstream cascade layers (heartbeat in #81,
+  action selection in #82) can route off the *direction* of the shift,
+  not just absolute state. Mood-anchored: the blend starts from
+  current mood (or the soul-projected fallback for first-ever
+  contemplation), so affinity acts as a target the mood drifts toward,
+  not an absolute jump. Existing ``soul_armor`` × ``dim_resilience``
+  machinery keeps personality load-bearing — a high-W agent
+  contemplating the same face moves measurably less than a low-W
+  agent. ``ContemplationResult`` exported from the top-level package.
+- **``PromptFace.vadugwi_affinity`` field.** Optional 7-tuple in
+  V/A/D/U/G/W/I order (each 0-255) describing the mood-shape a face
+  evokes when contemplated. Distinct from ``vadugwi_predicates``
+  (which gates *eligibility*): affinity says "if the agent thinks
+  about this, mood will tint toward this 7-vector." Defaults to
+  ``None`` — backward-compatible; existing faces without affinity
+  raise a clear ``ValueError`` when passed to ``contemplate`` rather
+  than guessing a default. Construction-time validation enforces
+  7-tuple length and 0..255 range when set.
 - **M4 thought-content research seed (#87).** Initial Gemini deep-research
   output saved as `docs/research/m4_thought_content_corpus.md` —
   framework grounded in mind-wandering / rumination-reflection /
