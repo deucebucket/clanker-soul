@@ -76,6 +76,16 @@ with SoulPlugin(agent_id="my-agent", db_path="./soul.db") as plugin:
 
 Every `ingest()` is logged to SQLite with full mood-before/mood-after, soul-before/soul-after, weight/armor/breach math, and a human-readable `why` string. Every `tick()` evaluation by a `PulseEngine` (when wired up) is logged similarly. The UI in Phase 2 will read this log.
 
+### Host integration — the three required wirings
+
+clanker-soul **folds into** an agent; it doesn't become one. To make the soul actually shape behavior, every host MUST do three things — see [`docs/host-integration.md`](docs/host-integration.md) for the full guide and [`clanker_soul/examples/reference_host.py`](clanker_soul/examples/reference_host.py) for a runnable copy-paste starting point (`python -m clanker_soul.examples.reference_host`).
+
+1. **Inject `plugin.state_context()` into every agent turn** — without this the agent has no awareness of its own mood and references soul as if it's external.
+2. **Persist contemplations as first-person memory entries** — *"I found myself wondering: …"*, not *"someone asked me: …"*. The framing is what makes the loop feel continuous instead of episodic.
+3. **Frame contemplations as introspection-not-attack at delivery** — wrap with explicit `source: "internal_introspection"` metadata so the model treats spontaneous thoughts as its own, not as accusations to deflect.
+
+Skip any of these and the agent technically works but reads as emotionally inert.
+
 ### Personality presets
 
 Soul can start anywhere. The package ships four bundles you can apply with one call:

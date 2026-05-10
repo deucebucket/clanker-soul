@@ -80,6 +80,23 @@ def _agent_row_exists(store: SoulStore, agent_id: str) -> bool:
 class SoulPlugin:
     """One-call wrapper around physics + storage + event log + overrides.
 
+    **Host integration is not optional.** clanker-soul folds INTO an
+    agent — it doesn't become one. For the soul to actually shape
+    behavior, every host MUST do three things (see
+    ``docs/host-integration.md`` for the full guide and
+    ``clanker_soul.examples.reference_host`` for a runnable
+    starting point):
+
+    1. **Inject ``plugin.state_context()`` into every agent turn** —
+       without this the agent has no awareness of its own mood.
+    2. **Persist contemplations as first-person memory entries** —
+       *"I found myself wondering: …"*, not *"someone asked me: …"*.
+    3. **Frame contemplations as introspection-not-attack at delivery** —
+       wrap with explicit ``source: "internal_introspection"``
+       metadata in the context dict passed to ``inference.score()``
+       so the model treats spontaneous thoughts as its own, not as
+       accusations to deflect.
+
     Construction params:
       ``agent_id``     — string key used for all per-agent rows.
       ``db_path``      — SQLite file path. Process-singleton store via
