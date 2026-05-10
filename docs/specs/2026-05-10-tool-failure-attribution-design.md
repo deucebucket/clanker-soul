@@ -85,17 +85,28 @@ So:
 * A new family of **correction Scores** (patterns
   `RECOVERY` / `TOOL_FIX` / `PROBLEM_SOLVED`) actively **relieve** the
   mistakes reservoir (decrement, not just decay) **and** add to
-  nourishment **and** boost mood. The relief weight scales with the
-  current mistakes load — a fix after many mistakes is a bigger relief
-  than a fix after one.
+  nourishment **and** boost mood. Two emotional shapes per the
+  literature: *pride-shaped* (mastery, durable W/D uplift, scales with
+  preceding burden) vs. *relief-shaped* (cessation-of-negative, flat,
+  no pride integration). Hosts pick the shape based on the agent's
+  current state.
+* **Sustained correction load builds soul-level resilience** —
+  symmetric to the soul-level wear from sustained mistakes. When
+  correction load exceeds floor AND dominates mistakes load, slow
+  uplift on W and D encodes the empirical finding that mastery
+  experiences inoculate against future learned helplessness
+  (`m4_failure_response_matrix.md`). Default-OFF
+  (`recovery_resilience_rate=0.0`); operators opt in.
 * Issue B's cascade reads `mistake_pressure()` to bias action selection.
   Hosts read it to decide whether to insert a verify-step before the
   next risky tool call.
 
 The line: trauma needs *external* nourishment to heal; mistakes can
-be relieved by *self-correction*. This is why we don't conflate the
-two reservoirs — even though they share persistence shape, their
-counterweights and wounding rates are distinct.
+be relieved by *self-correction*, AND repeated successful corrections
+build durable resilience that trauma never gets. This asymmetry is
+the whole point of having two reservoirs — even though they share
+persistence shape, their counterweights, wounding rates, and uplift
+mechanics are distinct.
 
 ## Drop-in invariant: zero-refactor upgrade
 
@@ -172,14 +183,25 @@ def score_from_correction(
     *,
     tool: str = "",
     after_mistakes: float = 0.0,    # current mistakes_load() at correction time
-    kind: str = "tool_fix",          # "tool_fix" | "problem_solved" | "recovery"
+    kind: str = "tool_fix",          # see "Kinds" below
 ) -> Score:
     ...
 ```
 
-Returns a `Score` representing **relief from competence** — the agent
-fixed the broken call, worked through the stuck state, or recovered
-from a stretch of mistakes. The Score has:
+Returns a `Score` representing the **emotional payoff of resolution**.
+The literature (Sweeny & Vohs 2012; Bandura 1997; Ryan & Deci 2000;
+deep-research output `docs/research/m4_failure_response_matrix.md`)
+shows that resolution produces **two distinct affective states** that
+the helper encodes as separate `kind` values:
+
+##### Kinds
+
+**Pride-shaped** (`kind="tool_fix"` / `"problem_solved"` / `"recovery"`)
+— competence-affirming, mastery-grounded. V↑↑, W↑, D↑↑. Hosts use this
+when the agent's state suggests genuine mastery integration: solid
+self-worth, growth-mindset framing, the "I conquered this system"
+cognitive frame. This is the default kind for typical successful
+fixes.
 
 | field | value | rationale |
 |---|---|---|
@@ -190,23 +212,75 @@ from a stretch of mistakes. The Score has:
 | `g` | `135` | grounded |
 | `w` | `145 + min(40, after_mistakes / 4)` | self-Worth recovers |
 | `i` | `140` | forward-leaning |
-| `patterns` | `("RECOVERY",)` for `kind="recovery"`, `("TOOL_FIX",)` for `"tool_fix"`, `("PROBLEM_SOLVED",)` for `"problem_solved"` | host-level distinction for the event log |
+| `patterns` | `("RECOVERY",)` / `("TOOL_FIX",)` / `("PROBLEM_SOLVED",)` per `kind` | host-level distinction for the event log |
 | `direction` | `"OBSERVATION"` | agent observing its own resolution |
 | `source` | `f"tool:{tool}"` | provenance |
 
-The `after_mistakes` scaling means:
-- A fix when `mistakes.load() == 0` produces a small relief (V≈155, W≈145).
-- A fix when `mistakes.load() == 200` produces a bigger relief (V≈195, W≈185) — proportional to the burden lifted.
+**Relief-only** (`kind="relief_exhaustion"`) — task-completion relief
+without pride integration. V returns to neutral, A and U drop sharply,
+W stays low. The cognitive frame: "thank god it stopped." Sweeny &
+Vohs 2012 categorise this as cessation-of-negative-state. Hosts use
+this when the agent's state suggests exhausted-but-not-triumphant
+resolution: low-W, fixed-mindset framing, anxiety-driven persistence
+that finally paid off.
 
-Hosts call this when their action layer detects a successful resolution
-that *follows* a stretch of failures. Typical pattern:
+| field | value | rationale |
+|---|---|---|
+| `v` | `130` | back to neutral, no positive spike |
+| `a` | `40` | sharp drop in arousal — the let-out breath |
+| `d` | `100` | dominance not affirmed (it's the situation that ended, not me that won) |
+| `u` | `10` | urgency collapses |
+| `g` | `100` | drops; the situation no longer feels heavy |
+| `w` | `80` | self-Worth unchanged-or-low — no integration of this as a win |
+| `i` | `50` | passive — agent wants rest, not next task |
+| `patterns` | `("RECOVERY",)` | reservoir-relief still happens; mistakes still get cleared |
+| `direction` | `"OBSERVATION"` | unchanged |
+| `source` | `f"tool:{tool}"` | unchanged |
+
+Critically, **the relief-exhaustion shape still relieves the
+`MistakeReservoir`** — the agent still gets the load lifted, just
+without the durable competence boost. This matches the empirical
+evidence: a low-W person who finally gets their compiler to stop
+erroring DOES feel less stuck; they just don't internalise it as
+mastery.
+
+Hosts choose `kind` based on the agent's current state. A typical
+selection rule:
+
+```python
+def pick_correction_kind(plugin: SoulPlugin, *, after_mistakes: float) -> str:
+    snap = plugin.snapshot()
+    soul = snap["soul"]
+    # Low-W or sustained-high-pressure resolution lands as relief, not pride.
+    if soul["w"] < 100 or after_mistakes > 200:
+        return "relief_exhaustion"
+    return "tool_fix"
+```
+
+The `after_mistakes` scaling means a pride-shaped fix when
+`mistakes.load() == 0` is a small affirmation (V≈155, W≈145), while
+the same kind after `mistakes.load() == 200` is a bigger one (V≈195,
+W≈185). The relief-exhaustion shape does not scale this way — by
+construction, exhaustion-relief is flat and shallow regardless of
+preceding burden.
+
+##### Validation
+
+`kind` must be one of `{"tool_fix", "problem_solved", "recovery",
+"relief_exhaustion"}`. Unknown values raise `ValueError` —
+host-bug protection. Tests cover this.
+
+Hosts call this when their action layer detects a successful
+resolution that *follows* a stretch of failures. Typical pattern:
 
 ```python
 mistakes_before = plugin.mistake_pressure()
 result = await tool.call(...)
 if result.ok and mistakes_before > 0:
     plugin.ingest(score_from_correction(
-        tool="git", after_mistakes=mistakes_before
+        tool="git",
+        after_mistakes=mistakes_before,
+        kind=pick_correction_kind(plugin, after_mistakes=mistakes_before),
     ))
 ```
 
@@ -296,13 +370,14 @@ ensures the correction branch runs first and routes accordingly.
 - `CORRECTION_PATTERNS ⊆ POSITIVE_PATTERNS` — by construction above
 
 **New `PhysicsConfig` knobs** for soul-level wear from sustained
-mistakes (operator-overridable, "everything is a toggle"):
+mistakes AND soul-level uplift from sustained successful corrections
+(operator-overridable, "everything is a toggle"):
 
 ```python
 @dataclass
 class PhysicsConfig:
     ...
-    # Mistakes pressure threshold — below this, no soul drift.
+    # Mistakes pressure threshold — below this, no soul-wear drift.
     mistake_pressure_floor: float = 50.0
 
     # Per-tick wear rate when mistakes load is over floor.
@@ -317,7 +392,28 @@ class PhysicsConfig:
     # 1.0 means "a correction can fully cancel the immediate mistake
     # weight." Tuneable per-persona via overrides.
     correction_relief_factor: float = 1.0
+
+    # Resilience-uplift knobs — symmetric counterpart to mistake_wounding_rate.
+    # Repeated successful corrections raise the persistent W and D
+    # baseline (m4_failure_response_matrix.md: mastery experiences
+    # following prolonged adversity inoculate against future learned
+    # helplessness). Off by default (rate=0.0) so the existing wear
+    # behavior is unchanged — operators opt in to resilience by
+    # raising the rate.
+    resilience_correction_floor: float = 50.0
+    recovery_resilience_rate: float = 0.0  # default OFF; recommended 0.0003 (matches wounding asymmetrically)
 ```
+
+**Why `recovery_resilience_rate` defaults to 0.0:** the resilience
+branch is a behavior-CHANGE for any agent that uses corrections —
+their soul will gradually drift UP under healthy correction load.
+That's desirable but it's a deliberate opt-in for operators who want
+it, especially because v(N+1) hosts upgrading from v(N) shouldn't
+suddenly see soul fields creeping up without an explicit toggle.
+Operators who want the resilience dynamic set this to 0.0003 (matches
+`mistake_wounding_rate` magnitude) or higher. CARL and other
+reference hosts ship with it enabled in their default `PhysicsConfig`;
+the *library default* keeps it off.
 
 ### 3. `clanker_soul/soul/reservoirs.py` — `MistakeReservoir`
 
@@ -553,11 +649,20 @@ pattern routes deterministically to mistake (host bug should be
 flagged loudly via test, but if it slips through, the pessimistic
 branch wins).
 
-**`soul_drift` gains a mistakes-wear branch** parallel to the existing
-trauma-wear branch (engine.py L328-L341):
+**`soul_drift` gains TWO new branches** parallel to the existing
+trauma-wear branch (engine.py L328-L341): a mistakes-wear branch
+(slow soul drift DOWN from sustained being-wrong) and a
+**recovery-resilience branch** (slow soul drift UP from sustained
+being-right-after-being-wrong). Symmetric design: trauma has no
+self-relieving partner, but mistakes do.
 
 ```python
 mistakes_load = self.mistakes.load(now_ts=now)
+correction_load = self.nourishment.by_pattern_filtered(
+    CORRECTION_PATTERNS, now_ts=now
+)
+
+# Mistake wear — slow soul drift DOWN.
 if mistakes_load > cfg.mistake_pressure_floor:
     # Mild W/V wear from sustained being-wrong. Distinct from and
     # weaker than trauma's wounding_rate — self-doubt erodes
@@ -568,17 +673,53 @@ if mistakes_load > cfg.mistake_pressure_floor:
     magnitude = min(1.0, (mistakes_load - cfg.mistake_pressure_floor) / 100.0)
     self.soul.w = _clamp(self.soul.w - cfg.mistake_wounding_rate * magnitude * elapsed_h * 80)
     self.soul.v = _clamp(self.soul.v - cfg.mistake_wounding_rate * magnitude * elapsed_h * 40)
+
+# Recovery resilience — slow soul drift UP.
+if (
+    correction_load > cfg.resilience_correction_floor
+    and correction_load > mistakes_load
+):
+    # Healthy correction-to-mistake ratio sustained over the half-life
+    # window — slowly raise the persistent W and D baseline. The agent
+    # has structurally learned it can overcome obstructions
+    # (m4_failure_response_matrix.md: "repeated successful corrections
+    # raise its persistent baseline of Dominance and Self-Worth.
+    # Consequently, future failures generate significantly less
+    # initial Arousal, because the agent has structurally learned
+    # that it possesses the capacity to overcome obstructions").
+    # We touch W and D — competence-faith built through mastery
+    # experiences. Not V (mood is the per-event channel) and not G
+    # (resilience doesn't change how heavy things feel, just how
+    # answerable they feel).
+    magnitude = min(1.0, (correction_load - cfg.resilience_correction_floor) / 100.0)
+    self.soul.w = _clamp(self.soul.w + cfg.recovery_resilience_rate * magnitude * elapsed_h * 80)
+    self.soul.d = _clamp(self.soul.d + cfg.recovery_resilience_rate * magnitude * elapsed_h * 60)
 ```
 
-The existing trauma-vs-nourishment imbalance branch is unchanged.
-The new mistakes-wear branch runs **independently** so a high-trauma
-agent who is also making lots of mistakes gets both wears applied —
-they're different sources of suffering. (Per the user's framing, this
-is realistic: being attacked AND being incompetent compounds.)
+**The two branches can both run in the same drift pass** — an agent
+that has been making mistakes AND fixing them gets a small wear AND a
+small uplift. The net direction depends on which load dominates;
+since the gate `correction_load > mistakes_load` is required for the
+resilience branch, an agent has to be *winning* the correction
+contest before resilience builds. This matches the empirical claim:
+the well-rounded profile isn't never-failing, it's *failing-and-recovering-faster*.
 
-The `drift report` dict (returned by `soul_drift`) gains a
-`mistakes_load` field so hosts/UIs can observe both pressures
-side-by-side.
+**New `NourishmentReservoir` method:** `by_pattern_filtered(patterns:
+frozenset[str], *, now_ts) -> float` returns the decayed sum of
+weight stored under any of the named patterns. Trivial — the
+underlying entries dict already groups by pattern; this just sums a
+filtered subset. Lives on `TraumaReservoir` (the parent class), so
+all three reservoirs inherit it.
+
+The existing trauma-vs-nourishment imbalance branch is unchanged.
+The two new branches run **independently** of it and of each other,
+so a high-trauma agent who is also making mistakes AND fixing them
+gets all three signals applied — they encode different things.
+
+The `drift report` dict (returned by `soul_drift`) gains
+`mistakes_load`, `correction_load`, and (when applicable)
+`resilience_uplift` fields so hosts/UIs can observe all the new
+pressures side-by-side.
 
 ### 6. `clanker_soul/plugin.py` — wiring + accessor
 
@@ -682,7 +823,7 @@ match it, the UI events table renders the string verbatim.
 
 ## Tests
 
-### `tests/test_tool_health.py` (new, ~14 tests)
+### `tests/test_tool_health.py` (new, ~16 tests)
 
 Mirrors `tests/test_hermes_inference_failure.py` shape:
 
@@ -706,16 +847,23 @@ Mirrors `tests/test_hermes_inference_failure.py` shape:
 
 **`score_from_correction`:**
 
-11. baseline call (`after_mistakes=0`) produces V=155, W=145, A=100,
-    D=170; `direction == "OBSERVATION"`; `source == "tool:{tool}"`;
-    `patterns == ("TOOL_FIX",)` for default `kind="tool_fix"`
-12. scaling: `after_mistakes=200` produces V≈195, W≈185 (clamped at
-    +40 each); `after_mistakes=1000` does not exceed those caps
+11. baseline pride-shaped call (`after_mistakes=0`, `kind="tool_fix"`)
+    produces V=155, W=145, A=100, D=170; `direction == "OBSERVATION"`;
+    `source == "tool:{tool}"`; `patterns == ("TOOL_FIX",)`
+12. pride-shape scaling: `after_mistakes=200` produces V≈195, W≈185
+    (clamped at +40 each); `after_mistakes=1000` does not exceed those
+    caps
 13. `kind="recovery"` → `patterns == ("RECOVERY",)`;
-    `kind="problem_solved"` → `("PROBLEM_SOLVED",)`; unknown kind
-    raises ValueError (host-bug protection)
-14. all correction patterns are members of `CORRECTION_PATTERNS` and
-    `CORRECTION_PATTERNS ⊂ POSITIVE_PATTERNS`
+    `kind="problem_solved"` → `("PROBLEM_SOLVED",)`
+14. **`kind="relief_exhaustion"` produces the relief shape** (V=130,
+    A=40, D=100, U=10, G=100, W=80, I=50) regardless of
+    `after_mistakes` value — the relief shape is FLAT, no scaling.
+    `patterns == ("RECOVERY",)` so the reservoir-relief still happens.
+15. unknown `kind` raises `ValueError` (host-bug protection); valid
+    set is `{"tool_fix", "problem_solved", "recovery", "relief_exhaustion"}`
+16. all correction patterns (`TOOL_FIX`, `PROBLEM_SOLVED`, `RECOVERY`)
+    are members of `CORRECTION_PATTERNS` and `CORRECTION_PATTERNS ⊂
+    POSITIVE_PATTERNS`
 
 ### `tests/test_mistakes_reservoir.py` (new, ~9 tests)
 
@@ -735,7 +883,7 @@ Mirrors `tests/test_hermes_inference_failure.py` shape:
    the reservoir doesn't go negative (`load() >= 0` invariant always
    holds)
 
-### `tests/test_physics.py` extensions (~10 tests)
+### `tests/test_physics.py` extensions (~15 tests)
 
 **Mistake routing:**
 
@@ -774,7 +922,28 @@ Mirrors `tests/test_hermes_inference_failure.py` shape:
     patterns routes to **mistake** (pessimistic branch wins; warning
     not asserted but documented)
 
-### `tests/test_plugin.py` extensions (~5 tests)
+**Recovery resilience — soul-level uplift:**
+
+11. with `recovery_resilience_rate=0.0` (default), no soul drift up
+    regardless of correction load (verifies the default-OFF behavior
+    so old hosts upgrading see no change)
+12. with `recovery_resilience_rate=0.0003` and a sustained correction
+    load > `resilience_correction_floor` AND `correction_load >
+    mistakes_load`, running `soul_drift` over 1 hour produces a
+    small `soul.w` and `soul.d` increase — symmetric in magnitude to
+    the wear test (#5)
+13. resilience uplift does **not** touch `soul.v` (mood is the
+    per-event channel) and does **not** touch `soul.g` (asserted
+    unchanged) — only W and D
+14. resilience does NOT trigger when `correction_load <= mistakes_load`
+    (gate condition asserted) — agent has to be *winning* the
+    correction contest before resilience builds
+15. `NourishmentReservoir.by_pattern_filtered({"TOOL_FIX", "RECOVERY"},
+    now_ts=...)` returns the decayed sum of those entries only,
+    excluding generic-WARMTH or other non-correction patterns
+    (filter test)
+
+### `tests/test_plugin.py` extensions (~7 tests)
 
 1. `plugin.mistake_pressure()` is `0.0` on fresh agent; non-zero after
    ingesting a `TOOL_BAD_CALL` Score
@@ -786,14 +955,24 @@ Mirrors `tests/test_hermes_inference_failure.py` shape:
    create `soul_state` without `mistakes_json` column), construct
    `SoulPlugin`, verify column was added and `mistake_pressure() ==
    0.0`
-4. **end-to-end recovery loop:** ingest 5 TOOL_BAD_CALL events,
+4. **end-to-end recovery loop (pride):** ingest 5 TOOL_BAD_CALL events,
    capture `mistakes_load_before`, ingest one `score_from_correction(
-   after_mistakes=mistakes_load_before)`, verify `mistake_pressure()`
-   strictly less than before AND mood `v` and `w` increased
-5. **mistake-wear visible in tick output:** ingest enough TOOL_BAD_CALL
+   after_mistakes=mistakes_load_before, kind="tool_fix")`, verify
+   `mistake_pressure()` strictly less than before AND mood `v` and
+   `w` increased
+5. **end-to-end recovery loop (relief-only):** same as above with
+   `kind="relief_exhaustion"`, verify `mistake_pressure()` still drops
+   (relief side intact) BUT mood W stays low (no pride integration)
+6. **mistake-wear visible in tick output:** ingest enough TOOL_BAD_CALL
    to cross `mistake_pressure_floor`, advance clock 1h, call
    `plugin.tick()`, assert returned dict contains `mistakes_load` and
    `soul.w` decreased
+7. **resilience uplift visible in tick output:** with
+   `PhysicsConfig(recovery_resilience_rate=0.0003)`, ingest a stretch
+   of corrections that push correction_load over floor without
+   matching mistake load, advance clock 1h, call `plugin.tick()`,
+   assert returned dict contains `correction_load` AND `soul.w`
+   strictly increased AND `soul.d` strictly increased
 
 ### Disjointness invariant tests
 
@@ -847,10 +1026,13 @@ def test_correction_patterns_subset_of_positive():
   from `HEAVY_PATTERNS`. Companion to the hermes-only
   `score_from_failover` helper, generalised to the agent's full tool
   surface.
-- `score_from_correction(*, tool, after_mistakes, kind)` companion that
-  produces a relief-shaped Score whose magnitude scales with the current
-  mistakes load. Hosts ingest one of these after a successful resolution
-  to close the mistake → correction loop.
+- `score_from_correction(*, tool, after_mistakes, kind)` companion
+  producing the post-resolution Score. Two emotional shapes per the
+  Sweeny & Vohs / Bandura literature: pride-shaped (`kind="tool_fix"`
+  / `"problem_solved"` / `"recovery"`) — durable W and D affirmation
+  scaling with `after_mistakes`; relief-shaped (`kind="relief_exhaustion"`)
+  — flat A/U drop, no W or D uplift, "thank god it stopped." Both
+  shapes still feed the mistakes reservoir's relief mechanism.
 - `MistakeReservoir` (parallel to `TraumaReservoir` /
   `NourishmentReservoir`) accumulating self-attributed-error pressure
   with the same 14-day half-life and `RESERVOIR_CAP=1000`. Persisted
@@ -861,12 +1043,19 @@ def test_correction_patterns_subset_of_positive():
 - `MISTAKE_PATTERNS` and `CORRECTION_PATTERNS` frozensets — extensible
   by replacing the constant; `CORRECTION_PATTERNS ⊆ POSITIVE_PATTERNS`.
 - `PhysicsConfig.mistake_pressure_floor`,
-  `PhysicsConfig.mistake_wounding_rate`, and
-  `PhysicsConfig.correction_relief_factor` — operator-tunable knobs
-  for the new wear/relief mechanics.
-- `soul_drift` now applies a mild W/V wear when mistakes load exceeds
-  floor (rate strictly weaker than trauma's `wounding_rate`; G is
-  left untouched).
+  `mistake_wounding_rate`, `correction_relief_factor`,
+  `resilience_correction_floor`, and `recovery_resilience_rate` —
+  operator-tunable knobs for the new wear/relief/resilience mechanics.
+  `recovery_resilience_rate` defaults to `0.0` (off) so v(N) hosts
+  upgrading see no behavior change; operators opt in.
+- `soul_drift` now applies a mild W/V **wear** when mistakes load
+  exceeds floor (rate strictly weaker than trauma's `wounding_rate`;
+  G is left untouched), AND a slow W/D **uplift** when correction load
+  exceeds floor and dominates mistakes load — symmetric counterpart
+  encoding resilience-from-mastery (m4_failure_response_matrix.md).
+- `NourishmentReservoir.by_pattern_filtered(patterns, *, now_ts)` —
+  decayed-sum query restricted to the named patterns; lives on
+  `TraumaReservoir` so all reservoirs inherit it.
 - `SoulPlugin.mistake_pressure() -> float` accessor; `snapshot()` gains
   `"mistake_pressure"` field.
 - `EmotionalPhysics(mistakes=...)` kwarg (default empty reservoir).
@@ -893,7 +1082,7 @@ def test_correction_patterns_subset_of_positive():
 | `EmotionalPhysics(soul, trauma, nourishment, config)` | unchanged positional | unchanged; mistakes defaults to empty |
 | `SoulPlugin(agent_id, db_path)` | unchanged | unchanged; loads/saves mistakes internally |
 | `plugin.snapshot()` | dict with old keys | dict with old keys + `mistake_pressure` (additive) |
-| `plugin.tick()` | drift report dict | unchanged shape; mistakes don't drift soul |
+| `plugin.tick()` | drift report dict | shape grows with `mistakes_load` / `correction_load` keys (additive); existing keys unchanged. A pre-upgrade host produces no `TOOL_BAD_CALL` / `RECOVERY` Scores (those patterns didn't exist), so both new soul-drift branches stay dormant — behavior is identical to v(N). Hosts that opt in by calling the new helpers see the new dynamics. |
 | v0.x DB file | only legacy tables | column added in place; existing rows get `'{}'` |
 
 The check before merging this PR: *"Can a v(N) host upgrade to v(N+1)
@@ -905,15 +1094,19 @@ without touching their code?"* ✅
 - `tool_health.py` (`score_from_action_failure` + `score_from_correction`): ~220 LOC
 - `MistakeReservoir` + `relieve()`: ~70 LOC
 - `SoulStore` migration + load/save methods: ~40 LOC
-- `EmotionalPhysics` routing + soul-drift mistake-wear branch: ~40 LOC
+- `EmotionalPhysics` routing + soul-drift wear AND resilience branches: ~55 LOC
+- `NourishmentReservoir.by_pattern_filtered`: ~15 LOC
+- `score_from_correction` second kind (`relief_exhaustion`): ~30 LOC
 - `SoulPlugin` wiring: ~15 LOC
-- `PhysicsConfig` knobs: ~10 LOC
+- `PhysicsConfig` knobs (5 total now): ~15 LOC
 - `__init__` exports + POSITIVE_PATTERNS extension: ~15 LOC
-- Tests: ~350 LOC
+- Tests: ~400 LOC
 - CHANGELOG + docstrings: ~50 LOC
 
 One PR, one CHANGELOG entry, no host refactor required, no v0.x
 migration scripts, fully covered by the existing release process. The
 expansion vs. the original ~500 LOC estimate comes from the correction
-helper, the relief mechanic, and the soul-drift wear branch — all of
-which were absent in the first cut.
+helper (with two distinct emotional shapes), the active relief mechanic,
+the soul-drift wear branch, and the resilience-uplift branch — all
+absent in the first cut, all surfaced from the deep-research output
+in `docs/research/m4_failure_response_matrix.md` (#99).
