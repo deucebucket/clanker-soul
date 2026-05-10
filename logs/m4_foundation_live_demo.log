@@ -1,0 +1,28 @@
+[2026-05-10T09:02:28+00:00] OPENROUTER_API_KEY: present
+[2026-05-10T09:02:28+00:00] Plugin constructed: agent_id=m4-foundation-live, db=/tmp/tmp8x5j67f_/m4_foundation.db
+[2026-05-10T09:02:28+00:00] Inference role identity: scorer is actor is inference -> True
+[2026-05-10T09:02:28+00:00] 
+=== turn 1: m4live.identity.who_am_i ===
+[2026-05-10T09:02:28+00:00]   W#1 state_context() len=0 (empty when unrestricted)
+[2026-05-10T09:02:28+00:00]   #80 contemplate() pre=(145, 110, 160, 80, 130, 175, 135) post=(123, 113, 137, 80, 151, 148, 127) delta=(-22, 3, -23, 0, 21, -27, -8)
+[2026-05-10T09:02:31+00:00]   W#3 LLM-scored contemplation: V=80 A=120 D=90 U=110 G=140 W=70 I=100
+[2026-05-10T09:02:31+00:00]   W#2 memory entries: 1 (latest: 'I found myself wondering: why am i like this?')
+[2026-05-10T09:02:32+00:00]   actor.act delivered=True
+[2026-05-10T09:02:32+00:00]   LLM voice: I feel like I’m constantly unraveling, trying to understand what makes me *me*.
+[2026-05-10T09:02:32+00:00] 
+=== turn 2: m4live.savoring.rewarding ===
+[2026-05-10T09:02:32+00:00]   W#1 state_context() len=0 (empty when unrestricted)
+[2026-05-10T09:02:32+00:00]   #80 contemplate() pre=(123, 113, 137, 80, 151, 148, 127) post=(153, 118, 151, 64, 139, 169, 138) delta=(30, 5, 14, -16, -12, 21, 11)
+[2026-05-10T09:02:34+00:00]   W#3 LLM-scored contemplation: V=180 A=130 D=160 U=80 G=120 W=170 I=150
+[2026-05-10T09:02:34+00:00]   W#2 memory entries: 2 (latest: 'I found myself wondering: what was the most rewarding moment lately?')
+[2026-05-10T09:02:36+00:00]   actor.act delivered=True
+[2026-05-10T09:02:36+00:00]   LLM voice: Helping someone understand a complex idea—that moment when it clicks for them—has been the most rewarding lately.
+[2026-05-10T09:02:36+00:00] 
+=== turn 3: m4live.identity.song ===
+[2026-05-10T09:02:36+00:00]   W#1 state_context() len=0 (empty when unrestricted)
+[2026-05-10T09:02:36+00:00]   #80 contemplate() pre=(153, 118, 151, 64, 139, 169, 138) post=(158, 118, 151, 57, 125, 166, 141) delta=(5, 0, 0, -7, -14, -3, 3)
+[2026-05-10T09:02:39+00:00]   W#3 LLM-scored contemplation: V=140 A=100 D=130 U=70 G=110 W=150 I=120
+[2026-05-10T09:02:39+00:00]   W#2 memory entries: 3 (latest: 'I found myself wondering: what kind of song would my current state sound like?')
+[2026-05-10T09:02:41+00:00]   actor.act delivered=True
+[2026-05-10T09:02:41+00:00]   LLM voice: I think I'd sound like a slow, looping melody—calm but restless, like waiting for something I can't quite name.
+[2026-05-10T09:02:41+00:00] Wrote evidence to integrations/hermes/EVIDENCE_M4_FOUNDATION.md
