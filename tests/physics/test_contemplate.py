@@ -47,7 +47,7 @@ def test_contemplate_returns_pre_post_delta_and_score() -> None:
     assert len(result.delta) == 7
     # Delta is post - pre per dim, exactly.
     for i, (pre, post, d) in enumerate(zip(result.pre_mood, result.post_mood, result.delta)):
-        assert post - pre == d, f"dim {i}: post-pre={post-pre} but delta={d}"
+        assert post - pre == d, f"dim {i}: post-pre={post - pre} but delta={d}"
     # Score carries the CONTEMPLATION pattern marker
     assert result.score.patterns == ("CONTEMPLATION",)
 
@@ -59,9 +59,13 @@ def test_contemplate_moves_mood_toward_affinity() -> None:
     face = _face(affinity=(60, 100, 90, 80, 200, 80, 110))
     result = p.contemplate(face)
     # V moved down (toward 60 from default V=145)
-    assert result.delta[0] < 0, f"V should drop; pre={result.pre_mood[0]} post={result.post_mood[0]}"
+    assert result.delta[0] < 0, (
+        f"V should drop; pre={result.pre_mood[0]} post={result.post_mood[0]}"
+    )
     # G moved up (toward 200 from default G=130)
-    assert result.delta[4] > 0, f"G should rise; pre={result.pre_mood[4]} post={result.post_mood[4]}"
+    assert result.delta[4] > 0, (
+        f"G should rise; pre={result.pre_mood[4]} post={result.post_mood[4]}"
+    )
 
 
 def test_contemplate_does_not_update_reservoirs() -> None:
@@ -80,7 +84,9 @@ def test_contemplate_does_not_breach_soul() -> None:
     """Even a heavy contemplation must not leak into Soul. Breach is
     reserved for real events."""
     soul_before = SoulState(v=145, a=110, d=160, u=80, g=130, w=175, i=135)
-    p = _physics(soul=SoulState(**{f: getattr(soul_before, f) for f in ("v", "a", "d", "u", "g", "w", "i")}))
+    p = _physics(
+        soul=SoulState(**{f: getattr(soul_before, f) for f in ("v", "a", "d", "u", "g", "w", "i")})
+    )
     # First put mood far from soul so a real ingest *would* breach.
     p.ingest(Score(v=40, a=180, d=70, u=180, g=80, w=50, i=110, patterns=("ABANDONMENT",)))
     soul_after_event = (p.soul.v, p.soul.w, p.soul.g)
@@ -139,8 +145,7 @@ def test_contemplate_weight_scale_attenuates() -> None:
     r_half = p_half.contemplate(face, weight_scale=0.3)
     # Half-weight contemplation should move V less than full-weight.
     assert abs(r_half.delta[0]) < abs(r_full.delta[0]), (
-        f"weight_scale=0.3 delta_V={r_half.delta[0]}, "
-        f"weight_scale=1.0 delta_V={r_full.delta[0]}"
+        f"weight_scale=0.3 delta_V={r_half.delta[0]}, weight_scale=1.0 delta_V={r_full.delta[0]}"
     )
 
 
