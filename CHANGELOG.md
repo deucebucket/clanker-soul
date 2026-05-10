@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **M4 thought-content research seed (#87).** Initial Gemini deep-research
+  output saved as `docs/research/m4_thought_content_corpus.md` —
+  framework grounded in mind-wandering / rumination-reflection /
+  non-clinical intrusive-thought literature plus 10 themed clusters of
+  introspective prompts and 5 branching trees. Seed material for #84
+  (ContemplationCorpus content). Formatting quirks preserved as-is;
+  cleanup and expansion to ≥500 entries happen during #84
+  implementation.
+- **M4 action-tendency research seed (#83).** Companion deep-research
+  output saved as `docs/research/m4_action_tendencies.md` — VADUGWI
+  topology mapped to action tendencies via appraisal theory, personality
+  moderators (self-worth × agency × attachment × extraversion),
+  Lazarus & Folkman coping taxonomy, and explicit mood-incongruent
+  traps (Shame Paradox, Pride Trap, Fear-Freeze). Includes structured
+  action-tendency matrix entries for sadness/anxiety/shame/grief.
+  Seed material for #82 (action registry + `tags_from_delta()`
+  defaults). Cleaned from a Google-Docs HTML-saturated paste on #83.
+
 ## [0.16.0] — 2026-05-09
 
 ### Changed
