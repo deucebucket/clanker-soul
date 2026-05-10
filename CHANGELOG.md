@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **M4 ``Inference`` protocol + ``SoulPlugin`` wiring (#79).** New
+  ``clanker_soul.Inference`` Protocol — a ``runtime_checkable`` async
+  seam with two methods, ``score(text, context) -> Score`` and
+  ``act(action) -> ActionOutcome``. clanker-soul itself never imports
+  any model SDK; concrete impls live in host code or companion
+  packages. ``SoulPlugin`` accepts three new mutually-compatible
+  kwargs: ``inference=`` (single impl covers both roles, simplest
+  config — pure-local Qwen / Phi / etc.), ``scorer=`` and ``actor=``
+  (split backends per role for hosts that want cheap local for
+  scoring + deliberate cloud for acting). When only ``inference`` is
+  passed, ``plugin.scorer is plugin.actor is plugin.inference``.
+  When ``scorer``/``actor`` are passed, they win over ``inference``
+  for their role. When *no* impl is wired for a role, the property
+  returns a sentinel that raises ``RuntimeError`` *on use*, not on
+  access — construction never fails for hosts that don't yet wire
+  inference. ``Inference`` is exported from the top-level package.
+  Foundation for #81 (heartbeat) and #82 (action registry).
 - **M4 contemplation primitive (#80).** New
   ``EmotionalPhysics.contemplate(face, *, weight_scale=1.0)`` ingests
   a ``PromptFace.vadugwi_affinity`` as a synthetic mood-shift —

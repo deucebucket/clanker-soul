@@ -39,6 +39,7 @@ from clanker_soul.governor import (
     GateDecision,
     GovernorConfig,
 )
+from clanker_soul.inference import Inference
 from clanker_soul.overrides import (
     ConfigOverrides,
     OverrideBundle,
@@ -191,6 +192,8 @@ __all__ = [
     "PRESETS",
     # One-call plugin
     "SoulPlugin",
+    # Inference protocol (M4 #79)
+    "Inference",
     # Safety governor
     "CapabilityLevel",
     "CapabilityProfile",
