@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Host integration guide + runnable reference host (#85).** New
+  ``docs/host-integration.md`` documents the three host-side wirings
+  every integration MUST do for clanker-soul to actually shape
+  behavior: (1) inject ``plugin.state_context()`` into every agent
+  turn so the agent has self-awareness of its own mood,
+  (2) persist contemplations as first-person memory entries
+  (*"I found myself wondering: …"*) so the inner life feels
+  continuous, (3) frame contemplations as introspection-not-attack
+  at delivery (explicit ``source: "internal_introspection"`` in the
+  context dict) so the model doesn't go defensive on spontaneous
+  thoughts. New ``clanker_soul.examples.reference_host`` is a
+  runnable copy-paste starting point — in-memory memory, stdout
+  printer, rule-based ``Inference`` impl (no LLM dependency),
+  end-to-end demo of all three wirings (``python -m
+  clanker_soul.examples.reference_host``). README updated with a
+  pointer to the guide and the wirings summary; ``SoulPlugin``
+  docstring lead now flags the three requirements. 7 new smoke
+  tests verify the demo runs and that the wirings produce
+  observable effects.
 - **M4 ``Inference`` protocol + ``SoulPlugin`` wiring (#79).** New
   ``clanker_soul.Inference`` Protocol — a ``runtime_checkable`` async
   seam with two methods, ``score(text, context) -> Score`` and
