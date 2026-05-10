@@ -15,6 +15,7 @@ from clanker_soul.physics.config import (
     POSITIVE_PATTERNS,
     PhysicsConfig,
 )
+from clanker_soul.physics.contemplation import ContemplationResult
 from clanker_soul.physics.engine import EmotionalPhysics
 from clanker_soul.physics.math import (
     dim_resilience,
@@ -29,6 +30,7 @@ __all__ = [
     "EmotionalPhysics",
     "PhysicsConfig",
     "PhysicsTick",
+    "ContemplationResult",
     "POSITIVE_PATTERNS",
     "HEAVY_PATTERNS",
     "event_weight",

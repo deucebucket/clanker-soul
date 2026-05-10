@@ -242,6 +242,15 @@ class PromptFace:
     ``branch_keys`` — optional parent-face hints. Faces that name a
     parent get a weight bump when that parent was the immediately
     previous fire. M3.1 stores the field; M3.4 wires the lookup.
+
+    ``vadugwi_affinity`` — optional 7-int tuple in V/A/D/U/G/W/I order
+    (each 0-255) describing the mood-shape this face evokes when
+    contemplated. Distinct from ``vadugwi_predicates`` (which gates
+    *eligibility*): affinity says "if the agent thinks about this,
+    mood will tint toward this 7-vector." Required for use with
+    :py:meth:`EmotionalPhysics.contemplate`; ``None`` means the face
+    isn't designed for the M4 contemplation cascade and ``contemplate``
+    will raise ``ValueError`` rather than guess a default.
     """
 
     id: str
@@ -255,6 +264,7 @@ class PromptFace:
     motif: str = "informational"
     template: str = ""
     branch_keys: frozenset[str] = frozenset()
+    vadugwi_affinity: tuple[int, int, int, int, int, int, int] | None = None
 
     def __post_init__(self) -> None:
         if not self.id:
@@ -278,6 +288,19 @@ class PromptFace:
             raise ValueError(f"PromptFace(id={self.id!r}).base_weight must be >= 0")
         if not self.template:
             raise ValueError(f"PromptFace(id={self.id!r}).template must be non-empty")
+        if self.vadugwi_affinity is not None:
+            if len(self.vadugwi_affinity) != 7:
+                raise ValueError(
+                    f"PromptFace(id={self.id!r}).vadugwi_affinity must be a "
+                    f"7-tuple in V/A/D/U/G/W/I order; got len="
+                    f"{len(self.vadugwi_affinity)}"
+                )
+            for dim, val in zip("VADUGWI", self.vadugwi_affinity):
+                if not (0 <= val <= 255):
+                    raise ValueError(
+                        f"PromptFace(id={self.id!r}).vadugwi_affinity[{dim}]="
+                        f"{val} must be in 0..255"
+                    )
 
     def situation_eligible(self, present_tags: frozenset[str]) -> bool:
         if not self.situation_tags:
