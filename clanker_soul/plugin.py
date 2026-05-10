@@ -40,6 +40,7 @@ from clanker_soul.governor import (
     compose_state_context,
     crisis_signal,
 )
+from clanker_soul.inference import Inference, _MissingInference
 from clanker_soul.overrides import ConfigOverrides
 from clanker_soul.physics import (
     EmotionalPhysics,
@@ -95,6 +96,21 @@ class SoulPlugin:
                          the safety governor (capability gating +
                          crisis discrimination). Defaults to
                          standard thresholds.
+      ``inference``    — optional :py:class:`Inference` impl that
+                         covers BOTH score + act roles. Pass when one
+                         model wears both hats. clanker-soul never
+                         imports any model SDK; the impl lives in
+                         host code or a companion package.
+      ``scorer``       — optional :py:class:`Inference` impl for the
+                         score role only. If both ``inference`` and
+                         ``scorer`` are passed, ``scorer`` wins for
+                         the score role.
+      ``actor``        — optional :py:class:`Inference` impl for the
+                         act role only. Same precedence as ``scorer``.
+                         Hosts wanting different backends per role
+                         (cheap local for scoring, deliberate cloud
+                         for acting) pass both kwargs and skip
+                         ``inference``.
     """
 
     def __init__(
@@ -108,6 +124,9 @@ class SoulPlugin:
         governor_config: GovernorConfig | None = None,
         extra_corpus: Iterable[PromptFace] | None = None,
         replace_corpus: bool = False,
+        inference: Inference | None = None,
+        scorer: Inference | None = None,
+        actor: Inference | None = None,
     ) -> None:
         self._agent_id = agent_id
         self._db_path = Path(db_path)
@@ -176,6 +195,24 @@ class SoulPlugin:
         # timestamps so cooldowns survive restart.
         self._recency = PersistentRecencyLog(self._corpus_store, agent_id)
 
+        # M4 — Inference resolution (#79). Single seam, optional split.
+        # If only ``inference`` is passed: scorer/actor alias to it.
+        # If ``scorer``/``actor`` are passed: they win for that role.
+        # If neither was passed for a role: install a sentinel that
+        # raises a clear error on use rather than at construction
+        # time, so hosts that don't yet wire inference still construct.
+        self._inference: Inference | None = inference
+        self._scorer: Inference | _MissingInference = (
+            scorer
+            if scorer is not None
+            else (inference if inference is not None else _MissingInference("scorer"))
+        )
+        self._actor: Inference | _MissingInference = (
+            actor
+            if actor is not None
+            else (inference if inference is not None else _MissingInference("actor"))
+        )
+
         self._closed = False
 
     # ------------------------------------------------------------------
@@ -218,6 +255,33 @@ class SoulPlugin:
         runtime CRUD: ``plugin.corpus_store.save_face(...)``,
         ``plugin.corpus_store.retire_face(face_id)``, etc."""
         return self._corpus_store
+
+    @property
+    def inference(self) -> Inference | None:
+        """The :py:class:`Inference` impl that covers both roles, when
+        a host wired one. ``None`` when only role-specific
+        ``scorer``/``actor`` were passed (or neither). Use
+        :py:attr:`scorer` / :py:attr:`actor` for the resolved per-role
+        impls; they fall back to this one when no role-specific
+        kwarg overrode them."""
+        return self._inference
+
+    @property
+    def scorer(self) -> Inference:
+        """The :py:class:`Inference` impl that handles the *score*
+        role. Aliases to :py:attr:`inference` when no role-specific
+        ``scorer=`` kwarg was passed. Calls into a host that never
+        wired any inference raise ``RuntimeError`` with a clear
+        message — not at construction, only on use."""
+        return self._scorer  # type: ignore[return-value]
+
+    @property
+    def actor(self) -> Inference:
+        """The :py:class:`Inference` impl that handles the *act* role.
+        Aliases to :py:attr:`inference` when no role-specific
+        ``actor=`` kwarg was passed. Same use-site error semantics as
+        :py:attr:`scorer`."""
+        return self._actor  # type: ignore[return-value]
 
     @property
     def recency(self) -> PersistentRecencyLog:
