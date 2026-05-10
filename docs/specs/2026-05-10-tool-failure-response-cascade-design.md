@@ -59,6 +59,41 @@ This keeps the contract narrow: this issue adds **triggers**, **tags**,
 `mistake_pressure` + obstruction count**. Concrete "troubleshoot" /
 "file_issue" / "journal" handlers are host code.
 
+### Closing the loop with `score_from_correction`
+
+Issue A ships `score_from_correction(*, tool, after_mistakes, kind)` —
+the relief-shaped Score that actively decrements the mistakes
+reservoir and boosts mood when a correction lands. Hosts implementing
+the `troubleshoot` / `file_issue` handlers should produce one in
+`ActionOutcome.consequences` on success:
+
+```python
+async def troubleshoot_handler(action, *, plugin):
+    mistakes_before = plugin.mistake_pressure()
+    success = await actually_diagnose_and_retry(...)
+    consequences = ()
+    if success and mistakes_before > 0:
+        consequences = (
+            score_from_correction(
+                tool=action.extra.get("tool_name", ""),
+                after_mistakes=mistakes_before,
+                kind="tool_fix",
+            ),
+        )
+    return ActionOutcome(delivered=success, consequences=consequences)
+```
+
+The engine's `_absorb_consequences` (engine.py L745-L767) then
+auto-ingests the correction Score into physics, where Issue A's new
+routing path actively relieves `mistakes` and boosts mood. **End-to-end
+loop:** mistake → reservoir accumulates → `stuck_impulse` fires → cascade
+picks `troubleshoot` action → handler succeeds → consequence = correction
+Score → reservoir relieved → mood boosted → soul wear from sustained
+mistakes lifts on next `soul_drift`.
+
+This is the full "make a mistake, fix it, feel better" arc made
+mechanical.
+
 ## Components
 
 ### 1. New trigger kinds in `clanker_soul/pulse/engine.py`

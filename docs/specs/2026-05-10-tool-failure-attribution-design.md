@@ -55,24 +55,47 @@ emotional currents.
   acting *on* the agent), not `EXTERNAL_REPORT` (this isn't a description
   of a third-party state).
 
-## Architecture line: trauma damages, mistakes are observable
+## Architecture line: mistakes wear, corrections relieve
 
-`TraumaReservoir` is the soul-wounding mechanism: when trauma load
-crosses `trauma_pressure_floor` and exceeds nourishment, `soul_drift`
-actively bleeds W/V/G via `wounding_rate` (engine.py L332-L336). It
-encodes *being wronged* — patterns are things like `BETRAYAL`,
-`CONTEMPT`, `ABANDONMENT`.
+`TraumaReservoir` encodes *being wronged*. Patterns are `BETRAYAL`,
+`CONTEMPT`, `ABANDONMENT` — things done to the agent. Trauma drifts the
+soul down via `wounding_rate`, and the only counterweight is *external*
+nourishment (`POSITIVE_PATTERNS` from someone showing up, repairing,
+expressing care). Insults don't cancel out cleanly — that's how human
+hurt actually works.
 
-The new `MistakeReservoir` encodes *being wrong* — a different valence.
-Self-doubt is a **constructive** signal the agent reads to decide
-"should I double-check this time?" — it is not depression, and it must
-not produce the same long-term soul shape that sustained contempt does.
+`MistakeReservoir` encodes *being wrong*. The user's clarification
+makes the symmetry explicit: **mistakes do affect self-Worth and
+self-Valence — sustained mistakes wear on the agent's soul.** The
+counterweight is **correction**: solving the problem, fixing the bad
+call, working through the stuck state. Unlike trauma, mistakes have a
+natural self-relieving partner — competence answers self-doubt.
 
-**Therefore: `MistakeReservoir` does NOT feed `wounding_rate`.** It
-accumulates and decays on the same 14-day half-life as the others, but
-the soul never drifts because of it. It is purely **observable** to the
-host and to Issue B's cascade. This architectural line is enforced by a
-test.
+So:
+
+* Per-event `validation_error` Scores carry W=120, V=120 (the immediate
+  emotional hit — same as before).
+* The `MistakeReservoir` accumulates pattern-keyed weight on the same
+  14-day half-life shape as trauma/nourishment.
+* When the reservoir crosses a configurable floor, `soul_drift`
+  applies a mild W/V wear via a new `mistake_wounding_rate` —
+  **distinct from and weaker than `wounding_rate`** so the soul shape
+  of "I keep getting things wrong" is recognisably different from "I
+  am being attacked."
+* A new family of **correction Scores** (patterns
+  `RECOVERY` / `TOOL_FIX` / `PROBLEM_SOLVED`) actively **relieve** the
+  mistakes reservoir (decrement, not just decay) **and** add to
+  nourishment **and** boost mood. The relief weight scales with the
+  current mistakes load — a fix after many mistakes is a bigger relief
+  than a fix after one.
+* Issue B's cascade reads `mistake_pressure()` to bias action selection.
+  Hosts read it to decide whether to insert a verify-step before the
+  next risky tool call.
+
+The line: trauma needs *external* nourishment to heal; mistakes can
+be relieved by *self-correction*. This is why we don't conflate the
+two reservoirs — even though they share persistence shape, their
+counterweights and wounding rates are distinct.
 
 ## Drop-in invariant: zero-refactor upgrade
 
@@ -120,6 +143,12 @@ surface (filesystem, browser, MCP, git, OS commands, custom) hits this.
 The hermes module stays as the inference-layer specialisation; it does
 not call into `tool_health.py` (different reason taxonomy).
 
+The module exports two helpers — failure scoring and correction scoring
+— so the loop is symmetric: every place a host produces an action-failure
+Score, it can produce a correction Score on the resolution turn.
+
+#### `score_from_action_failure`
+
 ```python
 def score_from_action_failure(
     reason: str | Any,         # category key, or anything with a .value attr
@@ -135,6 +164,54 @@ Returns a `Score` with `direction="OBSERVATION"` and
 configuration-shaped reasons and unknown/empty inputs. Uses the same
 `_normalise_reason` helper shape as `inference_health.py` (accepts an
 enum, a string, or anything with `.value`).
+
+#### `score_from_correction`
+
+```python
+def score_from_correction(
+    *,
+    tool: str = "",
+    after_mistakes: float = 0.0,    # current mistakes_load() at correction time
+    kind: str = "tool_fix",          # "tool_fix" | "problem_solved" | "recovery"
+) -> Score:
+    ...
+```
+
+Returns a `Score` representing **relief from competence** — the agent
+fixed the broken call, worked through the stuck state, or recovered
+from a stretch of mistakes. The Score has:
+
+| field | value | rationale |
+|---|---|---|
+| `v` | `155 + min(40, after_mistakes / 4)` | mood-positive; bigger after harder problem |
+| `a` | `100` | calm, settled — not the spike of joy, the let-out-breath |
+| `d` | `170` | competence affirmed |
+| `u` | `30` | urgency drops |
+| `g` | `135` | grounded |
+| `w` | `145 + min(40, after_mistakes / 4)` | self-Worth recovers |
+| `i` | `140` | forward-leaning |
+| `patterns` | `("RECOVERY",)` for `kind="recovery"`, `("TOOL_FIX",)` for `"tool_fix"`, `("PROBLEM_SOLVED",)` for `"problem_solved"` | host-level distinction for the event log |
+| `direction` | `"OBSERVATION"` | agent observing its own resolution |
+| `source` | `f"tool:{tool}"` | provenance |
+
+The `after_mistakes` scaling means:
+- A fix when `mistakes.load() == 0` produces a small relief (V≈155, W≈145).
+- A fix when `mistakes.load() == 200` produces a bigger relief (V≈195, W≈185) — proportional to the burden lifted.
+
+Hosts call this when their action layer detects a successful resolution
+that *follows* a stretch of failures. Typical pattern:
+
+```python
+mistakes_before = plugin.mistake_pressure()
+result = await tool.call(...)
+if result.ok and mistakes_before > 0:
+    plugin.ingest(score_from_correction(
+        tool="git", after_mistakes=mistakes_before
+    ))
+```
+
+Whether to fire on every success or only on success-after-failure is a
+host policy decision; the helper just produces the Score.
 
 #### Default category map
 
@@ -175,41 +252,136 @@ kwargs to remap one category without forking the table. Hosts that want
 host-specific patterns (`MY_HOST_BROWSER_TIMEOUT` vs the default
 `TOOL_TIMEOUT`) replace via `override`.
 
-### 2. `clanker_soul/physics/config.py` — `MISTAKE_PATTERNS`
+### 2. `clanker_soul/physics/config.py` — pattern sets + drift knobs
 
 ```python
 MISTAKE_PATTERNS = frozenset({"TOOL_BAD_CALL"})
+
+CORRECTION_PATTERNS = frozenset({
+    "RECOVERY",
+    "TOOL_FIX",
+    "PROBLEM_SOLVED",
+})
 ```
 
 Parallel to `HEAVY_PATTERNS` and `POSITIVE_PATTERNS`. Operators add
-their own self-attribution patterns by replacing the constant before
-constructing physics, or by subclassing — same extension shape as the
-existing two sets.
+their own self-attribution / self-correction patterns by replacing the
+constant before constructing physics, or by subclassing — same extension
+shape as the existing two sets.
+
+**`POSITIVE_PATTERNS` is extended** with the three correction names so
+the subset relation holds:
+
+```python
+POSITIVE_PATTERNS = frozenset({
+    # ...existing entries unchanged...
+    "GRATITUDE", "AFFIRMATION", "WARMTH", "HUMOR", "PLAYFULNESS",
+    "ACKNOWLEDGEMENT", "ENCOURAGEMENT", "CARE", "REPAIR",
+    "DIRECTED_POSITIVE", "RECOVERY_MILESTONE", "RELIEF_ABSENCE",
+    "REPORTED_COMFORT", "CONTRADICTION_RESOLVE",
+    # NEW (also members of CORRECTION_PATTERNS):
+    "RECOVERY", "TOOL_FIX", "PROBLEM_SOLVED",
+})
+```
+
+This is additive — no existing pattern is removed, no host emitting
+existing patterns sees a behavior change. Corrections are *a kind of*
+nourishment with extra mistake-relieving behavior; the classify-order
+ensures the correction branch runs first and routes accordingly.
 
 **Disjointness invariants** (asserted in tests):
 - `MISTAKE_PATTERNS ∩ HEAVY_PATTERNS == ∅`
 - `MISTAKE_PATTERNS ∩ POSITIVE_PATTERNS == ∅`
+- `MISTAKE_PATTERNS ∩ CORRECTION_PATTERNS == ∅`
+- `CORRECTION_PATTERNS ⊆ POSITIVE_PATTERNS` — by construction above
+
+**New `PhysicsConfig` knobs** for soul-level wear from sustained
+mistakes (operator-overridable, "everything is a toggle"):
+
+```python
+@dataclass
+class PhysicsConfig:
+    ...
+    # Mistakes pressure threshold — below this, no soul drift.
+    mistake_pressure_floor: float = 50.0
+
+    # Per-tick wear rate when mistakes load is over floor.
+    # DELIBERATELY weaker than wounding_rate (0.0009) — being-wrong is
+    # not being-wronged. Sustained self-doubt mildly bleeds W and V;
+    # it does NOT bleed G the way trauma does (despair, not grief).
+    mistake_wounding_rate: float = 0.0003
+
+    # When a CORRECTION_PATTERNS Score is ingested, the mistakes
+    # reservoir is actively decremented (relieved) by this fraction
+    # of the Score's effective weight times its scaled relief weight.
+    # 1.0 means "a correction can fully cancel the immediate mistake
+    # weight." Tuneable per-persona via overrides.
+    correction_relief_factor: float = 1.0
+```
 
 ### 3. `clanker_soul/soul/reservoirs.py` — `MistakeReservoir`
 
 Subclass of `TraumaReservoir` (same shape as `NourishmentReservoir`
-already does — engine.py L95-L112). Math identical, type structurally
-distinct so `isinstance` checks branch correctly.
+already does — reservoirs.py L95-L112). Math identical, type
+structurally distinct so `isinstance` checks branch correctly. **Adds
+a `relieve` method** for active decrement when correction events come
+in.
 
 ```python
 class MistakeReservoir(TraumaReservoir):
     """Per-pattern accumulator for self-attributed errors.
 
     Same mechanics as TraumaReservoir (14d half-life, RESERVOIR_CAP).
-    Semantically distinct: this reservoir is OBSERVABLE — hosts read
-    it to decide "should I double-check?" — but it does NOT feed
-    soul_drift's wounding_rate the way TraumaReservoir does. Self-doubt
-    is a working signal, not personality damage."""
+    Semantically distinct: encodes *being wrong* rather than *being
+    wronged*. Drifts the soul more mildly than trauma (via
+    PhysicsConfig.mistake_wounding_rate), and — unlike trauma — has
+    a self-relief partner: correction events actively decrement
+    the reservoir via `relieve()`."""
+
+    def relieve(self, weight: float, *, now_ts: float | None = None) -> float:
+        '''Actively reduce accumulated mistake weight after a correction.
+
+        Spreads the relief across all current entries proportionally
+        to their (decayed) weight, so a recovery answers a long
+        history of mistakes more than a fresh one. Does not create
+        new entries. Returns the actual amount relieved (may be less
+        than ``weight`` when the reservoir is mostly empty).
+
+        weight <= 0 is a no-op. Negative weights would correspond to
+        adding mistakes via this path, which is a misuse — use add()
+        instead.'''
+        if weight <= 0 or not self._entries:
+            return 0.0
+        now = now_ts if now_ts is not None else datetime.now(timezone.utc).timestamp()
+        # Compute current decayed weights to spread relief proportionally.
+        decayed = {}
+        total = 0.0
+        for pat, entry in self._entries.items():
+            d = entry.weight * _decay_factor(now - entry.last_update, self._half_life)
+            if d > 0.0:
+                decayed[pat] = d
+                total += d
+        if total <= 0.0:
+            return 0.0
+        actual_relief = min(weight, total)
+        for pat, d in decayed.items():
+            share = actual_relief * (d / total)
+            new_weight = max(0.0, d - share)
+            self._entries[pat].weight = new_weight
+            self._entries[pat].last_update = now
+        return actual_relief
 
     @classmethod
     def from_dict(cls, data: dict, half_life_s: float = RESERVOIR_HALF_LIFE_S) -> "MistakeReservoir":
         ...  # mirrors NourishmentReservoir.from_dict
 ```
+
+**Why proportional spread:** if the reservoir contains 30 weight on
+`TOOL_BAD_CALL` and 20 on `TOOL_TIMEOUT_BAD_CALL` (a host-defined
+mistake pattern), a correction relieves 60% of the burden from the
+former and 40% from the latter — proportional to current load. A
+recovery is felt across the whole accumulated history, not against
+one arbitrary pattern.
 
 Re-exported from `clanker_soul/soul/__init__.py` and the package
 `__init__.py` (`from clanker_soul import MistakeReservoir`).
@@ -287,18 +459,25 @@ def __init__(
     self.mistakes = mistakes if mistakes is not None else MistakeReservoir()
 ```
 
-**`_classify` gains a 4th return value** (`'mistake'`), checked **first**
-so it wins over the V/W heuristic:
+**`_classify` gains two new return values** (`'mistake'` and
+`'correction'`), checked **first** so explicit pattern routing wins
+over the V/W heuristic:
 
 ```python
 @staticmethod
 def _classify(event: Score) -> str | None:
-    """Return 'positive', 'negative', 'mistake', or None (ambiguous)."""
+    """Return 'positive', 'negative', 'mistake', 'correction', or None."""
     patterns_upper = [p.upper() for p in (event.patterns or ())]
 
     # Pattern routing wins over V/W heuristic — explicit beats implicit.
+    # Order matters: mistake > correction > positive > negative. A Score
+    # that carries both a mistake and a correction pattern is malformed
+    # (host bug); we route to mistake (the pessimistic branch) so the
+    # bug is felt rather than silently swallowed by relief.
     if any(p in MISTAKE_PATTERNS for p in patterns_upper):
         return "mistake"
+    if any(p in CORRECTION_PATTERNS for p in patterns_upper):
+        return "correction"
     if any(p in POSITIVE_PATTERNS for p in patterns_upper):
         return "positive"
     if any(p in HEAVY_PATTERNS for p in patterns_upper):
@@ -319,7 +498,17 @@ produced a more dramatic Score (V=80, W=85) with `TOOL_BAD_CALL` should
 still go to mistakes, not trauma — the pattern is more specific than the
 heuristic. Test asserts this with both shapes.
 
-**`_update_reservoirs` adds a third branch:**
+**Note on `events.classification` column:** the existing column gains
+two new possible values (`'mistake'`, `'correction'`). No existing
+reader breaks — the governor's `_fetch_recent_significant_events`
+filters on `'negative' or breached` and ignores both new strings.
+Mistakes don't surface in the crisis path (intentional — mistake
+pressure is read separately via the cascade); corrections also don't
+surface (a successful tool fix is not a "significant event" in the
+crisis-discrimination sense).
+
+**`_update_reservoirs` gains two branches** — mistake routing and
+correction relief:
 
 ```python
 def _update_reservoirs(self, event: Score, weight: float) -> None:
@@ -328,30 +517,68 @@ def _update_reservoirs(self, event: Score, weight: float) -> None:
     bucket = self._classify(event)
     if bucket is None:
         return
+
+    now = datetime.now(timezone.utc).timestamp()
+    patterns = (
+        list(event.patterns)
+        if event.patterns
+        else ["WARMTH" if bucket in {"positive", "correction"} else "GENERIC_NEGATIVE"]
+    )
+    per_pattern = weight * 100.0 / max(1, len(patterns))
+
+    if bucket == "correction":
+        # Corrections feed nourishment AND relieve mistakes. The
+        # relief weight is the same per-pattern weight scaled by the
+        # operator's correction_relief_factor.
+        for p in patterns:
+            self.nourishment.add(p, per_pattern, now_ts=now)
+        relief = weight * 100.0 * self.config.correction_relief_factor
+        self.mistakes.relieve(relief, now_ts=now)
+        return
+
     if bucket == "mistake":
         target = self.mistakes
     elif bucket == "positive":
         target = self.nourishment
     else:  # negative
         target = self.trauma
-    now = datetime.now(timezone.utc).timestamp()
-    patterns = (
-        list(event.patterns)
-        if event.patterns
-        else ["WARMTH" if bucket == "positive" else "GENERIC_NEGATIVE"]
-    )
-    per_pattern = weight * 100.0 / max(1, len(patterns))
     for p in patterns:
         target.add(p, per_pattern, now_ts=now)
 ```
 
-The `if bucket is None / WARMTH / GENERIC_NEGATIVE` fallback path is
-unchanged — only triggers when classification came from V/W heuristic
-(no patterns provided), which never produces 'mistake' (mistakes are
-pattern-keyed by definition).
+`_classify` is extended to return `'correction'` for events with
+patterns in `CORRECTION_PATTERNS` — checked **after** the mistake
+check so a Score that somehow carries both a mistake and a correction
+pattern routes deterministically to mistake (host bug should be
+flagged loudly via test, but if it slips through, the pessimistic
+branch wins).
 
-**`soul_drift` is unmodified.** No mistakes-driven W/V drift. The
-architectural line.
+**`soul_drift` gains a mistakes-wear branch** parallel to the existing
+trauma-wear branch (engine.py L328-L341):
+
+```python
+mistakes_load = self.mistakes.load(now_ts=now)
+if mistakes_load > cfg.mistake_pressure_floor:
+    # Mild W/V wear from sustained being-wrong. Distinct from and
+    # weaker than trauma's wounding_rate — self-doubt erodes
+    # competence-faith, not the broader sense of being safe in
+    # the world. Notably we don't touch G (gravity/grounding) here
+    # the way trauma does — being wrong doesn't make you feel
+    # crushed, it makes you feel uncertain.
+    magnitude = min(1.0, (mistakes_load - cfg.mistake_pressure_floor) / 100.0)
+    self.soul.w = _clamp(self.soul.w - cfg.mistake_wounding_rate * magnitude * elapsed_h * 80)
+    self.soul.v = _clamp(self.soul.v - cfg.mistake_wounding_rate * magnitude * elapsed_h * 40)
+```
+
+The existing trauma-vs-nourishment imbalance branch is unchanged.
+The new mistakes-wear branch runs **independently** so a high-trauma
+agent who is also making lots of mistakes gets both wears applied —
+they're different sources of suffering. (Per the user's framing, this
+is realistic: being attacked AND being incompetent compounds.)
+
+The `drift report` dict (returned by `soul_drift`) gains a
+`mistakes_load` field so hosts/UIs can observe both pressures
+side-by-side.
 
 ### 6. `clanker_soul/plugin.py` — wiring + accessor
 
@@ -455,9 +682,11 @@ match it, the UI events table renders the string verbatim.
 
 ## Tests
 
-### `tests/test_tool_health.py` (new, ~10 tests)
+### `tests/test_tool_health.py` (new, ~14 tests)
 
 Mirrors `tests/test_hermes_inference_failure.py` shape:
+
+**`score_from_action_failure`:**
 
 1. each default category produces a Score with the documented dims
 2. `tool=` populates `Score.source` as `"tool:{tool}"`; empty `tool` →
@@ -475,7 +704,20 @@ Mirrors `tests/test_hermes_inference_failure.py` shape:
     `validation_error.patterns == ("TOOL_BAD_CALL",)` and
     `"TOOL_BAD_CALL" in MISTAKE_PATTERNS`
 
-### `tests/test_mistakes_reservoir.py` (new, ~6 tests)
+**`score_from_correction`:**
+
+11. baseline call (`after_mistakes=0`) produces V=155, W=145, A=100,
+    D=170; `direction == "OBSERVATION"`; `source == "tool:{tool}"`;
+    `patterns == ("TOOL_FIX",)` for default `kind="tool_fix"`
+12. scaling: `after_mistakes=200` produces V≈195, W≈185 (clamped at
+    +40 each); `after_mistakes=1000` does not exceed those caps
+13. `kind="recovery"` → `patterns == ("RECOVERY",)`;
+    `kind="problem_solved"` → `("PROBLEM_SOLVED",)`; unknown kind
+    raises ValueError (host-bug protection)
+14. all correction patterns are members of `CORRECTION_PATTERNS` and
+    `CORRECTION_PATTERNS ⊂ POSITIVE_PATTERNS`
+
+### `tests/test_mistakes_reservoir.py` (new, ~9 tests)
 
 1. `MistakeReservoir()` is empty; `.load() == 0.0`
 2. `add("TOOL_BAD_CALL", weight=50)` updates the reservoir; `.load() > 0`
@@ -486,26 +728,53 @@ Mirrors `tests/test_hermes_inference_failure.py` shape:
 6. `isinstance(MistakeReservoir(), TraumaReservoir)` (subclass) **but**
    `not isinstance(TraumaReservoir(), MistakeReservoir)` — type
    branching works
+7. **`relieve(50)` on an empty reservoir returns 0.0**, no error
+8. **`relieve(50)` on a reservoir with 100 weight reduces load to 50**;
+   spreads proportionally across patterns
+9. **`relieve(weight)` capped at current load** — a relief larger than
+   the reservoir doesn't go negative (`load() >= 0` invariant always
+   holds)
 
-### `tests/test_physics.py` extensions (~5 tests)
+### `tests/test_physics.py` extensions (~10 tests)
+
+**Mistake routing:**
 
 1. ingesting `Score(patterns=("TOOL_BAD_CALL",), w=120, ...)` increments
    `physics.mistakes` and **does not** change `physics.trauma`
 2. ingesting a Score with `TOOL_BAD_CALL` AND a `HEAVY_PATTERNS` member
    (e.g. `("TOOL_BAD_CALL", "BETRAYAL")`) routes to **mistakes**, not
-   trauma — pattern check is by `MISTAKE_PATTERNS` first (this also
-   serves as documentation that hosts shouldn't co-tag, but the
-   behaviour is defined)
-3. ingesting many `TOOL_BAD_CALL` events does **not** drift the soul
-   via `soul_drift` (run drift after 100 events; soul.w unchanged
-   absent trauma load)
-4. ingesting a `TOOL_TIMEOUT` Score (W=128, no MISTAKE pattern) does
+   trauma — pattern check is by `MISTAKE_PATTERNS` first
+3. ingesting a `TOOL_TIMEOUT` Score (W=128, no MISTAKE pattern) does
    **not** touch the mistakes reservoir
-5. `_classify` returns `"mistake"` for pattern-tagged events even when
+4. `_classify` returns `"mistake"` for pattern-tagged events even when
    V/W would otherwise classify as 'negative' (V=80, W=85, patterns =
    `("TOOL_BAD_CALL",)` → 'mistake')
 
-### `tests/test_plugin.py` extensions (~3 tests)
+**Mistake-driven soul wear:**
+
+5. ingesting many `TOOL_BAD_CALL` events with `mistakes.load() >
+   mistake_pressure_floor`, then running `soul_drift` over 1 hour,
+   produces a small `soul.w` and `soul.v` decrease — but **smaller
+   than** the equivalent trauma load would produce (rate strictly
+   weaker than `wounding_rate`)
+6. mistake-wear does **not** touch `soul.g` (asserted unchanged)
+7. mistakes load below `mistake_pressure_floor` produces **no** soul
+   drift
+
+**Correction routing + relief:**
+
+8. ingesting a `Score(patterns=("TOOL_FIX",))` after a stretch of
+   `TOOL_BAD_CALL` events:
+   - reduces `physics.mistakes.load()` (active relief)
+   - increases `physics.nourishment.load()` (correction = nourishment)
+   - increases mood W and V (relief is positive)
+9. correction Score with `correction_relief_factor = 0.0` (override)
+   does NOT reduce mistakes — relief is operator-tunable
+10. ambiguous Score carrying both `TOOL_BAD_CALL` and `TOOL_FIX`
+    patterns routes to **mistake** (pessimistic branch wins; warning
+    not asserted but documented)
+
+### `tests/test_plugin.py` extensions (~5 tests)
 
 1. `plugin.mistake_pressure()` is `0.0` on fresh agent; non-zero after
    ingesting a `TOOL_BAD_CALL` Score
@@ -517,6 +786,14 @@ Mirrors `tests/test_hermes_inference_failure.py` shape:
    create `soul_state` without `mistakes_json` column), construct
    `SoulPlugin`, verify column was added and `mistake_pressure() ==
    0.0`
+4. **end-to-end recovery loop:** ingest 5 TOOL_BAD_CALL events,
+   capture `mistakes_load_before`, ingest one `score_from_correction(
+   after_mistakes=mistakes_load_before)`, verify `mistake_pressure()`
+   strictly less than before AND mood `v` and `w` increased
+5. **mistake-wear visible in tick output:** ingest enough TOOL_BAD_CALL
+   to cross `mistake_pressure_floor`, advance clock 1h, call
+   `plugin.tick()`, assert returned dict contains `mistakes_load` and
+   `soul.w` decreased
 
 ### Disjointness invariant tests
 
@@ -527,6 +804,13 @@ add if absent):
 def test_mistake_patterns_disjoint():
     assert MISTAKE_PATTERNS.isdisjoint(HEAVY_PATTERNS)
     assert MISTAKE_PATTERNS.isdisjoint(POSITIVE_PATTERNS)
+    assert MISTAKE_PATTERNS.isdisjoint(CORRECTION_PATTERNS)
+
+def test_correction_patterns_subset_of_positive():
+    # Corrections also count as nourishment — explicit pattern
+    # membership is belt-and-braces against weak-dim Scores routing
+    # incorrectly.
+    assert CORRECTION_PATTERNS <= POSITIVE_PATTERNS
 ```
 
 ## Out of scope (in Issue B or beyond)
@@ -534,6 +818,11 @@ def test_mistake_patterns_disjoint():
 - **The "should the agent double-check?" decision logic.** That's a
   cascade concern — Issue B reads `plugin.mistake_pressure()` and biases
   action selection.
+- **Auto-detection of "this turn was a correction."** `score_from_correction`
+  is a helper; deciding *when* to call it is the host's policy
+  (typically "tool succeeded after at least one prior failure on the
+  same logical operation"). clanker-soul does not provide a
+  success-after-failure interceptor.
 - **Generic tool-failure detection / wrapping.** `score_from_action_failure`
   is a *helper* — the host decides when to call it (e.g. inside a
   try/except around a tool call, or when an `ActionOutcome` reports
@@ -558,20 +847,42 @@ def test_mistake_patterns_disjoint():
   from `HEAVY_PATTERNS`. Companion to the hermes-only
   `score_from_failover` helper, generalised to the agent's full tool
   surface.
+- `score_from_correction(*, tool, after_mistakes, kind)` companion that
+  produces a relief-shaped Score whose magnitude scales with the current
+  mistakes load. Hosts ingest one of these after a successful resolution
+  to close the mistake → correction loop.
 - `MistakeReservoir` (parallel to `TraumaReservoir` /
   `NourishmentReservoir`) accumulating self-attributed-error pressure
   with the same 14-day half-life and `RESERVOIR_CAP=1000`. Persisted
   via the new `mistakes_json` column on `soul_state`, idempotently
-  added to v0.x databases.
-- `MISTAKE_PATTERNS` frozenset (`{"TOOL_BAD_CALL"}` initially; extensible
-  by replacing the constant). Disjoint from `HEAVY_PATTERNS` and
-  `POSITIVE_PATTERNS`.
+  added to v0.x databases. Includes `relieve(weight)` method for
+  active decrement on correction events (proportional spread across
+  current entries).
+- `MISTAKE_PATTERNS` and `CORRECTION_PATTERNS` frozensets — extensible
+  by replacing the constant; `CORRECTION_PATTERNS ⊆ POSITIVE_PATTERNS`.
+- `PhysicsConfig.mistake_pressure_floor`,
+  `PhysicsConfig.mistake_wounding_rate`, and
+  `PhysicsConfig.correction_relief_factor` — operator-tunable knobs
+  for the new wear/relief mechanics.
+- `soul_drift` now applies a mild W/V wear when mistakes load exceeds
+  floor (rate strictly weaker than trauma's `wounding_rate`; G is
+  left untouched).
 - `SoulPlugin.mistake_pressure() -> float` accessor; `snapshot()` gains
   `"mistake_pressure"` field.
 - `EmotionalPhysics(mistakes=...)` kwarg (default empty reservoir).
 - `SoulStore.load_mistakes(agent_id)` / `save_mistakes(agent_id,
   mistakes)` — additive methods; the legacy 3-tuple `load()`/`save()`
   signatures are unchanged.
+
+`### Changed`:
+
+- `POSITIVE_PATTERNS` extended with `RECOVERY`, `TOOL_FIX`,
+  `PROBLEM_SOLVED` so corrections register as nourishment alongside
+  their mistake-relieving role. Existing patterns unchanged.
+- `_classify` now also returns `'mistake'` and `'correction'`; the
+  `events.classification` column gains those two possible values. No
+  existing reader breaks (governor's significant-event filter still
+  matches `'negative' or breached`).
 
 ## Drop-in invariant compliance summary
 
@@ -590,15 +901,19 @@ without touching their code?"* ✅
 
 ## Estimated size
 
-~500 LOC including tests:
-- `tool_health.py`: ~150 LOC (mostly the mapping + docstrings)
-- `MistakeReservoir`: ~30 LOC
+~700 LOC including tests:
+- `tool_health.py` (`score_from_action_failure` + `score_from_correction`): ~220 LOC
+- `MistakeReservoir` + `relieve()`: ~70 LOC
 - `SoulStore` migration + load/save methods: ~40 LOC
-- `EmotionalPhysics` routing changes: ~15 LOC
+- `EmotionalPhysics` routing + soul-drift mistake-wear branch: ~40 LOC
 - `SoulPlugin` wiring: ~15 LOC
-- `__init__` exports + config additions: ~10 LOC
-- Tests: ~250 LOC
-- CHANGELOG + docstrings: ~30 LOC
+- `PhysicsConfig` knobs: ~10 LOC
+- `__init__` exports + POSITIVE_PATTERNS extension: ~15 LOC
+- Tests: ~350 LOC
+- CHANGELOG + docstrings: ~50 LOC
 
 One PR, one CHANGELOG entry, no host refactor required, no v0.x
-migration scripts, fully covered by the existing release process.
+migration scripts, fully covered by the existing release process. The
+expansion vs. the original ~500 LOC estimate comes from the correction
+helper, the relief mechanic, and the soul-drift wear branch — all of
+which were absent in the first cut.
