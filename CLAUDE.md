@@ -109,7 +109,7 @@ Two superimposed planes — the three timescales of state, and the motivation/le
 
 **`clanker_soul/presets.py`** — `Preset` is a frozen `(name, description, soul, config)` dataclass. The four built-ins (`CHILD`, `ADULT`, `BRITTLE`, `STOIC`) are **tuples, not subclasses** — anyone can construct their own. `Preset.apply(overrides, agent_id)` writes ALL physics fields and the personality soul fields (V/A/D/U/G/W/I) — **bookkeeping fields** (`last_drift_ts`, `last_save_ts`) **are intentionally excluded** since they're runtime state, not personality. Switching presets uses `ConfigOverrides.set` (replace), not `update` (merge), so stale knobs from the previous preset don't linger.
 
-**`clanker_soul/inference.py`** — `Inference` Protocol with two methods: `score(text, context) -> Score` (read text in context and return its VADUGWI scoring — used by the contemplation/idle loop to evaluate a synthesized thought) and `act(action) -> ActionOutcome` (carry out a `PulseAction` and report consequences). The library never imports any model SDK; concrete impls live in host code or optional companion packages. Reachable only via opt-in kwarg (`SoulPlugin(inference=...)` etc.) — hosts that don't pass one never see it. One model can wear both hats, or two can split via `inference_score=` / `inference_act=` for different budget profiles.
+**`clanker_soul/inference.py`** — `Inference` Protocol with two `async` methods: `async score(text, context) -> Score` (read text in context and return its VADUGWI scoring — used by the contemplation/idle loop to evaluate a synthesized thought) and `async act(action) -> ActionOutcome` (carry out a `PulseAction` and report consequences). The library never imports any model SDK; concrete impls live in host code or optional companion packages. Reachable only via opt-in kwarg (`SoulPlugin(inference=...)` etc.) — hosts that don't pass one never see it. One model can wear both hats, or two can split via `scorer=` / `actor=` for different budget profiles.
 
 **`clanker_soul/pending.py`** — `PendingCoordinator`, `OutcomeClassifier`, `InMemoryPendingActionStore`, `SqlitePendingActionStore`, `PendingDeltaConfig`. Extends the learning loop to actions whose outcome arrives later (or never): a check-in DM that gets no reply for hours, a comment that's seen-and-skipped. The host registers the action as pending; later resolution carries a status (`acknowledged` / `ignored` / `mixed` / `expired`) and applies an operator-tunable mood delta. Without this, `ActionOutcome` can only model immediate consequences — silence is invisible to the soul.
 
@@ -205,7 +205,7 @@ CARL (https://github.com/deucebucket/carl) is the reference host and the source 
 
 - `examples/` (top-level) — `01_minimal.py` → `04_pulse_host.py` is the recommended progression. Start here, not at the in-package `clanker_soul/examples/reference_host.py` (which is a fuller integration reference, second read).
 - `docs/host-integration.md` — canonical host integration writeup.
-- `docs/specs/` — per-issue specs. The pattern is "spec lands first, code follows" (the current branch `docs/tool-failure-specs` is exactly this).
+- `docs/specs/` — per-issue specs. The pattern is "spec lands first, code follows" — most M4 features (tool-failure attribution #97, response cascade #98, config API + labels) lived in `docs/specs/` for a PR before any code landed.
 - `docs/research/` — research notes that back design decisions; consult before touching the affect/breach/contemplation math.
 
 ## License
