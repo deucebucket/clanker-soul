@@ -42,10 +42,12 @@ This is the architecture every part of clanker-soul serves. Adding a feature tha
 
 ```bash
 pip install -e ".[dev]"                                  # dev install with pytest
+pip install -e ".[ui,dev]"                               # add the FastAPI UI deps
 pytest                                                   # full suite
 pytest tests/test_physics.py                             # one file
 pytest tests/test_pulse.py::test_distress_fires_when_v_and_w_drop  # one test
 pytest -k breach                                         # by name pattern
+python -m clanker_soul ui --db ./soul.db                 # launch the UI (needs [ui])
 ```
 
 `pyproject.toml` sets `asyncio_mode = "auto"` — async tests don't need `@pytest.mark.asyncio` to run, but existing tests use it for clarity. Ruff is configured (line-length 100, py310) but not wired into CI; `ruff check .` / `ruff format .` if you have it installed.
@@ -99,11 +101,17 @@ Two superimposed planes — the three timescales of state, and the motivation/le
 
 `soul_drift()` is the slow bookkeeping pass — call periodically (e.g. from `PulseHost.slow_drift_tick`). Idempotent via `last_drift_ts`; skips work under 3min elapsed.
 
+`contemplation.py` adds `EmotionalPhysics.contemplate(face)` — ingests a `PromptFace.vadugwi_affinity` as a synthetic mood-shift only. Returns `ContemplationResult` with pre/post mood snapshots and per-dim deltas. **No soul write, no reservoir update, no breach** — thinking about a thought is not a real event. Cascade layers (gate, action selection) route off the *direction* of the shift, not absolute state.
+
 **`clanker_soul/eventlog/`** — package: `records.py` (`IngestRecord`, `PulseRecord` frozen dataclasses), `protocol.py` (`EventLog` runtime-checkable Protocol, `NullEventLog` noop default), `sqlite.py` (`SqliteEventLog` durable impl writing via the shared `SoulStore.connection` + `SoulStore.lock` — no second handle). **Soft-fail invariant:** writes that fail (DB locked, disk full, connection closed mid-tick) MUST log a warning and continue; they MUST NOT raise into the caller. Physics catches sink exceptions in addition to `SqliteEventLog`'s own catch — defense in depth for custom impls.
 
 **`clanker_soul/overrides.py`** — `OverrideBundle` is a frozen `(physics: dict, soul: dict)` partial-fields dataclass. `ConfigOverrides(store)` reads/writes the v0.2 `config_overrides` table. `apply_overrides()` is a pure merge function. **Partial-merge semantics:** only fields explicitly present in the bundle are overridden. Removing a previously-overridden field reverts that field to its **constructor** value (not the dataclass default — the value the agent was constructed with). Soul fields that were *never* overridden are left alone, so drift accumulated since construction is preserved across `reload_overrides()` calls. Unknown override keys are logged at WARNING and ignored — forward-compat with future `PhysicsConfig` fields and survives a v0.2/v0.3 schema skew between agent and UI processes.
 
 **`clanker_soul/presets.py`** — `Preset` is a frozen `(name, description, soul, config)` dataclass. The four built-ins (`CHILD`, `ADULT`, `BRITTLE`, `STOIC`) are **tuples, not subclasses** — anyone can construct their own. `Preset.apply(overrides, agent_id)` writes ALL physics fields and the personality soul fields (V/A/D/U/G/W/I) — **bookkeeping fields** (`last_drift_ts`, `last_save_ts`) **are intentionally excluded** since they're runtime state, not personality. Switching presets uses `ConfigOverrides.set` (replace), not `update` (merge), so stale knobs from the previous preset don't linger.
+
+**`clanker_soul/inference.py`** — `Inference` Protocol with two methods: `score(text, context) -> Score` (read text in context and return its VADUGWI scoring — used by the contemplation/idle loop to evaluate a synthesized thought) and `act(action) -> ActionOutcome` (carry out a `PulseAction` and report consequences). The library never imports any model SDK; concrete impls live in host code or optional companion packages. Reachable only via opt-in kwarg (`SoulPlugin(inference=...)` etc.) — hosts that don't pass one never see it. One model can wear both hats, or two can split via `inference_score=` / `inference_act=` for different budget profiles.
+
+**`clanker_soul/pending.py`** — `PendingCoordinator`, `OutcomeClassifier`, `InMemoryPendingActionStore`, `SqlitePendingActionStore`, `PendingDeltaConfig`. Extends the learning loop to actions whose outcome arrives later (or never): a check-in DM that gets no reply for hours, a comment that's seen-and-skipped. The host registers the action as pending; later resolution carries a status (`acknowledged` / `ignored` / `mixed` / `expired`) and applies an operator-tunable mood delta. Without this, `ActionOutcome` can only model immediate consequences — silence is invisible to the soul.
 
 **`clanker_soul/__main__.py`** — CLI subcommands `info` / `prune` / `ui`. The `ui` subcommand uses `try: from clanker_soul.ui import launch` to dispatch — Phase 2 just adds the module, no CLI changes needed.
 
@@ -113,7 +121,7 @@ Two superimposed planes — the three timescales of state, and the motivation/le
 
 **`clanker_soul/governor/`** — package: `levels.py` (`CapabilityLevel` IntEnum + `GovernorConfig` thresholds), `assessment.py` (`assess_capability` pure function), `crisis.py` (`crisis_signal` + `CrisisDiagnosis` — discriminates emotional spike from real emergency using `Score.direction` + `Score.source`), `context.py` (`compose_state_context` — produces the human-readable string the agent reads to know its own state). Wires into `SoulPlugin` via `plugin.capability_level()`, `plugin.crisis_signal()`, `plugin.state_context()`. **User communication channel is always preserved** at levels 0-3 (the user's framing: "rage all you want, use your words, no destruction in anger"). Level 4 (`crisis_lockout`) is opt-in only via `GovernorConfig.enable_crisis_lockout=True`.
 
-**`clanker_soul/pulse/`** — package: `config.py` (`PulseConfig`), `triggers.py` (`Trigger`, `PulseTarget`, `PulseAction`, `ActionOutcome`, `ACTION_KINDS`), `host.py` (`PulseHost` Protocol), `prompt.py` (`compose_self_prompt`), `engine.py` (`PulseEngine`).
+**`clanker_soul/pulse/`** — package: `config.py` (`PulseConfig`), `triggers.py` (`Trigger`, `PulseTarget`, `PulseAction`, `ActionOutcome`, `ACTION_KINDS`), `host.py` (`PulseHost` Protocol), `prompt.py` (`compose_self_prompt` — wraps the corpus sampler, falls back to a static map when no corpus is wired), `engine.py` (`PulseEngine`), `dispatcher.py` (`PulseDispatcher` — handler-injected alternative to writing `dispatch_action` as a switch statement; soft-fails handler exceptions into `ActionOutcome(delivered=False, note="dispatch_exception:...")`, recommended starting point for new integrations), `corpus.py` (`PromptCorpus`, `PromptFace` — weighted sampler over self-prompt candidates eligible by trigger × VADUGWI predicates × situational tags × memory anchors × recency cooldown), `corpus_defaults.py` (~55 baseline faces covering all 12 trigger kinds × motif/situational gradients — ships with the library so a fresh host is visibly different from pre-M3.2 deterministic prompts on day one), `corpus_store.py` (`CorpusStore`, `PersistentRecencyLog` — SQLite persistence reusing `SoulStore.connection` + lock, soft-fail writes).
 
 **The motivation engine.** `PulseEngine` evaluates 12 trigger kinds and dispatches one of 6 action kinds:
 
@@ -153,6 +161,7 @@ These are deliberate and easy to break by accident:
 - **Failures are loud in physics, soft in storage.** Physics raises on bad input. `SoulStore.save` catches and logs a warning so a transient SQLite hiccup doesn't desync mood from disk forever — but corruption on `load` falls back to defaults rather than crashing the agent. Don't add silent excepts to physics; don't add hard raises to the store.
 - **`HEAVY_PATTERNS` and `POSITIVE_PATTERNS` are frozensets defined in `physics.py`.** Hosts using a different scoring engine extend these by **replacing the constant** before constructing `EmotionalPhysics`, or by subclassing. Pattern matching is upper-cased.
 - **The breach mechanic only mutates V, W, G.** Other dims drift through `soul_drift` only. Keep it that way — wholesale soul rewrite from a single event is a bug, not a feature.
+- **Contemplation never updates soul or reservoirs.** `EmotionalPhysics.contemplate()` mutates mood only. If you find yourself adding a soul write or reservoir tick inside `contemplate()`, you've broken the M4 primitive. The cascade routes off mood-shift *direction*, not absolute state — that's why contemplation can run at high frequency without polluting the slow plane.
 - **Event log writes are soft-fail.** A logging failure (DB locked, disk full, connection closed mid-tick) MUST warn and continue, never raise into physics. `SqliteEventLog` catches; `EmotionalPhysics` and `PulseEngine` also catch as defense-in-depth for custom sinks. Don't add `raise` into a logging path.
 - **`config_overrides` are partial-merge, not full-replace.** `reload_overrides()` only touches fields explicitly in the bundle. Soul fields that were never overridden are left alone — drift is preserved across reloads. The `_active_*_overrides` sets on `EmotionalPhysics` track which fields are *currently* overridden so removing one cleanly reverts it to the constructor value without clobbering everything else.
 - **`SoulPlugin` is the recommended entry point but not the only one.** Direct `EmotionalPhysics(...)` construction works exactly as it did in v0.1 — opt-in `event_log=` and `overrides=` kwargs are the only additions. Don't deprecate the low-level path; advanced hosts (test rigs, custom persistence) need it.
@@ -161,6 +170,7 @@ These are deliberate and easy to break by accident:
 - **`Score.direction` + `Score.source` are the crisis-vs-spike key.** Without them, the governor can only flag "spike, unclear" with low confidence. Hosts that want emergency escalation must populate at least one of those fields. `SELF_DIRECTED` from one source = personal spike; `EXTERNAL_REPORT` from diverse sources = world emergency.
 - **State-context generation is pure-function over snapshot + recent_events + crisis.** The host can call it cheaply each turn, or once per N turns and cache. Don't add side effects (file writes, network calls) to the context generator.
 - **The learning loop is first-class, not optional.** `PulseEngine(physics=...)` is the kwarg that closes it: action consequences auto-ingest into physics. Without that kwarg, the engine warns once and drops consequences. Hosts that don't populate `ActionOutcome.consequences` give up the learning signal — flag this in docs, don't silently let it slide. Also: don't bake "consequences feed back into soul" logic anywhere outside the engine — keep it in one place so when we change the model, every consumer benefits.
+- **`PromptCorpus` faces are sampled, never selected deterministically.** A trigger maps to *eligible faces* (filtered by VADUGWI predicates, situational tags, memory anchors, recency cooldown), then a weighted die rolls over the eligible set. Tests that pin one specific prompt for one trigger are fragile by design — assert over the eligible set or the weighting math, not the chosen face. The default `corpus_defaults.DEFAULT_FACES` ships with the library so hosts get behavior out-of-the-box; replace via `SoulPlugin(replace_corpus=True, ...)` rather than mutating the constant.
 - **Defaults are permissive, opt-in safety.** `DEFAULT_CAPABILITY_PROFILES` allow every action kind at every level. `enable_public_action_lockout=False` by default. Operators who want safety pass `STRICT_CAPABILITY_PROFILES` or build a custom profile dict. clanker-soul is a learning tool, not a corporate safety wrapper — letting agents act on impulses is the point. See `memory/project_learning_tool_framing.md`.
 - **Every gating cell is operator-overridable.** Don't write `if level == X and kind == Y: deny`. The table is in `GovernorConfig.capability_profiles: dict[CapabilityLevel, CapabilityProfile]` and operators replace cells, not fork code. See `memory/feedback_everything_is_a_toggle.md`.
 
@@ -188,6 +198,15 @@ Don't bump the version on every PR mechanically — bump when you cut a release 
 ## Hosts
 
 CARL (https://github.com/deucebucket/carl) is the reference host and the source this was extracted from. The module here is canonical; CARL's bundled copy may temporarily diverge while changes are upstreamed.
+
+`integrations/hermes/` (in this repo) holds first-party scaffolding for the [hermes](https://github.com/deucebucket/hermes) inference layer — used by the M4 cascade and by the inference-failure hook described in `memory/project_inference_failure_hook.md`.
+
+## Reading order for new contributors
+
+- `examples/` (top-level) — `01_minimal.py` → `04_pulse_host.py` is the recommended progression. Start here, not at the in-package `clanker_soul/examples/reference_host.py` (which is a fuller integration reference, second read).
+- `docs/host-integration.md` — canonical host integration writeup.
+- `docs/specs/` — per-issue specs. The pattern is "spec lands first, code follows" (the current branch `docs/tool-failure-specs` is exactly this).
+- `docs/research/` — research notes that back design decisions; consult before touching the affect/breach/contemplation math.
 
 ## License
 
