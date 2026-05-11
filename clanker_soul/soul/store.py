@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from clanker_soul.soul.reservoirs import (
+    MistakeReservoir,
     NourishmentReservoir,
     TraumaReservoir,
 )
@@ -145,6 +146,19 @@ class SoulStore:
         }
         if "face_id" not in existing_pulse_cols:
             c.execute("ALTER TABLE pulse_log ADD COLUMN face_id TEXT")
+        # M4 #97 — soul_state gets a mistakes_json column. Same
+        # idempotent shape as pulse_log.face_id above so existing
+        # databases (v0.x without the column) upgrade in place. New
+        # rows get '{}' as the empty MistakeReservoir, decoded by
+        # MistakeReservoir.from_dict into an empty reservoir.
+        existing_soul_cols = {
+            row[1] for row in c.execute("PRAGMA table_info(soul_state)").fetchall()
+        }
+        if "mistakes_json" not in existing_soul_cols:
+            c.execute(
+                "ALTER TABLE soul_state "
+                "ADD COLUMN mistakes_json TEXT NOT NULL DEFAULT '{}'"
+            )
         # M3.3 — corpus persistence + per-agent face recency.
         c.execute(
             """
@@ -236,6 +250,66 @@ class SoulStore:
                 self._db.commit()
         except Exception as e:
             logger.warning("soul save failed for %s (%s) — continuing", agent_id, e)
+
+    # ------------------------------------------------------------------
+    # MistakeReservoir persistence (M4 #97)
+    #
+    # Kept separate from the legacy 3-tuple ``load``/``save`` signatures
+    # so hosts that destructure ``soul, trauma, nourishment =
+    # store.load(...)`` keep working without code changes. The drop-in
+    # invariant requires every new feature to be reachable additively.
+    # ------------------------------------------------------------------
+
+    def load_mistakes(self, agent_id: str) -> MistakeReservoir:
+        """Read the per-agent :py:class:`MistakeReservoir` from disk.
+
+        Returns an empty reservoir for unknown agents OR when the
+        ``mistakes_json`` row value is missing/empty (matches the
+        column default for v0.x rows upgraded in place). Corruption
+        is soft-failed: a JSON decode error logs a warning and returns
+        a fresh empty reservoir rather than crashing the agent.
+        """
+        with self._db_lock:
+            row = self._db.execute(
+                "SELECT mistakes_json FROM soul_state WHERE agent_id = ?",
+                (agent_id,),
+            ).fetchone()
+        if row is None or not row[0]:
+            return MistakeReservoir()
+        try:
+            return MistakeReservoir.from_dict(json.loads(row[0]))
+        except Exception as e:
+            logger.warning(
+                "mistakes reservoir corrupt for %s (%s) — resetting",
+                agent_id,
+                e,
+            )
+            return MistakeReservoir()
+
+    def save_mistakes(self, agent_id: str, mistakes: MistakeReservoir) -> None:
+        """Persist the per-agent :py:class:`MistakeReservoir`.
+
+        Uses ``UPDATE``, not ``INSERT OR REPLACE``, because the row is
+        expected to already exist (created by :py:meth:`save`). The
+        plugin calls ``save()`` before ``save_mistakes()`` to guarantee
+        that order. If a host opts to call ``save_mistakes`` standalone
+        on a never-seen agent_id, the UPDATE is a no-op and the agent
+        gets an empty reservoir on the next load — soft-fail behaviour
+        preserved.
+        """
+        try:
+            with self._db_lock:
+                self._db.execute(
+                    "UPDATE soul_state SET mistakes_json = ? WHERE agent_id = ?",
+                    (json.dumps(mistakes.to_dict()), agent_id),
+                )
+                self._db.commit()
+        except Exception as e:
+            logger.warning(
+                "mistakes save failed for %s (%s) — continuing",
+                agent_id,
+                e,
+            )
 
 
 __all__ = ["SoulStore"]

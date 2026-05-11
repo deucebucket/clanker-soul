@@ -14,6 +14,7 @@ name that was at the top of the old monolithic ``soul.py``."""
 from clanker_soul.soul.reservoirs import (
     RESERVOIR_CAP,
     RESERVOIR_HALF_LIFE_S,
+    MistakeReservoir,
     NourishmentReservoir,
     TraumaReservoir,
 )
@@ -25,6 +26,7 @@ __all__ = [
     "SoulStore",
     "TraumaReservoir",
     "NourishmentReservoir",
+    "MistakeReservoir",
     "RESERVOIR_HALF_LIFE_S",
     "RESERVOIR_CAP",
 ]

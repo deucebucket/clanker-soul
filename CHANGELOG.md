@@ -9,6 +9,85 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Tool-failure attribution + MistakeReservoir (#97).** New
+  ``clanker_soul.tool_health`` module with two helpers:
+  ``score_from_action_failure(reason, *, tool, override)`` produces
+  an ingestable ``Score`` for tool/system failures (timeout, rate
+  limit, denied, validation_error, etc.) — all with
+  ``direction="OBSERVATION"`` and patterns disjoint from
+  ``HEAVY_PATTERNS`` so a rate-limit never triggers the breach
+  mechanic. ``validation_error`` is the **only** category that dents
+  Worth (W=120) and emits ``TOOL_BAD_CALL`` — routed to the new
+  ``MistakeReservoir`` for accumulating self-doubt.
+  ``score_from_correction(*, tool, after_mistakes, kind)`` produces
+  the post-resolution Score. Two emotional shapes per the
+  Sweeny/Vohs/Bandura literature: pride-shaped (``kind="tool_fix"``
+  / ``"problem_solved"`` / ``"recovery"``) — durable W and D
+  affirmation scaling with ``after_mistakes``; relief-shaped
+  (``kind="relief_exhaustion"``) — flat A/U drop, no pride
+  integration, *still* relieves the reservoir. Configuration-shaped
+  reasons (``not_implemented``, ``tool_disabled``, ``config_error``)
+  return ``None`` — operator concerns, not agent experiences.
+- ``MistakeReservoir`` (parallel to ``TraumaReservoir`` /
+  ``NourishmentReservoir``) accumulates self-attributed errors on
+  the same 14-day half-life. Includes ``relieve(weight)`` for
+  active decrement on correction events; spreads relief
+  proportionally across current pattern entries, capped at the
+  current load (never goes negative). Persisted via the new
+  ``mistakes_json`` column on ``soul_state``, added idempotently
+  to v0.x databases via the same ``PRAGMA table_info`` pattern as
+  ``pulse_log.face_id``.
+- ``MISTAKE_PATTERNS`` (``{"TOOL_BAD_CALL"}``) and
+  ``CORRECTION_PATTERNS`` (``{"RECOVERY", "TOOL_FIX",
+  "PROBLEM_SOLVED"}``) frozensets, replaceable by operators.
+  ``CORRECTION_PATTERNS ⊆ POSITIVE_PATTERNS`` by construction —
+  corrections are a kind of nourishment with extra mistake-relieving
+  behavior.
+- ``PhysicsConfig.mistake_pressure_floor`` (50.0),
+  ``mistake_wounding_rate`` (0.0003 — deliberately weaker than
+  trauma's ``wounding_rate``),
+  ``correction_relief_factor`` (1.0 — tune to 0.0 to disable
+  active relief), ``resilience_correction_floor`` (50.0), and
+  ``recovery_resilience_rate`` (**0.0 by default — OFF**;
+  operators opt in to the soul-uplift dynamic by setting to
+  ``0.0003`` or higher).
+- ``soul_drift`` now applies (1) a mild W/V wear when mistakes
+  load exceeds floor — G untouched, distinct shape from trauma's
+  wear — and (2) a slow W/D uplift when correction load exceeds
+  floor AND dominates mistakes load (the "winning the correction
+  contest" gate). Default rate is off; opt-in encodes resilience
+  from mastery per ``docs/research/m4_failure_response_matrix.md``.
+- ``TraumaReservoir.by_pattern_filtered(patterns, *, now_ts)`` —
+  decayed-sum query restricted to the named patterns. Lives on
+  the base class so all three reservoirs inherit it.
+- ``SoulPlugin.mistake_pressure() -> float`` accessor for hosts
+  (and the M4 cascade in #98) to bias behavior toward verifying
+  tool calls. ``snapshot()`` gains the additive
+  ``"mistake_pressure"`` field; ``tick()`` drift report gains
+  ``mistakes_load`` / ``correction_load`` / ``resilience_uplift``.
+- ``EmotionalPhysics(mistakes=...)`` kwarg (default empty
+  reservoir) — additive.
+- ``SoulStore.load_mistakes(agent_id)`` /
+  ``save_mistakes(agent_id, mistakes)`` — additive methods; the
+  legacy 3-tuple ``load(...)`` / ``save(...)`` signatures are
+  unchanged. Drop-in invariant preserved: a v(N) host upgrading
+  to v(N+1) writes zero new code and behaves identically.
+
+### Changed
+
+- ``POSITIVE_PATTERNS`` extended with ``RECOVERY``, ``TOOL_FIX``,
+  ``PROBLEM_SOLVED`` so corrections register as nourishment
+  alongside their mistake-relieving role. Existing patterns
+  unchanged.
+- ``EmotionalPhysics._classify`` now also returns ``"mistake"``
+  and ``"correction"``. Routing priority is **mistake → correction
+  → positive → negative** so a Score that somehow carries both a
+  mistake and a correction pattern routes to mistake (pessimistic
+  branch wins — host-bug protection). The
+  ``events.classification`` column gains the two new possible
+  values; existing readers (notably the governor's
+  ``_fetch_recent_significant_events`` filter) ignore them.
+
 - **M4 cascade entry point: ``IdleLoop`` + Roll 0 gate (#81).** New
   ``clanker_soul.cascade`` package ships the heartbeat tick the M4
   Autonomous Motivation Cascade is built around. Each ``await

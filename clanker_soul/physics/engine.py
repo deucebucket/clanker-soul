@@ -32,7 +32,9 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from clanker_soul.physics.config import (
+    CORRECTION_PATTERNS,
     HEAVY_PATTERNS,
+    MISTAKE_PATTERNS,
     POSITIVE_PATTERNS,
     PhysicsConfig,
 )
@@ -48,6 +50,7 @@ from clanker_soul.physics.contemplation import ContemplationResult
 from clanker_soul.physics.tick import PhysicsTick
 from clanker_soul.score import Score
 from clanker_soul.soul import (
+    MistakeReservoir,
     NourishmentReservoir,
     SoulState,
     TraumaReservoir,
@@ -78,6 +81,7 @@ class EmotionalPhysics:
         event_log: "EventLog | None" = None,
         overrides: "ConfigOverrides | None" = None,
         agent_id: str | None = None,
+        mistakes: MistakeReservoir | None = None,
     ) -> None:
         if (event_log is not None or overrides is not None) and not agent_id:
             raise ValueError(
@@ -87,6 +91,10 @@ class EmotionalPhysics:
         self.soul = soul
         self.trauma = trauma if trauma is not None else TraumaReservoir()
         self.nourishment = nourishment if nourishment is not None else NourishmentReservoir()
+        # M4 #97 — additive kwarg, defaults to an empty reservoir so
+        # callers that don't pass it (v0.17.x and earlier hosts) get
+        # zero behaviour change.
+        self.mistakes = mistakes if mistakes is not None else MistakeReservoir()
         self.config = config or PhysicsConfig()
         self._mood: Score | None = None
         self._mood_time: float = 0.0  # perf_counter
@@ -340,12 +348,62 @@ class EmotionalPhysics:
             self.soul.v = _clamp(self.soul.v + cfg.healing_rate * magnitude * elapsed_h * 60)
             self.soul.g = _clamp(self.soul.g + cfg.healing_rate * magnitude * elapsed_h * 30)
 
+        # ── Mistake wear — slow soul drift DOWN from sustained
+        # being-wrong. Distinct from and weaker than trauma's
+        # wounding_rate. Notably we do NOT touch G (gravity/grounding)
+        # the way trauma does — being wrong makes you feel uncertain,
+        # not crushed.
+        mistakes_load = self.mistakes.load(now_ts=now)
+        if mistakes_load > cfg.mistake_pressure_floor:
+            mistake_magnitude = min(
+                1.0, (mistakes_load - cfg.mistake_pressure_floor) / 100.0
+            )
+            self.soul.w = _clamp(
+                self.soul.w - cfg.mistake_wounding_rate * mistake_magnitude * elapsed_h * 80
+            )
+            self.soul.v = _clamp(
+                self.soul.v - cfg.mistake_wounding_rate * mistake_magnitude * elapsed_h * 40
+            )
+
+        # ── Recovery resilience — slow soul drift UP. Healthy
+        # correction-to-mistake ratio sustained over the half-life
+        # window raises the persistent W and D baseline (mastery
+        # experiences inoculate against future learned helplessness —
+        # see docs/research/m4_failure_response_matrix.md). Gated on
+        # ``correction_load > mistakes_load`` so the agent has to be
+        # *winning* the correction contest before resilience builds.
+        # Default rate is 0.0 (OFF) — opt-in only.
+        correction_load = self.nourishment.by_pattern_filtered(
+            CORRECTION_PATTERNS, now_ts=now
+        )
+        resilience_uplift_applied = False
+        if (
+            cfg.recovery_resilience_rate > 0.0
+            and correction_load > cfg.resilience_correction_floor
+            and correction_load > mistakes_load
+        ):
+            resilience_uplift_applied = True
+            resilience_magnitude = min(
+                1.0, (correction_load - cfg.resilience_correction_floor) / 100.0
+            )
+            self.soul.w = _clamp(
+                self.soul.w
+                + cfg.recovery_resilience_rate * resilience_magnitude * elapsed_h * 80
+            )
+            self.soul.d = _clamp(
+                self.soul.d
+                + cfg.recovery_resilience_rate * resilience_magnitude * elapsed_h * 60
+            )
+
         self.soul.last_drift_ts = now
         return {
             "elapsed_hours": round(elapsed_h, 4),
             "trauma_load": round(trauma_load, 4),
             "nourishment_load": round(nourishment_load, 4),
             "imbalance": round(imbalance, 4),
+            "mistakes_load": round(mistakes_load, 4),
+            "correction_load": round(correction_load, 4),
+            "resilience_uplift": resilience_uplift_applied,
             "drifted_dims": moved,
             "soul_now": self.soul.to_dict(),
         }
@@ -544,31 +602,70 @@ class EmotionalPhysics:
         s.g = _clamp(s.g * (1 - d) + event.g * d)
 
     def _update_reservoirs(self, event: Score, weight: float) -> None:
-        """Route weight into trauma vs nourishment based on event content.
+        """Route weight into the right reservoir based on event content.
 
-        Three buckets: POSITIVE → nourishment, NEGATIVE → trauma,
-        AMBIGUOUS → no reservoir change."""
+        Five outcomes from ``_classify``: ``positive`` → nourishment,
+        ``negative`` → trauma, ``mistake`` → mistakes,
+        ``correction`` → nourishment AND active relief on mistakes,
+        ``None`` → no reservoir change."""
         if weight <= 0.05:
             return
         bucket = self._classify(event)
         if bucket is None:
             return
-        target = self.nourishment if bucket == "positive" else self.trauma
+
         now = datetime.now(timezone.utc).timestamp()
         patterns = (
             list(event.patterns)
             if event.patterns
-            else ["WARMTH" if bucket == "positive" else "GENERIC_NEGATIVE"]
+            else [
+                "WARMTH"
+                if bucket in {"positive", "correction"}
+                else (
+                    "GENERIC_MISTAKE" if bucket == "mistake" else "GENERIC_NEGATIVE"
+                )
+            ]
         )
         per_pattern = weight * 100.0 / max(1, len(patterns))
+
+        if bucket == "correction":
+            # Two-step: feed nourishment AND actively relieve mistakes.
+            # The relief weight tracks the full event weight (×100 to
+            # match the same scaling factor used for reservoir adds),
+            # scaled by the operator-tunable correction_relief_factor.
+            for p in patterns:
+                self.nourishment.add(p, per_pattern, now_ts=now)
+            relief = weight * 100.0 * self.config.correction_relief_factor
+            if relief > 0.0:
+                self.mistakes.relieve(relief, now_ts=now)
+            return
+
+        if bucket == "mistake":
+            target: TraumaReservoir = self.mistakes
+        elif bucket == "positive":
+            target = self.nourishment
+        else:  # negative
+            target = self.trauma
         for p in patterns:
             target.add(p, per_pattern, now_ts=now)
 
     @staticmethod
     def _classify(event: Score) -> str | None:
-        """Return 'positive', 'negative', or None (ambiguous)."""
+        """Return ``'positive'``, ``'negative'``, ``'mistake'``,
+        ``'correction'``, or ``None`` (ambiguous).
+
+        Pattern routing wins over the V/W heuristic — explicit beats
+        implicit. Order is **mistake → correction → positive →
+        negative**: a Score that somehow carries both a mistake and a
+        correction pattern is malformed (host bug) and routes to
+        mistake so the bug surfaces in soul-wear rather than getting
+        silently swallowed by relief."""
         patterns_upper = [p.upper() for p in (event.patterns or ())]
 
+        if any(p in MISTAKE_PATTERNS for p in patterns_upper):
+            return "mistake"
+        if any(p in CORRECTION_PATTERNS for p in patterns_upper):
+            return "correction"
         if any(p in POSITIVE_PATTERNS for p in patterns_upper):
             return "positive"
         if any(p in HEAVY_PATTERNS for p in patterns_upper):
