@@ -69,9 +69,11 @@ from clanker_soul.presets import (
     STOIC,
 )
 from clanker_soul.physics import (
+    CORRECTION_PATTERNS,
     ContemplationResult,
     EmotionalPhysics,
     HEAVY_PATTERNS,
+    MISTAKE_PATTERNS,
     POSITIVE_PATTERNS,
     PhysicsConfig,
     PhysicsTick,
@@ -104,12 +106,17 @@ from clanker_soul.pulse import (
 )
 from clanker_soul.score import Score
 from clanker_soul.soul import (
+    MistakeReservoir,
     NourishmentReservoir,
     RESERVOIR_CAP,
     RESERVOIR_HALF_LIFE_S,
     SoulState,
     SoulStore,
     TraumaReservoir,
+)
+from clanker_soul.tool_health import (
+    score_from_action_failure,
+    score_from_correction,
 )
 
 __version__ = "0.17.0"
@@ -122,6 +129,7 @@ __all__ = [
     "SoulStore",
     "TraumaReservoir",
     "NourishmentReservoir",
+    "MistakeReservoir",
     "RESERVOIR_HALF_LIFE_S",
     "RESERVOIR_CAP",
     # Mood layer (physics)
@@ -136,6 +144,8 @@ __all__ = [
     "dim_resilience",
     "POSITIVE_PATTERNS",
     "HEAVY_PATTERNS",
+    "MISTAKE_PATTERNS",
+    "CORRECTION_PATTERNS",
     # Pulse / motivation
     "PulseEngine",
     "PulseHost",
@@ -194,6 +204,9 @@ __all__ = [
     "SoulPlugin",
     # Inference protocol (M4 #79)
     "Inference",
+    # Tool-failure attribution (M4 #97)
+    "score_from_action_failure",
+    "score_from_correction",
     # Safety governor
     "CapabilityLevel",
     "CapabilityProfile",

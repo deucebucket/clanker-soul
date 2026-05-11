@@ -19,6 +19,28 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
+# Pattern names that signal a tool/system failure that the agent
+# committed (a bad tool call, a misformatted argument). Routed to the
+# MistakeReservoir rather than the TraumaReservoir — being-wrong is
+# not being-wronged. Disjoint from HEAVY_PATTERNS so mistakes never
+# trigger the breach mechanic; disjoint from POSITIVE_PATTERNS so the
+# routing in _classify is unambiguous.
+MISTAKE_PATTERNS = frozenset({"TOOL_BAD_CALL"})
+
+# Pattern names that signal a *resolution* of a prior tool failure or
+# stuck state. Actively relieve the MistakeReservoir (decrement, not
+# decay) AND feed the NourishmentReservoir — corrections are a kind
+# of nourishment with an extra mistake-relieving role. Subset of
+# POSITIVE_PATTERNS by construction below.
+CORRECTION_PATTERNS = frozenset(
+    {
+        "RECOVERY",
+        "TOOL_FIX",
+        "PROBLEM_SOLVED",
+    }
+)
+
+
 # Pattern names that signal positive nourishment (from the Clanker
 # scoring engine structures). Hosts using a different engine can
 # extend this set by replacing the constant before constructing
@@ -39,6 +61,12 @@ POSITIVE_PATTERNS = frozenset(
         "RELIEF_ABSENCE",
         "REPORTED_COMFORT",
         "CONTRADICTION_RESOLVE",
+        # Correction patterns (also members of CORRECTION_PATTERNS).
+        # Corrections are a kind of nourishment AND actively relieve
+        # the MistakeReservoir — both branches run.
+        "RECOVERY",
+        "TOOL_FIX",
+        "PROBLEM_SOLVED",
     }
 )
 
@@ -126,9 +154,47 @@ class PhysicsConfig:
     # When trauma reservoir crosses this, Soul actively starts losing W/V.
     trauma_pressure_floor: float = 5.0
 
+    # ------------------------------------------------------------------
+    # Mistakes + corrections (M4 #97)
+    # ------------------------------------------------------------------
+
+    # Mistakes pressure threshold — below this, no soul-wear drift from
+    # the mistakes reservoir. Set higher than ``trauma_pressure_floor``
+    # because mistakes are noisier than trauma; one bad tool call is not
+    # an existential signal.
+    mistake_pressure_floor: float = 50.0
+
+    # Per-tick W/V wear rate when mistakes load is over floor.
+    # DELIBERATELY weaker than ``wounding_rate`` (0.0009) — being-wrong
+    # is not being-wronged. Self-doubt mildly bleeds competence-faith;
+    # it does NOT bleed G (gravity/grounding) the way trauma does.
+    mistake_wounding_rate: float = 0.0003
+
+    # When a CORRECTION_PATTERNS Score is ingested, the mistakes
+    # reservoir is actively decremented (relieved) by ``weight_effective
+    # * 100 * correction_relief_factor``. 1.0 means "a correction can
+    # fully cancel the immediate mistake weight." Set to 0.0 to disable
+    # active relief and rely only on the 14-day decay.
+    correction_relief_factor: float = 1.0
+
+    # Resilience-uplift threshold — below this, no soul-uplift drift
+    # from sustained corrections. Symmetric counterpart to
+    # ``mistake_pressure_floor``.
+    resilience_correction_floor: float = 50.0
+
+    # Per-tick W/D uplift rate when correction load is over floor AND
+    # exceeds mistakes load. DEFAULTS TO 0.0 (OFF) so v(N) hosts
+    # upgrading to v(N+1) see zero behaviour change — their soul does
+    # not start drifting up without an explicit opt-in. Operators who
+    # want the resilience dynamic set this to ``0.0003`` (matches
+    # ``mistake_wounding_rate`` magnitude asymmetrically) or higher.
+    recovery_resilience_rate: float = 0.0
+
 
 __all__ = [
     "PhysicsConfig",
     "POSITIVE_PATTERNS",
     "HEAVY_PATTERNS",
+    "MISTAKE_PATTERNS",
+    "CORRECTION_PATTERNS",
 ]

@@ -11,7 +11,9 @@ Re-exports the public surface of the four submodules:
 ``from clanker_soul.physics import X`` keeps working unchanged."""
 
 from clanker_soul.physics.config import (
+    CORRECTION_PATTERNS,
     HEAVY_PATTERNS,
+    MISTAKE_PATTERNS,
     POSITIVE_PATTERNS,
     PhysicsConfig,
 )
@@ -33,6 +35,8 @@ __all__ = [
     "ContemplationResult",
     "POSITIVE_PATTERNS",
     "HEAVY_PATTERNS",
+    "MISTAKE_PATTERNS",
+    "CORRECTION_PATTERNS",
     "event_weight",
     "soul_armor",
     "soul_distance",

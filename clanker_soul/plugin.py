@@ -151,6 +151,11 @@ class SoulPlugin:
 
         existed = _agent_row_exists(self._store, agent_id)
         soul, trauma, nourishment = self._store.load(agent_id)
+        # M4 #97 — load the per-agent mistakes reservoir. Always returns
+        # an empty MistakeReservoir for never-saved agents OR for v0.x
+        # rows that pre-date the mistakes_json column (the column
+        # migration on _init_schema gave those rows '{}').
+        mistakes = self._store.load_mistakes(agent_id)
         if not existed and default_soul is not None:
             soul = default_soul
 
@@ -180,6 +185,7 @@ class SoulPlugin:
             soul=soul,
             trauma=trauma,
             nourishment=nourishment,
+            mistakes=mistakes,
             config=config,
             event_log=physics_event_log,
             overrides=self._overrides,
@@ -411,7 +417,10 @@ class SoulPlugin:
         ``soul``: dict of all SoulState fields.
         ``mood``: list[7] (V/A/D/U/G/W/I) or None when no mood yet.
         ``soul_distance``: float distance Mood↔Soul, or None.
-        ``trauma_load`` / ``nourishment_load``: decayed reservoir sums."""
+        ``trauma_load`` / ``nourishment_load``: decayed reservoir sums.
+        ``mistake_pressure``: decayed sum of the mistakes reservoir
+        (M4 #97). Consumers that don't know about this field ignore
+        it via ``dict.get`` — additive."""
         mood = self._physics.mood
         soul = self._physics.soul
         return {
@@ -420,7 +429,17 @@ class SoulPlugin:
             "soul_distance": (soul_distance(mood, soul) if mood is not None else None),
             "trauma_load": self._physics.trauma.load(),
             "nourishment_load": self._physics.nourishment.load(),
+            "mistake_pressure": self._physics.mistakes.load(),
         }
+
+    def mistake_pressure(self) -> float:
+        """Decayed sum of the per-agent :py:class:`MistakeReservoir`.
+
+        Hosts read this to bias behaviour toward double-checking,
+        verifying tool calls, or pausing before risky operations. The
+        M4 cascade (Issue B / #98) reads it for action selection.
+        Returns ``0.0`` on a fresh agent. M4 #97."""
+        return self._physics.mistakes.load()
 
     # ------------------------------------------------------------------
     # Safety governor — capability gating + crisis discrimination
@@ -521,6 +540,11 @@ class SoulPlugin:
             self._physics.trauma,
             self._physics.nourishment,
         )
+        # M4 #97 — additive mistakes persistence. Must run AFTER the
+        # legacy save() because save_mistakes uses UPDATE (no row
+        # creation); save() runs INSERT OR REPLACE and guarantees the
+        # row exists.
+        self._store.save_mistakes(self._agent_id, self._physics.mistakes)
 
     def close(self) -> None:
         """Save and mark closed. Safe to call twice. The underlying
