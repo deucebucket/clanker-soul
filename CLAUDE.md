@@ -50,7 +50,7 @@ pytest -k breach                                         # by name pattern
 python -m clanker_soul ui --db ./soul.db                 # launch the UI (needs [ui])
 ```
 
-`pyproject.toml` sets `asyncio_mode = "auto"` — async tests don't need `@pytest.mark.asyncio` to run, but existing tests use it for clarity. Ruff is configured (line-length 100, py310) but not wired into CI; `ruff check .` / `ruff format .` if you have it installed.
+`pyproject.toml` sets `asyncio_mode = "auto"` — async tests don't need `@pytest.mark.asyncio` to run, but existing tests use it for clarity. Ruff (line-length 100, py310) **is wired into CI** as a blocking lint job — run `ruff check . && ruff format --check .` locally before pushing or CI will fail. `ruff format .` fixes formatting in place. CI also runs pytest across Python 3.10 / 3.11 / 3.12 / 3.13; the 3.10 target means stdlib calls that landed later (e.g. the `random.Random.__new__` behaviour change between 3.10 and 3.11) need workarounds in tests.
 
 Python 3.10+. **Zero runtime dependencies** — stdlib only. Don't add any without a strong reason; this is a deliberate constraint.
 

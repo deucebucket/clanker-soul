@@ -54,7 +54,13 @@ def _physics() -> EmotionalPhysics:
 def test_mistake_pattern_routes_to_mistakes_not_trauma() -> None:
     p = _physics()
     s = Score(
-        v=120, a=125, d=110, u=55, g=120, w=120, i=110,
+        v=120,
+        a=125,
+        d=110,
+        u=55,
+        g=120,
+        w=120,
+        i=110,
         patterns=("TOOL_BAD_CALL",),
     )
     trauma_before = p.trauma.load()
@@ -68,7 +74,12 @@ def test_mistake_pattern_wins_over_heavy_pattern() -> None:
     pessimistic branch — host bug protection)."""
     p = _physics()
     s = Score(
-        v=80, a=130, d=100, u=60, g=100, w=85,
+        v=80,
+        a=130,
+        d=100,
+        u=60,
+        g=100,
+        w=85,
         patterns=("TOOL_BAD_CALL", "BETRAYAL"),
     )
     trauma_before = p.trauma.load()
@@ -82,7 +93,13 @@ def test_tool_timeout_does_not_touch_mistakes() -> None:
     annoyance, not a self-attributed error."""
     p = _physics()
     s = Score(
-        v=118, a=138, d=115, u=60, g=122, w=128, i=115,
+        v=118,
+        a=138,
+        d=115,
+        u=60,
+        g=122,
+        w=128,
+        i=115,
         patterns=("TOOL_TIMEOUT",),
     )
     p.ingest(s)
@@ -134,7 +151,12 @@ def test_ambiguous_mistake_plus_correction_routes_to_mistake() -> None:
     p = _physics()
     # Use stronger dims so event_weight clears the _update_reservoirs floor.
     s = Score(
-        v=100, a=140, d=100, u=70, g=100, w=100,
+        v=100,
+        a=140,
+        d=100,
+        u=70,
+        g=100,
+        w=100,
         patterns=("TOOL_BAD_CALL", "TOOL_FIX"),
     )
     nourishment_before = p.nourishment.load()
@@ -146,8 +168,7 @@ def test_ambiguous_mistake_plus_correction_routes_to_mistake() -> None:
 
 def test_classify_picks_mistake_over_correction_for_combined_patterns() -> None:
     """Pure classifier-level check — order: mistake before correction."""
-    s = Score(v=140, a=120, d=140, u=40, g=130, w=130,
-              patterns=("TOOL_BAD_CALL", "TOOL_FIX"))
+    s = Score(v=140, a=120, d=140, u=40, g=130, w=130, patterns=("TOOL_BAD_CALL", "TOOL_FIX"))
     assert EmotionalPhysics._classify(s) == "mistake"
 
 
@@ -267,9 +288,7 @@ def test_by_pattern_filtered_returns_only_named_patterns() -> None:
     p = _physics()
     p.nourishment.add("TOOL_FIX", weight=100.0, now_ts=1000.0)
     p.nourishment.add("WARMTH", weight=50.0, now_ts=1000.0)
-    correction_only = p.nourishment.by_pattern_filtered(
-        CORRECTION_PATTERNS, now_ts=1000.0
-    )
+    correction_only = p.nourishment.by_pattern_filtered(CORRECTION_PATTERNS, now_ts=1000.0)
     total = p.nourishment.load(now_ts=1000.0)
     assert correction_only > 0.0
     assert correction_only < total

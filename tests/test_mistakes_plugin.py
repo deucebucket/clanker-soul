@@ -60,6 +60,7 @@ def test_mistake_pressure_persists_across_reconstruct(tmp_path: Path) -> None:
     # Process-singleton SoulStore is keyed by path — clear it so the
     # second construction reads a fresh handle (mimics a real restart).
     from clanker_soul.soul.store import SoulStore as _SS
+
     with _SS._instances_lock:
         _SS._instances.clear()
     with SoulPlugin("agent-a", db) as p2:
@@ -86,23 +87,20 @@ def test_v0x_db_without_mistakes_column_migrates_in_place(tmp_path: Path) -> Non
         )
         """
     )
-    conn.execute(
-        "INSERT INTO soul_state VALUES ('legacy-agent', '{}', '{}', '{}', '2026-01-01')"
-    )
+    conn.execute("INSERT INTO soul_state VALUES ('legacy-agent', '{}', '{}', '{}', '2026-01-01')")
     conn.commit()
     conn.close()
 
     # Clear singleton so SoulPlugin construction sees a fresh handle.
     from clanker_soul.soul.store import SoulStore as _SS
+
     with _SS._instances_lock:
         _SS._instances.clear()
 
     with SoulPlugin("legacy-agent", db) as plugin:
         cols = {
             row[1]
-            for row in plugin.store.connection.execute(
-                "PRAGMA table_info(soul_state)"
-            ).fetchall()
+            for row in plugin.store.connection.execute("PRAGMA table_info(soul_state)").fetchall()
         }
         assert "mistakes_json" in cols
         assert plugin.mistake_pressure() == 0.0
@@ -120,11 +118,13 @@ def test_recovery_loop_pride_shape_lifts_mood_and_w(tmp_path: Path) -> None:
         assert mood_before is not None
         v_before, w_before = mood_before.v, mood_before.w
 
-        plugin.ingest(score_from_correction(
-            tool="git",
-            after_mistakes=load_before,
-            kind="tool_fix",
-        ))
+        plugin.ingest(
+            score_from_correction(
+                tool="git",
+                after_mistakes=load_before,
+                kind="tool_fix",
+            )
+        )
         assert plugin.mistake_pressure() < load_before
         mood_after = plugin.physics.mood
         assert mood_after is not None
@@ -141,11 +141,13 @@ def test_recovery_loop_relief_shape_relieves_without_pride(tmp_path: Path) -> No
         load_before = plugin.mistake_pressure()
         assert load_before > 0.0
 
-        plugin.ingest(score_from_correction(
-            tool="git",
-            after_mistakes=load_before,
-            kind="relief_exhaustion",
-        ))
+        plugin.ingest(
+            score_from_correction(
+                tool="git",
+                after_mistakes=load_before,
+                kind="relief_exhaustion",
+            )
+        )
         # Reservoir relieved (correction pattern in CORRECTION_PATTERNS).
         assert plugin.mistake_pressure() < load_before
         # Mood W stayed low — the relief Score itself has W=80, which

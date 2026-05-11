@@ -320,8 +320,7 @@ def score_from_correction(
     """
     if kind not in _VALID_KINDS:
         raise ValueError(
-            f"score_from_correction: kind={kind!r} must be one of "
-            f"{sorted(_VALID_KINDS)}"
+            f"score_from_correction: kind={kind!r} must be one of {sorted(_VALID_KINDS)}"
         )
 
     source = f"tool:{tool}" if tool else "tool"

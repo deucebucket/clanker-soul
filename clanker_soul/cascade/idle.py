@@ -210,9 +210,7 @@ class IdleLoop:
         contemplation_corpus: PromptCorpus,
         gate_config: GateConfig | None = None,
         gate_fn: (
-            Callable[[GateRollContext], bool]
-            | Callable[[GateRollContext], Awaitable[bool]]
-            | None
+            Callable[[GateRollContext], bool] | Callable[[GateRollContext], Awaitable[bool]] | None
         ) = None,
         now_fn: Callable[[], float] | None = None,
         rng: random.Random | None = None,
