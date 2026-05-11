@@ -355,9 +355,7 @@ class EmotionalPhysics:
         # not crushed.
         mistakes_load = self.mistakes.load(now_ts=now)
         if mistakes_load > cfg.mistake_pressure_floor:
-            mistake_magnitude = min(
-                1.0, (mistakes_load - cfg.mistake_pressure_floor) / 100.0
-            )
+            mistake_magnitude = min(1.0, (mistakes_load - cfg.mistake_pressure_floor) / 100.0)
             self.soul.w = _clamp(
                 self.soul.w - cfg.mistake_wounding_rate * mistake_magnitude * elapsed_h * 80
             )
@@ -373,9 +371,7 @@ class EmotionalPhysics:
         # ``correction_load > mistakes_load`` so the agent has to be
         # *winning* the correction contest before resilience builds.
         # Default rate is 0.0 (OFF) — opt-in only.
-        correction_load = self.nourishment.by_pattern_filtered(
-            CORRECTION_PATTERNS, now_ts=now
-        )
+        correction_load = self.nourishment.by_pattern_filtered(CORRECTION_PATTERNS, now_ts=now)
         resilience_uplift_applied = False
         if (
             cfg.recovery_resilience_rate > 0.0
@@ -387,12 +383,10 @@ class EmotionalPhysics:
                 1.0, (correction_load - cfg.resilience_correction_floor) / 100.0
             )
             self.soul.w = _clamp(
-                self.soul.w
-                + cfg.recovery_resilience_rate * resilience_magnitude * elapsed_h * 80
+                self.soul.w + cfg.recovery_resilience_rate * resilience_magnitude * elapsed_h * 80
             )
             self.soul.d = _clamp(
-                self.soul.d
-                + cfg.recovery_resilience_rate * resilience_magnitude * elapsed_h * 60
+                self.soul.d + cfg.recovery_resilience_rate * resilience_magnitude * elapsed_h * 60
             )
 
         self.soul.last_drift_ts = now
@@ -621,9 +615,7 @@ class EmotionalPhysics:
             else [
                 "WARMTH"
                 if bucket in {"positive", "correction"}
-                else (
-                    "GENERIC_MISTAKE" if bucket == "mistake" else "GENERIC_NEGATIVE"
-                )
+                else ("GENERIC_MISTAKE" if bucket == "mistake" else "GENERIC_NEGATIVE")
             ]
         )
         per_pattern = weight * 100.0 / max(1, len(patterns))

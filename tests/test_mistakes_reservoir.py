@@ -75,9 +75,7 @@ def test_relieve_reduces_load_proportionally_across_patterns() -> None:
     assert relieved > 0.0
     load_after = r.load(now_ts=1000.0)
     # Load dropped roughly by the relief amount.
-    assert load_after == load_before - relieved or abs(
-        (load_before - relieved) - load_after
-    ) < 0.5
+    assert load_after == load_before - relieved or abs((load_before - relieved) - load_after) < 0.5
 
     # Both patterns share the burden in proportion to their starting weight:
     # TOOL_BAD_CALL=60/100 takes 60% of the relief; OTHER_MISTAKE=40/100 takes 40%.

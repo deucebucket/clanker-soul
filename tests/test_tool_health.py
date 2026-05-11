@@ -116,9 +116,7 @@ def test_no_default_pattern_in_HEAVY_PATTERNS() -> None:
         s = score_from_action_failure(reason)
         assert s is not None
         for p in s.patterns:
-            assert p not in HEAVY_PATTERNS, (
-                f"{reason} pattern {p} must not be in HEAVY_PATTERNS"
-            )
+            assert p not in HEAVY_PATTERNS, f"{reason} pattern {p} must not be in HEAVY_PATTERNS"
 
 
 def test_validation_error_is_only_W_denting_category() -> None:

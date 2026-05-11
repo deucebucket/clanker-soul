@@ -335,11 +335,26 @@ class _FakeClock:
 
 class _ScriptedRandom(random.Random):
     """A Random whose ``random()`` returns scripted values in order, then
-    falls back to the parent for everything else (e.g. ``choices``)."""
+    falls back to the parent for everything else (e.g. ``choices``).
 
-    def __init__(self, values: list[float]) -> None:
+    Python 3.10's ``random.Random.__new__`` (C-level) seeds from the
+    first positional argument at allocation time, *before* ``__init__``
+    runs. Passing a ``list`` there raises ``TypeError: unhashable type``.
+    Workaround: take no positional args at construction and load scripted
+    values via the classmethod :py:meth:`with_values`. 3.11+ moved the
+    seeding to ``__init__`` and is unaffected; we keep this shape for
+    matrix-CI compatibility.
+    """
+
+    def __init__(self) -> None:
         super().__init__(0)
-        self._values = list(values)
+        self._values: list[float] = []
+
+    @classmethod
+    def with_values(cls, values: list[float]) -> "_ScriptedRandom":
+        r = cls()
+        r._values = list(values)
+        return r
 
     def random(self) -> float:  # type: ignore[override]
         if self._values:
@@ -348,4 +363,4 @@ class _ScriptedRandom(random.Random):
 
 
 def _rng_returning(value: float) -> random.Random:
-    return _ScriptedRandom([value])
+    return _ScriptedRandom.with_values([value])

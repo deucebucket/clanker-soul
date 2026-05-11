@@ -155,10 +155,7 @@ class SoulStore:
             row[1] for row in c.execute("PRAGMA table_info(soul_state)").fetchall()
         }
         if "mistakes_json" not in existing_soul_cols:
-            c.execute(
-                "ALTER TABLE soul_state "
-                "ADD COLUMN mistakes_json TEXT NOT NULL DEFAULT '{}'"
-            )
+            c.execute("ALTER TABLE soul_state ADD COLUMN mistakes_json TEXT NOT NULL DEFAULT '{}'")
         # M3.3 — corpus persistence + per-agent face recency.
         c.execute(
             """
