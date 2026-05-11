@@ -5,12 +5,12 @@
 
 ## Problem
 
-`clanker-soul` exposes a lot of knobs: `PhysicsConfig` (17 fields),
-`GovernorConfig` (15 fields including capability profiles),
+`clanker-soul` exposes a lot of knobs: `PhysicsConfig` (13 fields),
+`GovernorConfig` (16 fields including the `capability_profiles` table),
 `PulseConfig` (30+ fields covering 12 trigger thresholds),
 `PendingDeltaConfig` (4 status-keyed tuples + a scale + a mode),
-`GateConfig` (6 fields, just shipped in #81), plus per-agent
-`SoulState` (7 dims). Every one of them is a behavior dial.
+`GateConfig` (7 fields, just shipped in #81), plus per-agent
+`SoulState` (7 personality dims). Every one of them is a behavior dial.
 
 Today operators have two paths to tweak them:
 
