@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **M4 cascade entry point: ``IdleLoop`` + Roll 0 gate (#81).** New
+  ``clanker_soul.cascade`` package ships the heartbeat tick the M4
+  Autonomous Motivation Cascade is built around. Each ``await
+  loop.tick()`` rolls a *gate* (mood-arousal-biased probability,
+  honoring action / contemplation / quiet cooldowns); when the roll
+  passes, the loop samples a face from a host-supplied contemplation
+  corpus (``trigger_kinds={"idle_introspection"}`` by default) and
+  runs ``physics.contemplate``. The mood shifts; ``TickResult``
+  reports gate decision, probability, skip reason, sampled face,
+  contemplation deltas, and elapsed wall time. Three cooldowns are
+  independently configurable: ``cooldown_after_action_s`` (host
+  calls ``loop.note_action()`` from its dispatch path),
+  ``cooldown_after_contemplation_s`` (loop tracks internally),
+  ``min_quiet_s`` (host calls ``loop.note_event()`` from its ingest
+  path). When a ``note_*`` was never called, the corresponding
+  cooldown is treated as already-elapsed — drop-in safe. Custom
+  gate logic replaces ``default_gate`` wholesale via ``gate_fn=``;
+  ``GateConfig`` is the operator-overridable knob table for
+  everything else (defaults: ~5%/tick base probability, 300s
+  action cooldown, 60s contemplation cooldown, 30s min quiet).
+  ``IdleLoop`` is opt-in — ``SoulPlugin`` does not construct one
+  automatically. Action selection (Roll 2 + Roll 3) lands separately
+  in #82.
+
 ## [0.17.0] — 2026-05-10
 
 ### Added
