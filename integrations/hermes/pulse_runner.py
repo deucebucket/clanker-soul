@@ -191,23 +191,12 @@ class PulseRunner:
         if self._thread is None:
             return
         self._stop_event.set()
-        # Schedule the engine.stop coroutine onto the runner's loop,
-        # then ALSO stop the loop itself so run_forever() returns and
-        # the thread exits.
         loop = self._loop
-        engine = self._engine
-        if loop is not None and engine is not None and loop.is_running():
+        if loop is not None and loop.is_running():
             try:
-                asyncio.run_coroutine_threadsafe(engine.stop(), loop).result(
-                    timeout=timeout,
-                )
+                loop.call_soon_threadsafe(lambda: None)
             except Exception:
-                logger.exception("engine.stop failed during runner stop")
-            # Now break run_forever() so the thread can exit.
-            try:
-                loop.call_soon_threadsafe(loop.stop)
-            except Exception:
-                logger.exception("loop.stop scheduling failed")
+                logger.exception("loop wake scheduling failed during runner stop")
         self._thread.join(timeout=timeout)
         self._thread = None
         self._loop = None
@@ -232,38 +221,45 @@ class PulseRunner:
         try:
             self._loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self._loop)
-            host = _PulseHostAdapter(
-                plugin=self._plugin,
-                dispatcher=self._dispatcher,
-                target_factory=self._target_factory,
-            )
-            self._engine = PulseEngine(
-                host,
-                config=self._pulse_config,
-                event_log=self._plugin.event_log,
-                agent_id=self._plugin.agent_id,
-                physics=self._plugin.physics,  # closes the learning loop
-            )
-            self._loop.run_until_complete(self._engine.start())
-            self._ready_event.set()
-            # Idle the loop. The engine ticks itself on its own asyncio
-            # task; we just keep the loop alive until stop is called.
-            self._loop.run_forever()
+            self._loop.run_until_complete(self._main())
         except Exception:
             logger.exception("PulseRunner thread crashed")
             self._ready_event.set()
         finally:
             try:
-                if self._loop and self._loop.is_running():
-                    self._loop.call_soon_threadsafe(self._loop.stop)
-                # Cancel any remaining tasks before closing the loop.
                 if self._loop:
                     pending = asyncio.all_tasks(loop=self._loop)
                     for task in pending:
                         task.cancel()
+                    if pending:
+                        self._loop.run_until_complete(
+                            asyncio.gather(*pending, return_exceptions=True)
+                        )
                     self._loop.close()
             except Exception:
                 logger.exception("PulseRunner cleanup failed")
+
+    async def _main(self) -> None:
+        host = _PulseHostAdapter(
+            plugin=self._plugin,
+            dispatcher=self._dispatcher,
+            target_factory=self._target_factory,
+        )
+        self._engine = PulseEngine(
+            host,
+            config=self._pulse_config,
+            event_log=self._plugin.event_log,
+            agent_id=self._plugin.agent_id,
+            physics=self._plugin.physics,  # closes the learning loop
+        )
+        await self._engine.start()
+        self._ready_event.set()
+        try:
+            while not self._stop_event.is_set():
+                await asyncio.sleep(0.05)
+        finally:
+            if self._engine is not None:
+                await self._engine.stop()
 
 
 __all__ = [

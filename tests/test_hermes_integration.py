@@ -229,12 +229,14 @@ def test_provider_unknown_tool_returns_error(tmp_path) -> None:
 def test_provider_three_tool_schemas_exposed() -> None:
     p = ClankerSoulMemoryProvider()
     schemas = p.get_tool_schemas()
-    names = {s["function"]["name"] for s in schemas}
+    names = {s["name"] for s in schemas}
     assert names == {
         "clanker_soul_state",
         "clanker_soul_apply_preset",
         "clanker_soul_dashboard_url",
     }
+    assert all("type" not in s for s in schemas)
+    assert all("function" not in s for s in schemas)
 
 
 def test_provider_config_schema_includes_db_path() -> None:

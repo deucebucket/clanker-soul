@@ -287,58 +287,49 @@ class ClankerSoulMemoryProvider(MemoryProvider):  # type: ignore[misc,valid-type
     def get_tool_schemas(self) -> List[Dict[str, Any]]:
         return [
             {
-                "type": "function",
-                "function": {
-                    "name": "clanker_soul_state",
-                    "description": (
-                        "Read your own current emotional state from clanker-soul. "
-                        "Returns mood, soul (baseline personality), capability "
-                        "level, trauma/nourishment loads, and the recent-events "
-                        "summary. Call this when you want to introspect on why "
-                        "you're responding the way you are, or when the user "
-                        "asks how you're feeling and you want a precise answer "
-                        "rather than a vibes-based guess."
-                    ),
-                    "parameters": {"type": "object", "properties": {}},
-                },
+                "name": "clanker_soul_state",
+                "description": (
+                    "Read your own current emotional state from clanker-soul. "
+                    "Returns mood, soul (baseline personality), capability "
+                    "level, trauma/nourishment loads, and the recent-events "
+                    "summary. Call this when you want to introspect on why "
+                    "you're responding the way you are, or when the user "
+                    "asks how you're feeling and you want a precise answer "
+                    "rather than a vibes-based guess."
+                ),
+                "parameters": {"type": "object", "properties": {}},
             },
             {
-                "type": "function",
-                "function": {
-                    "name": "clanker_soul_apply_preset",
-                    "description": (
-                        "Apply one of the personality presets (child / adult / "
-                        "brittle / stoic) to your own soul. Operator-facing — "
-                        "use only when the user explicitly asks for a "
-                        "personality reshape. This writes to ConfigOverrides "
-                        "and persists across sessions until cleared."
-                    ),
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "preset": {
-                                "type": "string",
-                                "enum": list(PRESETS.keys()),
-                                "description": "Name of the preset to apply.",
-                            },
+                "name": "clanker_soul_apply_preset",
+                "description": (
+                    "Apply one of the personality presets (child / adult / "
+                    "brittle / stoic) to your own soul. Operator-facing — "
+                    "use only when the user explicitly asks for a "
+                    "personality reshape. This writes to ConfigOverrides "
+                    "and persists across sessions until cleared."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "preset": {
+                            "type": "string",
+                            "enum": list(PRESETS.keys()),
+                            "description": "Name of the preset to apply.",
                         },
-                        "required": ["preset"],
                     },
+                    "required": ["preset"],
                 },
             },
             {
-                "type": "function",
-                "function": {
-                    "name": "clanker_soul_dashboard_url",
-                    "description": (
-                        "Return the URL the user can visit to inspect your "
-                        "emotional state in the clanker-soul dashboard. "
-                        "Useful when the user asks 'how are you really feeling' "
-                        "or 'show me your state' — point them at the live UI "
-                        "rather than summarizing in chat."
-                    ),
-                    "parameters": {"type": "object", "properties": {}},
-                },
+                "name": "clanker_soul_dashboard_url",
+                "description": (
+                    "Return the URL the user can visit to inspect your "
+                    "emotional state in the clanker-soul dashboard. "
+                    "Useful when the user asks 'how are you really feeling' "
+                    "or 'show me your state' — point them at the live UI "
+                    "rather than summarizing in chat."
+                ),
+                "parameters": {"type": "object", "properties": {}},
             },
         ]
 
