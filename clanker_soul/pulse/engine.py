@@ -60,6 +60,9 @@ _DEFAULT_TRIGGER_TO_ACTION: dict[str, str] = {
     "caretake_impulse": "direct_message",
     "withdraw_impulse": "withdraw",
     "restless_curiosity": "browse_topic",
+    # M4 #98 — actual behavior selected by host-registered cascade actions.
+    "stuck_impulse": "tool_invocation",
+    "obstructed_impulse": "tool_invocation",
 }
 
 
@@ -296,6 +299,7 @@ class PulseEngine:
         distance: float = snap.get("soul_distance") or 0.0
         trauma: float = snap.get("trauma_load") or 0.0
         nourishment: float = snap.get("nourishment_load") or 0.0
+        mistake_pressure: float = snap.get("mistake_pressure") or 0.0
 
         now = datetime.now(timezone.utc).timestamp()
         idle = now - max(self._last_pulse_ts, self._last_outbound_ts)
@@ -434,7 +438,29 @@ class PulseEngine:
                 },
             )
 
-        # 10. reflective_impulse (NEW) — extended quiet + sustained mood
+        # 10. stuck_impulse (M4 #98) — repeated self-attributed tool mistakes.
+        if mistake_pressure > cfg.mistake_pressure_floor:
+            return Trigger(
+                kind="stuck_impulse",
+                soul=soul,
+                mood=mood,
+                metrics={"mistake_pressure": round(mistake_pressure, 1)},
+            )
+
+        # 11. obstructed_impulse (M4 #98) — repeated external tool/system failures.
+        obstruction_count = self._recent_obstruction_count()
+        if obstruction_count > cfg.obstruction_count_floor:
+            return Trigger(
+                kind="obstructed_impulse",
+                soul=soul,
+                mood=mood,
+                metrics={
+                    "obstruction_count": obstruction_count,
+                    "obstruction_window_events": cfg.obstruction_window_events,
+                },
+            )
+
+        # 12. reflective_impulse (NEW) — extended quiet + sustained mood
         # off baseline + not heavy trauma. Want to write it down.
         if (
             mood
@@ -452,7 +478,7 @@ class PulseEngine:
                 },
             )
 
-        # 11. gratitude (existing).
+        # 13. gratitude (existing).
         if nourishment > cfg.nourishment_thank_trigger and nourishment > trauma * 2:
             return Trigger(
                 kind="gratitude",
@@ -461,7 +487,7 @@ class PulseEngine:
                 metrics={"nourishment_load": round(nourishment, 1)},
             )
 
-        # 12. restless_curiosity (NEW) — high arousal + close to baseline +
+        # 14. restless_curiosity (NEW) — high arousal + close to baseline +
         # idle for a bit. Lowest priority — only fires when nothing heavier
         # has anything to say.
         if (
@@ -478,6 +504,30 @@ class PulseEngine:
             )
 
         return None
+
+    def _recent_obstruction_count(self) -> int:
+        """Count recent external TOOL_* failures from the public event log.
+
+        ``TOOL_BAD_CALL`` belongs to the mistake reservoir, not obstruction.
+        Missing read support or read failures disable this trigger quietly.
+        """
+        log = self._event_log
+        if log is None or self._agent_id is None:
+            return 0
+        reader = getattr(log, "read_ingest", None)
+        if not callable(reader):
+            return 0
+        try:
+            records = reader(self._agent_id, limit=self._cfg.obstruction_window_events)
+        except Exception:
+            logger.exception("event_log.read_ingest failed for obstruction count")
+            return 0
+        count = 0
+        for record in records:
+            patterns = set(record.raw.patterns or record.patterns or ())
+            if any(p.startswith("TOOL_") and p != "TOOL_BAD_CALL" for p in patterns):
+                count += 1
+        return count
 
     def _peer_distress_signals(self) -> list[dict]:
         """Read peer distress signals from the host if it implements

@@ -17,6 +17,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   delta thresholding, tagged weighted action sampling, handler dispatch,
   and consequence ingestion back into physics. With no registry, existing
   gate+contemplate behavior is unchanged.
+- **M4 tool-failure response cascade (#98).** ``PulseEngine`` now emits
+  ``stuck_impulse`` from sustained ``mistake_pressure`` and
+  ``obstructed_impulse`` from recent external ``TOOL_*`` failures.
+  ``mistake_aware_tags`` and ``confide_proxy_score`` extend cascade
+  selection with tags such as ``troubleshoot``, ``file_issue``,
+  ``journal_distress``, ``confide``, ``reflect``, and
+  ``withdraw_silent``. ``IdleLoop`` can union those tags into normal
+  contemplation-driven action selection, or run a reservoir-driven
+  action when no contemplation face is active. ``compose_state_context``
+  now narrates elevated mistake pressure as a constructive verification
+  signal.
 - **Tool-failure attribution + MistakeReservoir (#97).** New
   ``clanker_soul.tool_health`` module with two helpers:
   ``score_from_action_failure(reason, *, tool, override)`` produces

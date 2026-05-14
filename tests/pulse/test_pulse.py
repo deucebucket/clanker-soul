@@ -9,11 +9,15 @@ from datetime import datetime, timezone
 import pytest
 
 from clanker_soul import (
+    ActionOutcome,
     PulseConfig,
     PulseEngine,
     PulseTarget,
+    Score,
     Trigger,
 )
+from clanker_soul.eventlog.records import IngestRecord
+from clanker_soul.soul import SoulState
 from clanker_soul.pulse import compose_self_prompt
 
 
@@ -39,6 +43,10 @@ class FakeHost:
     def dispatch_pulse(self, target: PulseTarget, trigger: Trigger, prompt: str) -> bool:
         self.dispatched.append((trigger, prompt))
         return self.dispatch_returns
+
+    def dispatch_action(self, action) -> ActionOutcome:
+        self.dispatched.append((action.trigger, action.prompt))
+        return ActionOutcome(delivered=self.dispatch_returns)
 
     def due_reminders(self) -> list[dict]:
         out = self.reminders
@@ -66,9 +74,46 @@ def _baseline_snap(**overrides) -> dict:
         "soul_distance": 0.0,
         "trauma_load": 0.0,
         "nourishment_load": 0.0,
+        "mistake_pressure": 0.0,
     }
     snap.update(overrides)
     return snap
+
+
+def _event(patterns: tuple[str, ...]) -> IngestRecord:
+    raw = Score(patterns=patterns)
+    return IngestRecord(
+        ts=0.0,
+        agent_id="agent",
+        raw=raw,
+        primed=None,
+        mood_before=None,
+        mood_after=Score(),
+        soul_before=SoulState(),
+        soul_after=SoulState(),
+        weight_raw=0.1,
+        armor=0.0,
+        weight_effective=0.1,
+        breached=False,
+        breach_delta=0.0,
+        patterns=patterns,
+        classification="neutral",
+        why="test",
+    )
+
+
+class FakeEventLog:
+    def __init__(self, records: list[IngestRecord]) -> None:
+        self.records = records
+
+    def log_ingest(self, record: IngestRecord) -> None:
+        pass
+
+    def log_pulse(self, record) -> None:
+        pass
+
+    def read_ingest(self, agent_id: str, *, limit: int | None = None) -> list[IngestRecord]:
+        return self.records[:limit]
 
 
 @pytest.mark.asyncio
@@ -119,6 +164,71 @@ async def test_trauma_pressure_fires_with_high_load() -> None:
     _seed_clock_past_cooldown(engine)
     result = await engine.tick()
     assert result is not None and result.kind == "trauma_pressure"
+
+
+@pytest.mark.asyncio
+async def test_stuck_impulse_fires_with_high_mistake_pressure() -> None:
+    snap = _baseline_snap(mistake_pressure=80.0)
+    host = FakeHost(snap=snap)
+    cfg = PulseConfig(min_quiet_seconds=0.0, mistake_pressure_floor=60.0)
+    engine = PulseEngine(host, config=cfg)
+    engine.note_outbound()
+
+    result = await engine.tick()
+
+    assert result is not None and result.kind == "stuck_impulse"
+    assert host.dispatched and host.dispatched[0][0].kind == "stuck_impulse"
+
+
+@pytest.mark.asyncio
+async def test_stuck_impulse_muted_by_infinite_floor() -> None:
+    snap = _baseline_snap(mistake_pressure=80.0)
+    host = FakeHost(snap=snap)
+    cfg = PulseConfig(min_quiet_seconds=0.0, mistake_pressure_floor=float("inf"))
+    engine = PulseEngine(host, config=cfg)
+    engine.note_outbound()
+
+    result = await engine.tick()
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_obstructed_impulse_counts_recent_external_tool_failures() -> None:
+    snap = _baseline_snap()
+    host = FakeHost(snap=snap)
+    cfg = PulseConfig(
+        min_quiet_seconds=0.0,
+        obstruction_count_floor=2,
+        obstruction_window_events=5,
+    )
+    log = FakeEventLog(
+        [
+            _event(("TOOL_TIMEOUT",)),
+            _event(("TOOL_RATE_LIMIT",)),
+            _event(("TOOL_BAD_CALL",)),
+            _event(("TOOL_DENIED",)),
+        ]
+    )
+    engine = PulseEngine(host, config=cfg, event_log=log, agent_id="agent")
+    engine.note_outbound()
+
+    result = await engine.tick()
+
+    assert result is not None and result.kind == "obstructed_impulse"
+
+
+@pytest.mark.asyncio
+async def test_obstructed_impulse_soft_fails_without_readable_event_log() -> None:
+    snap = _baseline_snap()
+    host = FakeHost(snap=snap)
+    cfg = PulseConfig(min_quiet_seconds=0.0, obstruction_count_floor=0)
+    engine = PulseEngine(host, config=cfg)
+    engine.note_outbound()
+
+    result = await engine.tick()
+
+    assert result is None
 
 
 @pytest.mark.asyncio

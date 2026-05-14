@@ -17,11 +17,13 @@ These tests pin the contract:
 from __future__ import annotations
 
 import random
+import time
 
 import pytest
 
 from clanker_soul import (
     ActionOutcome,
+    PulseConfig,
     EmotionalPhysics,
     PhysicsConfig,
     PromptCorpus,
@@ -453,6 +455,110 @@ async def test_cascade_action_starts_action_cooldown() -> None:
     second = await loop.tick()
     assert second.gate_passed is False
     assert second.gate_skip_reason == "cooldown_action"
+
+
+async def test_reservoir_driven_cascade_runs_without_contemplation() -> None:
+    physics = _physics()
+    physics.mistakes.add("TOOL_BAD_CALL", weight=100.0, now_ts=time.time())
+    calls: list[CascadeActionContext] = []
+
+    def handler(ctx: CascadeActionContext) -> ActionOutcome:
+        calls.append(ctx)
+        return ActionOutcome(delivered=True, consequences=(Score(v=240),))
+
+    registry = ActionRegistry(
+        [
+            RegisteredAction(
+                name="troubleshoot",
+                tags=frozenset({"troubleshoot"}),
+                handler=handler,
+                cooldown_seconds=0,
+            )
+        ]
+    )
+    loop = _loop(
+        physics=physics,
+        corpus=PromptCorpus((), rng=random.Random(1)),
+        gate_fn=lambda ctx: True,
+        registry=registry,
+        tags_fn=lambda pre, post, soul: frozenset(),
+    )
+
+    result = await loop.tick()
+
+    assert result.face is None
+    assert result.contemplation is None
+    assert result.chosen_action is not None
+    assert result.chosen_action.name == "troubleshoot"
+    assert result.action_tags == frozenset({"troubleshoot"})
+    assert calls[0].face is None
+    assert calls[0].contemplation is None
+    assert calls[0].trigger.kind == "stuck_impulse"
+    assert physics.mood is not None
+    assert physics.mood.v > 145
+
+
+async def test_contemplation_path_unions_failure_tags_with_delta_tags() -> None:
+    physics = _physics()
+    physics.mistakes.add("TOOL_BAD_CALL", weight=100.0, now_ts=time.time())
+    registry = ActionRegistry(
+        [
+            RegisteredAction(
+                name="journal",
+                tags=frozenset({"reflect"}),
+                handler=lambda ctx: ActionOutcome(delivered=True),
+                cooldown_seconds=0,
+            ),
+            RegisteredAction(
+                name="troubleshoot",
+                tags=frozenset({"troubleshoot"}),
+                handler=lambda ctx: ActionOutcome(delivered=True),
+                cooldown_seconds=0,
+            ),
+        ]
+    )
+    loop = _loop(
+        physics=physics,
+        gate_fn=lambda ctx: True,
+        registry=registry,
+        tags_fn=lambda pre, post, soul: frozenset({"reflect"}),
+        rng=random.Random(0),
+    )
+
+    result = await loop.tick()
+
+    assert result.contemplation is not None
+    assert result.action_tags == frozenset({"reflect", "troubleshoot"})
+    assert result.chosen_action is not None
+
+
+async def test_custom_mistake_aware_tags_replaces_default() -> None:
+    physics = _physics()
+    physics.mistakes.add("TOOL_BAD_CALL", weight=100.0, now_ts=time.time())
+    registry = ActionRegistry(
+        [
+            RegisteredAction(
+                name="custom",
+                tags=frozenset({"custom_tag"}),
+                handler=lambda ctx: ActionOutcome(delivered=True),
+                cooldown_seconds=0,
+            )
+        ]
+    )
+    loop = IdleLoop(
+        physics=physics,
+        contemplation_corpus=PromptCorpus((), rng=random.Random(1)),
+        gate_fn=lambda ctx: True,
+        registry=registry,
+        pulse_config=PulseConfig(mistake_pressure_floor=60.0),
+        mistake_aware_tags_fn=lambda pre, post, soul: frozenset({"custom_tag"}),
+    )
+
+    result = await loop.tick()
+
+    assert result.action_tags == frozenset({"custom_tag"})
+    assert result.chosen_action is not None
+    assert result.chosen_action.name == "custom"
 
 
 # ── helpers ─────────────────────────────────────────────────────────────

@@ -60,6 +60,26 @@ def test_unrestricted_with_quiet_history_returns_empty_string() -> None:
     assert out == ""
 
 
+def test_unrestricted_with_mistake_pressure_narrates_verification_guidance() -> None:
+    out = compose_state_context(
+        CapabilityLevel.UNRESTRICTED,
+        _baseline_snap(mistake_pressure=82.4),
+        GovernorConfig(mistake_narration_floor=50.0),
+    )
+    assert "mistake_pressure=82.4" in out
+    assert "verify tool calls" in out
+    assert "not a sign you are failing" in out
+
+
+def test_mistake_pressure_below_floor_stays_quiet() -> None:
+    out = compose_state_context(
+        CapabilityLevel.UNRESTRICTED,
+        _baseline_snap(mistake_pressure=20.0),
+        GovernorConfig(mistake_narration_floor=50.0),
+    )
+    assert out == ""
+
+
 def test_non_destructive_explains_level_and_why() -> None:
     snap = _baseline_snap(mood=[145, 110, 160, 80, 130, 70, 135])  # W=70
     out = compose_state_context(

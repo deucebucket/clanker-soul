@@ -108,6 +108,8 @@ def test_action_kind_for_new_triggers() -> None:
     assert _action_kind_for_trigger("connect_impulse") == "direct_message"
     assert _action_kind_for_trigger("reflective_impulse") == "direct_message"
     assert _action_kind_for_trigger("caretake_impulse") == "direct_message"
+    assert _action_kind_for_trigger("stuck_impulse") == "tool_invocation"
+    assert _action_kind_for_trigger("obstructed_impulse") == "tool_invocation"
 
 
 def test_action_kind_unknown_falls_back_to_dm() -> None:
@@ -433,6 +435,8 @@ def test_new_trigger_kinds_have_unique_prompts() -> None:
         "reflective_impulse",
         "caretake_impulse",
         "restless_curiosity",
+        "stuck_impulse",
+        "obstructed_impulse",
     ]
     prompts = []
     for kind in new_kinds:
@@ -484,5 +488,7 @@ def test_all_12_trigger_kinds_have_action_mappings() -> None:
         "reflective_impulse",
         "caretake_impulse",
         "restless_curiosity",
+        "stuck_impulse",
+        "obstructed_impulse",
     }
     assert set(_DEFAULT_TRIGGER_TO_ACTION.keys()) == expected

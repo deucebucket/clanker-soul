@@ -121,6 +121,22 @@ class PulseConfig:
     when own well is dry — that's compulsive caretaking, not authentic
     concern."""
 
+    # ------------------------------------------------------------------
+    # M4 — tool-failure response cascade (#98)
+    # ------------------------------------------------------------------
+
+    mistake_pressure_floor: float = 60.0
+    """MistakeReservoir load above which stuck_impulse can fire."""
+
+    obstruction_count_floor: int = 5
+    """Recent non-self-attributed TOOL_* failures needed for obstructed_impulse."""
+
+    obstruction_window_events: int = 30
+    """How many recent ingest records to scan for obstruction patterns."""
+
+    mistake_narration_floor: float = 50.0
+    """Mistake pressure above which state_context narrates verification guidance."""
+
     startup_grace_s: float = 60.0
     """Sleep this long before the first tick after ``start()``."""
 

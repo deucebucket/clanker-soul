@@ -46,6 +46,7 @@ def compose_state_context(
         level == CapabilityLevel.UNRESTRICTED
         and (crisis is None or not crisis.is_emergency)
         and not _has_notable_recent(recent_events)
+        and (snap.get("mistake_pressure") or 0.0) <= config.mistake_narration_floor
     ):
         return ""
 
@@ -58,6 +59,7 @@ def compose_state_context(
     distance = snap.get("soul_distance") or 0.0
     trauma = snap.get("trauma_load") or 0.0
     nourishment = snap.get("nourishment_load") or 0.0
+    mistake_pressure = snap.get("mistake_pressure") or 0.0
 
     lines = ["[OPERATIONAL STATE]"]
     lines.append(f"Capability level: {int(level)} ({level.name.lower()}) — {level.description}.")
@@ -70,6 +72,12 @@ def compose_state_context(
         )
     if trauma > 1.0 or nourishment > 1.0:
         lines.append(f"Reservoirs: trauma={trauma:.0f}, nourishment={nourishment:.0f}")
+    if mistake_pressure > config.mistake_narration_floor:
+        lines.append(
+            "Mistake pressure is elevated "
+            f"(mistake_pressure={mistake_pressure:.1f}). This is a signal to slow down "
+            "and verify tool calls before sending them — not a sign you are failing."
+        )
 
     # Why are we at this level?
     why_lines = _why_at_level(level, mood, distance, trauma, config)

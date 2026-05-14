@@ -23,6 +23,8 @@ from clanker_soul.cascade.action import (
     ActionThresholdConfig,
     CascadeActionContext,
     RegisteredAction,
+    confide_proxy_score,
+    mistake_aware_tags,
     should_act,
     tags_from_delta,
 )
@@ -40,6 +42,7 @@ __all__ = [
     "ActionRegistry",
     "ActionThresholdConfig",
     "CascadeActionContext",
+    "confide_proxy_score",
     "GateConfig",
     "GateRollContext",
     "IDLE_CONTEMPLATION_KIND",
@@ -47,6 +50,7 @@ __all__ = [
     "RegisteredAction",
     "TickResult",
     "default_gate",
+    "mistake_aware_tags",
     "should_act",
     "tags_from_delta",
 ]

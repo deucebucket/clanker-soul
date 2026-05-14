@@ -39,7 +39,9 @@ from clanker_soul.cascade import (
     IdleLoop,
     RegisteredAction,
     TickResult,
+    confide_proxy_score,
     default_gate,
+    mistake_aware_tags,
     should_act,
     tags_from_delta,
 )
@@ -225,6 +227,7 @@ __all__ = [
     "ActionRegistry",
     "ActionThresholdConfig",
     "CascadeActionContext",
+    "confide_proxy_score",
     "GateConfig",
     "GateRollContext",
     "IDLE_CONTEMPLATION_KIND",
@@ -232,6 +235,7 @@ __all__ = [
     "RegisteredAction",
     "TickResult",
     "default_gate",
+    "mistake_aware_tags",
     "should_act",
     "tags_from_delta",
     # Safety governor
