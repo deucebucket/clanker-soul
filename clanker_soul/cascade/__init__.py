@@ -12,10 +12,20 @@ endogenous motivation. The per-feature drop-in invariant
 Current contents:
 
 * :py:mod:`clanker_soul.cascade.idle` — Roll 0 (gate) + Roll 1
-  (contemplation). Lands #81. Roll 2 + Roll 3 (action registry + tag
-  selection) ship in #82 as :py:mod:`clanker_soul.cascade.action`.
+  (contemplation).
+* :py:mod:`clanker_soul.cascade.action` — Roll 2 (delta threshold) +
+  Roll 3 (tagged action selection).
 """
 
+from clanker_soul.cascade.action import (
+    ActionHandler,
+    ActionRegistry,
+    ActionThresholdConfig,
+    CascadeActionContext,
+    RegisteredAction,
+    should_act,
+    tags_from_delta,
+)
 from clanker_soul.cascade.idle import (
     GateConfig,
     GateRollContext,
@@ -26,10 +36,17 @@ from clanker_soul.cascade.idle import (
 )
 
 __all__ = [
+    "ActionHandler",
+    "ActionRegistry",
+    "ActionThresholdConfig",
+    "CascadeActionContext",
     "GateConfig",
     "GateRollContext",
     "IDLE_CONTEMPLATION_KIND",
     "IdleLoop",
+    "RegisteredAction",
     "TickResult",
     "default_gate",
+    "should_act",
+    "tags_from_delta",
 ]

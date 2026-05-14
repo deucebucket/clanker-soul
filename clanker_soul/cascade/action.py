@@ -1,0 +1,186 @@
+"""Roll 2 + Roll 3 action selection for the M4 cascade.
+
+``IdleLoop`` produces a contemplation delta. This module decides whether
+that delta is strong enough to consider action, then samples from
+host-registered actions by tag match, novelty, and soul fit.
+"""
+
+from __future__ import annotations
+
+import random
+from dataclasses import dataclass
+from typing import Awaitable, Callable, Iterable
+
+from clanker_soul.physics.contemplation import ContemplationResult
+from clanker_soul.pulse.corpus import PromptFace, RecencyLog, novelty
+from clanker_soul.pulse.triggers import ActionOutcome, Trigger
+from clanker_soul.soul import SoulState
+
+
+ActionHandler = Callable[["CascadeActionContext"], ActionOutcome | Awaitable[ActionOutcome]]
+
+
+@dataclass(frozen=True)
+class RegisteredAction:
+    """A host-owned action that can participate in cascade selection."""
+
+    name: str
+    tags: frozenset[str]
+    handler: ActionHandler
+    vadugwi_affinity: tuple[int, int, int, int, int, int, int] | None = None
+    cost: int = 1
+    cooldown_seconds: int = 300
+
+    def __post_init__(self) -> None:
+        if not self.name:
+            raise ValueError("RegisteredAction.name must be non-empty")
+        if not self.tags:
+            raise ValueError("RegisteredAction.tags must be non-empty")
+        if self.cost < 1:
+            raise ValueError("RegisteredAction.cost must be >= 1")
+        if self.cooldown_seconds < 0:
+            raise ValueError("RegisteredAction.cooldown_seconds must be >= 0")
+        if self.vadugwi_affinity is None:
+            return
+        if len(self.vadugwi_affinity) != 7:
+            raise ValueError("RegisteredAction.vadugwi_affinity must be a 7-tuple")
+        for idx, value in enumerate(self.vadugwi_affinity):
+            if not 0 <= value <= 255:
+                raise ValueError(
+                    f"RegisteredAction.vadugwi_affinity[{idx}]={value} must be in 0..255"
+                )
+
+
+@dataclass(frozen=True)
+class CascadeActionContext:
+    """Context passed to a selected :class:`RegisteredAction` handler."""
+
+    trigger: Trigger
+    face: PromptFace
+    contemplation: ContemplationResult
+    tags: frozenset[str]
+    action: RegisteredAction
+
+
+@dataclass(frozen=True)
+class ActionThresholdConfig:
+    """Roll 2 thresholds for whether a contemplation delta should act."""
+
+    min_abs_delta_per_dim: int = 12
+    min_total_delta: int = 30
+    cost_scaling: float = 1.0
+
+
+class ActionRegistry:
+    """Registry and weighted sampler for host-provided cascade actions."""
+
+    def __init__(self, actions: Iterable[RegisteredAction] = ()) -> None:
+        self._actions: dict[str, RegisteredAction] = {}
+        for action in actions:
+            self.register(action)
+
+    @property
+    def actions(self) -> tuple[RegisteredAction, ...]:
+        return tuple(self._actions.values())
+
+    def register(self, action: RegisteredAction) -> None:
+        if action.name in self._actions:
+            raise ValueError(f"ActionRegistry: duplicate action name {action.name!r}")
+        self._actions[action.name] = action
+
+    def filter(self, tags: Iterable[str]) -> list[RegisteredAction]:
+        wanted = frozenset(tags)
+        if not wanted:
+            return []
+        return [action for action in self._actions.values() if action.tags & wanted]
+
+    def sample(
+        self,
+        tags: Iterable[str],
+        *,
+        soul: SoulState,
+        recency: RecencyLog,
+        rng: random.Random,
+        now: float = 0.0,
+        actions: Iterable[RegisteredAction] | None = None,
+    ) -> RegisteredAction | None:
+        """Sample by tag match × novelty × soul affinity.
+
+        ``actions`` lets callers pass a pre-filtered subset, such as the
+        actions that passed Roll 2 thresholding. When omitted, the registry
+        filters by tag itself.
+        """
+        wanted = frozenset(tags)
+        candidates = list(actions) if actions is not None else self.filter(wanted)
+        weighted: list[tuple[RegisteredAction, float]] = []
+        for action in candidates:
+            tag_weight = _tag_match_weight(action, wanted)
+            if tag_weight <= 0.0:
+                continue
+            nov = novelty(action.name, action.cooldown_seconds, recency, now)
+            if nov <= 0.0:
+                continue
+            weight = tag_weight * nov * _soul_affinity_weight(action, soul)
+            if weight > 0.0:
+                weighted.append((action, weight))
+        if not weighted:
+            return None
+        actions_out, weights = zip(*weighted)
+        return rng.choices(list(actions_out), weights=list(weights), k=1)[0]
+
+
+def tags_from_delta(
+    pre: tuple[int, int, int, int, int, int, int],
+    post: tuple[int, int, int, int, int, int, int],
+    soul: SoulState,
+) -> frozenset[str]:
+    """Default reaction-shape mapper.
+
+    The research-backed matrix lands separately. Until then, the safe
+    default is no tags, so hosts opt in by passing their own mapper.
+    """
+    _ = (pre, post, soul)
+    return frozenset()
+
+
+def should_act(
+    delta: tuple[int, int, int, int, int, int, int],
+    action: RegisteredAction,
+    config: ActionThresholdConfig,
+) -> bool:
+    """Return True when ``delta`` is large enough for ``action.cost``."""
+    scale = 1.0 + (max(1, action.cost) - 1) * max(0.0, config.cost_scaling)
+    dim_floor = config.min_abs_delta_per_dim * scale
+    total_floor = config.min_total_delta * scale
+    abs_delta = [abs(value) for value in delta]
+    return max(abs_delta) >= dim_floor or sum(abs_delta) >= total_floor
+
+
+def _tag_match_weight(action: RegisteredAction, wanted: frozenset[str]) -> float:
+    if not wanted:
+        return 0.0
+    overlap = len(action.tags & wanted)
+    if overlap == 0:
+        return 0.0
+    return overlap / len(wanted)
+
+
+def _soul_affinity_weight(action: RegisteredAction, soul: SoulState) -> float:
+    if action.vadugwi_affinity is None:
+        return 1.0
+    soul_tuple = (soul.v, soul.a, soul.d, soul.u, soul.g, soul.w, soul.i)
+    closeness = 0.0
+    for actual, desired in zip(soul_tuple, action.vadugwi_affinity):
+        closeness += 1.0 - (abs(actual - desired) / 255.0)
+    return 1.0 + (closeness / 7)
+
+
+__all__ = [
+    "ActionHandler",
+    "ActionRegistry",
+    "ActionThresholdConfig",
+    "CascadeActionContext",
+    "RegisteredAction",
+    "tags_from_delta",
+    "should_act",
+]
