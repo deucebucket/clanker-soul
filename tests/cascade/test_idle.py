@@ -21,16 +21,21 @@ import random
 import pytest
 
 from clanker_soul import (
+    ActionOutcome,
     EmotionalPhysics,
     PhysicsConfig,
     PromptCorpus,
     PromptFace,
+    Score,
     SoulState,
 )
 from clanker_soul.cascade import (
+    ActionRegistry,
+    CascadeActionContext,
     GateConfig,
     GateRollContext,
     IdleLoop,
+    RegisteredAction,
     TickResult,
     default_gate,
 )
@@ -69,6 +74,8 @@ def _loop(
     gate_fn=None,
     now_fn=None,
     rng: random.Random | None = None,
+    registry: ActionRegistry | None = None,
+    tags_fn=None,
 ) -> IdleLoop:
     return IdleLoop(
         physics=physics or _physics(),
@@ -77,6 +84,8 @@ def _loop(
         gate_fn=gate_fn,
         now_fn=now_fn,
         rng=rng or random.Random(7),
+        registry=registry,
+        tags_fn=tags_fn,
     )
 
 
@@ -358,6 +367,92 @@ async def test_tick_elapsed_seconds_is_non_negative() -> None:
     loop = _loop(gate_fn=lambda ctx: True)
     result = await loop.tick()
     assert result.elapsed_seconds >= 0.0
+
+
+async def test_tick_with_registry_selects_action_and_ingests_consequences() -> None:
+    physics = _physics()
+    calls: list[CascadeActionContext] = []
+
+    def handler(ctx: CascadeActionContext) -> ActionOutcome:
+        calls.append(ctx)
+        return ActionOutcome(delivered=True, consequences=(Score(v=240),))
+
+    registry = ActionRegistry(
+        [
+            RegisteredAction(
+                name="journal",
+                tags=frozenset({"reflect"}),
+                handler=handler,
+                cooldown_seconds=0,
+            )
+        ]
+    )
+    loop = _loop(
+        physics=physics,
+        corpus=_corpus(_affinity_face("idle.heavy", affinity=(40, 100, 90, 80, 230, 80, 110))),
+        gate_fn=lambda ctx: True,
+        registry=registry,
+        tags_fn=lambda pre, post, soul: frozenset({"reflect"}),
+    )
+
+    result = await loop.tick()
+
+    assert result.face is not None
+    assert result.contemplation is not None
+    assert result.action_tags == frozenset({"reflect"})
+    assert result.chosen_action is not None
+    assert result.chosen_action.name == "journal"
+    assert result.action_outcome == ActionOutcome(delivered=True, consequences=(Score(v=240),))
+    assert len(calls) == 1
+    assert calls[0].action.name == "journal"
+    assert physics.mood is not None
+    assert physics.mood.v > result.contemplation.post_mood[0]
+
+
+async def test_tick_without_registry_keeps_contemplate_only_behavior() -> None:
+    loop = _loop(gate_fn=lambda ctx: True)
+
+    result = await loop.tick()
+
+    assert result.gate_passed is True
+    assert result.contemplation is not None
+    assert result.action_tags == frozenset()
+    assert result.chosen_action is None
+    assert result.action_outcome is None
+
+
+async def test_cascade_action_starts_action_cooldown() -> None:
+    clock = _FakeClock(start=1000.0)
+    registry = ActionRegistry(
+        [
+            RegisteredAction(
+                name="journal",
+                tags=frozenset({"reflect"}),
+                handler=lambda ctx: ActionOutcome(delivered=True),
+                cooldown_seconds=0,
+            )
+        ]
+    )
+    cfg = GateConfig(
+        base_probability=1.0,
+        mood_arousal_bias=0.0,
+        cooldown_after_action_s=300.0,
+        cooldown_after_contemplation_s=0.0,
+        min_quiet_s=0.0,
+    )
+    loop = _loop(
+        config=cfg,
+        now_fn=clock.now,
+        registry=registry,
+        tags_fn=lambda pre, post, soul: frozenset({"reflect"}),
+    )
+
+    first = await loop.tick()
+    assert first.chosen_action is not None
+
+    second = await loop.tick()
+    assert second.gate_passed is False
+    assert second.gate_skip_reason == "cooldown_action"
 
 
 # ── helpers ─────────────────────────────────────────────────────────────

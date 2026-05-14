@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **M4 action registry + tag-based selection (#82).** New
+  ``clanker_soul.cascade.action`` module with ``RegisteredAction``,
+  ``ActionRegistry``, ``ActionThresholdConfig``, ``tags_from_delta``,
+  and ``should_act``. ``IdleLoop`` now accepts an optional
+  ``registry=`` and, when present, runs Roll 2/3 after contemplation:
+  delta thresholding, tagged weighted action sampling, handler dispatch,
+  and consequence ingestion back into physics. With no registry, existing
+  gate+contemplate behavior is unchanged.
 - **Tool-failure attribution + MistakeReservoir (#97).** New
   ``clanker_soul.tool_health`` module with two helpers:
   ``score_from_action_failure(reason, *, tool, override)`` produces

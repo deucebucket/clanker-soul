@@ -36,13 +36,22 @@ import inspect
 import logging
 import random
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Awaitable, Callable
 
+from clanker_soul.cascade.action import (
+    ActionRegistry,
+    ActionThresholdConfig,
+    CascadeActionContext,
+    RegisteredAction,
+    should_act,
+    tags_from_delta,
+)
 from clanker_soul.physics import EmotionalPhysics
 from clanker_soul.physics.contemplation import ContemplationResult
 from clanker_soul.pulse.corpus import PromptCorpus, PromptFace, RecencyLog
-from clanker_soul.pulse.triggers import Trigger
+from clanker_soul.pulse.triggers import ActionOutcome, Trigger
+from clanker_soul.soul import SoulState
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +142,9 @@ class TickResult:
     face: PromptFace | None
     contemplation: ContemplationResult | None
     elapsed_seconds: float
+    action_tags: frozenset[str] = field(default_factory=frozenset)
+    chosen_action: RegisteredAction | None = None
+    action_outcome: ActionOutcome | None = None
 
 
 def default_gate(ctx: GateRollContext) -> bool:
@@ -201,6 +213,9 @@ class IdleLoop:
         uses one internally even when ``recency=None`` so face-level
         cooldowns work; pass a host-owned log if you want one
         :py:class:`RecencyLog` shared across pulse + cascade.
+      ``registry`` — optional :py:class:`ActionRegistry`. When absent,
+        the loop stops after contemplation. When present, Roll 2/3 run:
+        delta → tags → threshold → registered action handler.
     """
 
     def __init__(
@@ -215,6 +230,31 @@ class IdleLoop:
         now_fn: Callable[[], float] | None = None,
         rng: random.Random | None = None,
         recency: RecencyLog | None = None,
+        registry: ActionRegistry | None = None,
+        action_threshold_config: ActionThresholdConfig | None = None,
+        tags_fn: (
+            Callable[
+                [
+                    tuple[int, int, int, int, int, int, int],
+                    tuple[int, int, int, int, int, int, int],
+                    SoulState,
+                ],
+                frozenset[str],
+            ]
+            | None
+        ) = None,
+        should_act_fn: (
+            Callable[
+                [
+                    tuple[int, int, int, int, int, int, int],
+                    RegisteredAction,
+                    ActionThresholdConfig,
+                ],
+                bool,
+            ]
+            | None
+        ) = None,
+        action_recency: RecencyLog | None = None,
     ) -> None:
         self._physics = physics
         self._corpus = contemplation_corpus
@@ -223,6 +263,11 @@ class IdleLoop:
         self._now_fn = now_fn or time.time
         self._rng = rng or random.Random()
         self._recency = recency or RecencyLog()
+        self._registry = registry
+        self._action_threshold_config = action_threshold_config or ActionThresholdConfig()
+        self._tags_fn = tags_fn or tags_from_delta
+        self._should_act_fn = should_act_fn or should_act
+        self._action_recency = action_recency or RecencyLog()
 
         self._last_action_ts: float | None = None
         self._last_contemplation_ts: float | None = None
@@ -320,6 +365,11 @@ class IdleLoop:
 
         # Gate-on: sample a contemplation face and contemplate it.
         face, contemplation = await self._sample_and_contemplate(ctx)
+        action_tags, chosen_action, action_outcome = await self._maybe_run_action(
+            ctx,
+            face,
+            contemplation,
+        )
         return TickResult(
             gate_passed=True,
             gate_probability=probability,
@@ -327,6 +377,9 @@ class IdleLoop:
             face=face,
             contemplation=contemplation,
             elapsed_seconds=time.perf_counter() - start,
+            action_tags=action_tags,
+            chosen_action=chosen_action,
+            action_outcome=action_outcome,
         )
 
     async def _sample_and_contemplate(
@@ -366,6 +419,85 @@ class IdleLoop:
         # synchronous contemplate path).
         await asyncio.sleep(0)
         return face, result
+
+    async def _maybe_run_action(
+        self,
+        ctx: GateRollContext,
+        face: PromptFace | None,
+        contemplation: ContemplationResult | None,
+    ) -> tuple[frozenset[str], RegisteredAction | None, ActionOutcome | None]:
+        """Run Roll 2/3 when an action registry is configured."""
+        if self._registry is None or face is None or contemplation is None:
+            return frozenset(), None, None
+
+        tags = self._tags_fn(
+            contemplation.pre_mood,
+            contemplation.post_mood,
+            self._physics.soul,
+        )
+        if not tags:
+            return tags, None, None
+
+        candidates = [
+            action
+            for action in self._registry.filter(tags)
+            if self._should_act_fn(
+                contemplation.delta,
+                action,
+                self._action_threshold_config,
+            )
+        ]
+        if not candidates:
+            return tags, None, None
+
+        now = self._now_fn()
+        chosen = self._registry.sample(
+            tags,
+            soul=self._physics.soul,
+            recency=self._action_recency,
+            rng=self._rng,
+            now=now,
+            actions=candidates,
+        )
+        if chosen is None:
+            return tags, None, None
+
+        self._action_recency.note_fired(chosen.name, now)
+        self._last_action_ts = now
+        context = CascadeActionContext(
+            trigger=self._synthesize_trigger(ctx),
+            face=face,
+            contemplation=contemplation,
+            tags=tags,
+            action=chosen,
+        )
+        try:
+            result = chosen.handler(context)
+            outcome = await result if inspect.isawaitable(result) else result
+        except Exception:
+            logger.exception("cascade action handler %r raised", chosen.name)
+            return tags, chosen, ActionOutcome(delivered=False, note="cascade_action_exception")
+
+        if not isinstance(outcome, ActionOutcome):
+            logger.error(
+                "cascade action handler %r returned %r, expected ActionOutcome",
+                chosen.name,
+                outcome,
+            )
+            return tags, chosen, ActionOutcome(delivered=False, note="invalid_action_outcome")
+
+        self._absorb_action_consequences(outcome)
+        return tags, chosen, outcome
+
+    def _absorb_action_consequences(self, outcome: ActionOutcome) -> None:
+        for score in outcome.consequences:
+            try:
+                self._physics.ingest(score)
+            except Exception:
+                logger.exception(
+                    "Failed to ingest cascade action consequence Score (patterns=%s)",
+                    score.patterns,
+                )
 
     def _synthesize_trigger(self, ctx: GateRollContext) -> Trigger:
         """Build a Trigger purely for corpus eligibility lookup. Carries

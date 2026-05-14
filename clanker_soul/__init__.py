@@ -29,6 +29,20 @@ from clanker_soul.eventlog import (
     PulseRecord,
     SqliteEventLog,
 )
+from clanker_soul.cascade import (
+    ActionRegistry,
+    ActionThresholdConfig,
+    CascadeActionContext,
+    GateConfig,
+    GateRollContext,
+    IDLE_CONTEMPLATION_KIND,
+    IdleLoop,
+    RegisteredAction,
+    TickResult,
+    default_gate,
+    should_act,
+    tags_from_delta,
+)
 from clanker_soul.governor import (
     DEFAULT_CAPABILITY_PROFILES,
     STRICT_CAPABILITY_PROFILES,
@@ -207,6 +221,19 @@ __all__ = [
     # Tool-failure attribution (M4 #97)
     "score_from_action_failure",
     "score_from_correction",
+    # M4 cascade
+    "ActionRegistry",
+    "ActionThresholdConfig",
+    "CascadeActionContext",
+    "GateConfig",
+    "GateRollContext",
+    "IDLE_CONTEMPLATION_KIND",
+    "IdleLoop",
+    "RegisteredAction",
+    "TickResult",
+    "default_gate",
+    "should_act",
+    "tags_from_delta",
     # Safety governor
     "CapabilityLevel",
     "CapabilityProfile",
