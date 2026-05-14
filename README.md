@@ -155,6 +155,24 @@ with SoulPlugin(agent_id="my-agent", db_path="./soul.db") as plugin:
     )
 ```
 
+### Felt-state language for prompts
+
+Hosts that want short feeling words without exposing engine labels can render any
+`Score` or 7-value VADUGWI tuple through `FeltState`:
+
+```python
+from clanker_soul import Register, Score, render_felt_state
+
+phrase = render_felt_state(
+    Score(v=40, a=210, w=60),
+    register=Register.CLINICAL,
+)
+# "depleted, wound up, disposable"
+```
+
+Use this in prompts when the model should know how it feels, but should not
+talk about `VADUGWI`, `Soul`, or other runtime internals.
+
 **Capability levels** (gradient — higher = more restricted):
 
 | Level | Name              | Allowed                                     |

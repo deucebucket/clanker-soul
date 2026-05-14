@@ -55,6 +55,14 @@ from clanker_soul.governor import (
     GateDecision,
     GovernorConfig,
 )
+from clanker_soul.felt_state import (
+    FeltState,
+    Register,
+    baseline_comparison_line,
+    nourishment_load_line,
+    render_felt_state,
+    trauma_load_line,
+)
 from clanker_soul.inference import Inference
 from clanker_soul.overrides import (
     ConfigOverrides,
@@ -140,6 +148,12 @@ __version__ = "0.17.0"
 __all__ = [
     # Conversational layer
     "Score",
+    "FeltState",
+    "Register",
+    "render_felt_state",
+    "baseline_comparison_line",
+    "trauma_load_line",
+    "nourishment_load_line",
     # Soul layer
     "SoulState",
     "SoulStore",

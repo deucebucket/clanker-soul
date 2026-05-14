@@ -23,7 +23,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from clanker_soul import SoulPlugin
+from clanker_soul import SoulPlugin, render_felt_state
 from clanker_soul.presets import ALL as PRESETS
 
 # Hermes import — agent.memory_provider lives in the hermes-agent venv.
@@ -345,10 +345,17 @@ class ClankerSoulMemoryProvider(MemoryProvider):  # type: ignore[misc,valid-type
         if tool_name == "clanker_soul_state":
             try:
                 snap = self._plugin.snapshot()
+                mood = snap.get("mood")
+                soul = snap.get("soul")
+                soul_dims = tuple(
+                    (soul or {}).get(dim, 128) for dim in ("v", "a", "d", "u", "g", "w", "i")
+                )
+                felt_state = render_felt_state(mood or soul_dims)
                 return json.dumps(
                     {
                         "soul": snap.get("soul"),
                         "mood": snap.get("mood"),
+                        "felt_state": felt_state,
                         "soul_distance": snap.get("soul_distance"),
                         "trauma_load": snap.get("trauma_load"),
                         "nourishment_load": snap.get("nourishment_load"),
