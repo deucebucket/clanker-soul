@@ -25,6 +25,7 @@ class EventLog(Protocol):
 
     def log_ingest(self, record: IngestRecord) -> None: ...
     def log_pulse(self, record: PulseRecord) -> None: ...
+    def read_ingest(self, agent_id: str, *, limit: int | None = None) -> list[IngestRecord]: ...
 
 
 class NullEventLog:
@@ -35,6 +36,9 @@ class NullEventLog:
 
     def log_pulse(self, record: PulseRecord) -> None:  # noqa: ARG002
         return None
+
+    def read_ingest(self, agent_id: str, *, limit: int | None = None) -> list[IngestRecord]:  # noqa: ARG002
+        return []
 
 
 __all__ = ["EventLog", "NullEventLog"]

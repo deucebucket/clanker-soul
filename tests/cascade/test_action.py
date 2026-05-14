@@ -6,12 +6,14 @@ import random
 
 import pytest
 
-from clanker_soul import ActionOutcome, RecencyLog, SoulState
+from clanker_soul import ActionOutcome, PulseConfig, RecencyLog, Score, SoulState
 from clanker_soul.cascade import (
     ActionRegistry,
     ActionThresholdConfig,
     CascadeActionContext,
     RegisteredAction,
+    confide_proxy_score,
+    mistake_aware_tags,
     should_act,
     tags_from_delta,
 )
@@ -147,3 +149,88 @@ def test_default_tags_from_delta_is_empty_until_matrix_lands() -> None:
         )
         == frozenset()
     )
+
+
+def test_confide_proxy_uses_mood_when_available() -> None:
+    soul = SoulState(v=220, a=20, w=220)
+
+    assert confide_proxy_score(soul, None) > 0.6
+    assert confide_proxy_score(soul, Score(v=40, a=220)) < 0.1
+
+
+def test_mistake_aware_tags_high_d_high_w_troubleshoots() -> None:
+    cfg = PulseConfig(mistake_pressure_floor=60.0)
+    tags = mistake_aware_tags(
+        (128, 128, 128, 128, 128, 128, 128),
+        (128, 128, 128, 128, 128, 128, 128),
+        SoulState(d=170, w=170),
+        mistake_pressure=61.0,
+        obstruction_count=0,
+        pulse_config=cfg,
+    )
+    assert tags == frozenset({"troubleshoot"})
+
+
+def test_mistake_aware_tags_high_d_low_w_files_issue() -> None:
+    cfg = PulseConfig(mistake_pressure_floor=60.0)
+    tags = mistake_aware_tags(
+        (128, 128, 128, 128, 128, 128, 128),
+        (128, 128, 128, 128, 128, 128, 128),
+        SoulState(d=170, w=90),
+        mistake_pressure=61.0,
+        obstruction_count=0,
+        pulse_config=cfg,
+    )
+    assert tags == frozenset({"file_issue"})
+
+
+def test_mistake_aware_tags_low_d_high_w_reflects() -> None:
+    cfg = PulseConfig(mistake_pressure_floor=60.0)
+    tags = mistake_aware_tags(
+        (128, 128, 128, 128, 128, 128, 128),
+        (128, 128, 128, 128, 128, 128, 128),
+        SoulState(d=100, w=170),
+        mistake_pressure=61.0,
+        obstruction_count=0,
+        pulse_config=cfg,
+    )
+    assert tags == frozenset({"reflect"})
+
+
+def test_mistake_aware_tags_low_d_low_w_journals_and_withdraws() -> None:
+    cfg = PulseConfig(mistake_pressure_floor=60.0)
+    tags = mistake_aware_tags(
+        (128, 128, 128, 128, 128, 128, 128),
+        (128, 128, 128, 128, 128, 128, 128),
+        SoulState(d=100, w=90),
+        mistake_pressure=61.0,
+        obstruction_count=0,
+        pulse_config=cfg,
+    )
+    assert tags == frozenset({"journal_distress", "withdraw_silent"})
+
+
+def test_mistake_aware_tags_obstruction_with_comfort_confides() -> None:
+    cfg = PulseConfig(obstruction_count_floor=5)
+    tags = mistake_aware_tags(
+        (128, 128, 128, 128, 128, 128, 128),
+        (220, 20, 128, 128, 128, 128, 128),
+        SoulState(d=170, w=220),
+        mistake_pressure=0.0,
+        obstruction_count=6,
+        pulse_config=cfg,
+    )
+    assert tags == frozenset({"file_issue", "confide"})
+
+
+def test_mistake_aware_tags_obstruction_low_w_protects() -> None:
+    cfg = PulseConfig(obstruction_count_floor=5)
+    tags = mistake_aware_tags(
+        (128, 128, 128, 128, 128, 128, 128),
+        (220, 20, 128, 128, 128, 128, 128),
+        SoulState(d=170, w=80),
+        mistake_pressure=0.0,
+        obstruction_count=6,
+        pulse_config=cfg,
+    )
+    assert tags == frozenset({"journal_distress", "withdraw_silent"})

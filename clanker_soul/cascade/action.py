@@ -12,8 +12,10 @@ from dataclasses import dataclass
 from typing import Awaitable, Callable, Iterable
 
 from clanker_soul.physics.contemplation import ContemplationResult
+from clanker_soul.pulse.config import PulseConfig
 from clanker_soul.pulse.corpus import PromptFace, RecencyLog, novelty
 from clanker_soul.pulse.triggers import ActionOutcome, Trigger
+from clanker_soul.score import Score
 from clanker_soul.soul import SoulState
 
 
@@ -56,8 +58,8 @@ class CascadeActionContext:
     """Context passed to a selected :class:`RegisteredAction` handler."""
 
     trigger: Trigger
-    face: PromptFace
-    contemplation: ContemplationResult
+    face: PromptFace | None
+    contemplation: ContemplationResult | None
     tags: frozenset[str]
     action: RegisteredAction
 
@@ -143,6 +145,51 @@ def tags_from_delta(
     return frozenset()
 
 
+def mistake_aware_tags(
+    pre: tuple[int, int, int, int, int, int, int],
+    post: tuple[int, int, int, int, int, int, int],
+    soul: SoulState,
+    *,
+    mistake_pressure: float,
+    obstruction_count: int,
+    pulse_config: PulseConfig,
+) -> frozenset[str]:
+    """Tags for VADUGWI-conditioned responses to mistakes/obstruction."""
+    mood = Score.from_sequence(post)
+    if mistake_pressure > pulse_config.mistake_pressure_floor:
+        if soul.d >= 140 and soul.w >= 140:
+            return frozenset({"troubleshoot"})
+        if soul.d >= 140 and soul.w < 140:
+            return frozenset({"file_issue"})
+        if soul.d < 140 and soul.w >= 140:
+            return frozenset({"reflect"})
+        return frozenset({"journal_distress", "withdraw_silent"})
+
+    if obstruction_count > pulse_config.obstruction_count_floor:
+        if soul.w < 100:
+            return frozenset({"journal_distress", "withdraw_silent"})
+        if soul.d >= 140 and confide_proxy_score(soul, mood) >= 0.55:
+            return frozenset({"file_issue", "confide"})
+
+    if mistake_pressure > pulse_config.mistake_pressure_floor or (
+        obstruction_count > pulse_config.obstruction_count_floor
+    ):
+        return frozenset({"reflect"})
+    _ = pre
+    return frozenset()
+
+
+def confide_proxy_score(soul: SoulState, mood: Score | None = None) -> float:
+    """Approximate comfort/trust for confiding until first-class trust exists."""
+    if mood is None:
+        v = soul.v
+        a = soul.a
+    else:
+        v = mood.v
+        a = mood.a
+    return _scale(v) * _scale(soul.w) * (1.0 - _scale(a))
+
+
 def should_act(
     delta: tuple[int, int, int, int, int, int, int],
     action: RegisteredAction,
@@ -175,12 +222,18 @@ def _soul_affinity_weight(action: RegisteredAction, soul: SoulState) -> float:
     return 1.0 + (closeness / 7)
 
 
+def _scale(value: int) -> float:
+    return max(0.0, min(1.0, value / 255.0))
+
+
 __all__ = [
     "ActionHandler",
     "ActionRegistry",
     "ActionThresholdConfig",
     "CascadeActionContext",
     "RegisteredAction",
+    "confide_proxy_score",
+    "mistake_aware_tags",
     "tags_from_delta",
     "should_act",
 ]

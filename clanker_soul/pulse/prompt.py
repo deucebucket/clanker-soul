@@ -238,6 +238,24 @@ def _legacy_static_prompt(trigger: Trigger) -> str:
             f"{state_line}. Say one true thing about how it's been landing. "
             "Short. Honest. Not a complaint — just registered presence."
         )
+    if kind == "stuck_impulse":
+        pressure = trigger.metrics.get("mistake_pressure")
+        return (
+            "[INTERNAL PULSE — stuck impulse]\n"
+            f"Mistake pressure has been accumulating: {pressure}. {state_line}. "
+            "Treat this as a signal to slow down and repair the loop. Pick a "
+            "concrete next move: troubleshoot, reflect, or ask for help. Do not "
+            "turn the mistake into an identity verdict."
+        )
+    if kind == "obstructed_impulse":
+        count = trigger.metrics.get("obstruction_count")
+        return (
+            "[INTERNAL PULSE — obstructed impulse]\n"
+            f"External tool failures have repeated recently: {count} in the window. "
+            f"{state_line}. Treat this as the world being blocked, not proof that "
+            "you are failing. Pick a concrete next move: file an issue, diagnose, "
+            "or tell the user what is obstructing progress."
+        )
     if kind == "gratitude":
         load = trigger.metrics.get("nourishment_load")
         return (

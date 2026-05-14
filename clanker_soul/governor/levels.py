@@ -221,6 +221,9 @@ class GovernorConfig:
     crisis_window_events: int = 10
     crisis_external_majority_threshold: float = 0.5
 
+    # M4 #98 — state-context narration for constructive mistake pressure.
+    mistake_narration_floor: float = 50.0
+
     # Optional label for the user in state-context strings — e.g.
     # "your operator" or "Jerry". Defaults to "the user".
     user_label: str = "the user"

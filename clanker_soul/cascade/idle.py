@@ -44,11 +44,13 @@ from clanker_soul.cascade.action import (
     ActionThresholdConfig,
     CascadeActionContext,
     RegisteredAction,
+    mistake_aware_tags,
     should_act,
     tags_from_delta,
 )
 from clanker_soul.physics import EmotionalPhysics
 from clanker_soul.physics.contemplation import ContemplationResult
+from clanker_soul.pulse.config import PulseConfig
 from clanker_soul.pulse.corpus import PromptCorpus, PromptFace, RecencyLog
 from clanker_soul.pulse.triggers import ActionOutcome, Trigger
 from clanker_soul.soul import SoulState
@@ -255,6 +257,21 @@ class IdleLoop:
             | None
         ) = None,
         action_recency: RecencyLog | None = None,
+        pulse_config: PulseConfig | None = None,
+        mistake_aware_tags_fn: (
+            Callable[
+                [
+                    tuple[int, int, int, int, int, int, int],
+                    tuple[int, int, int, int, int, int, int],
+                    SoulState,
+                ],
+                frozenset[str],
+            ]
+            | None
+        ) = None,
+        enable_reservoir_drive: bool = True,
+        event_log=None,
+        agent_id: str | None = None,
     ) -> None:
         self._physics = physics
         self._corpus = contemplation_corpus
@@ -268,6 +285,11 @@ class IdleLoop:
         self._tags_fn = tags_fn or tags_from_delta
         self._should_act_fn = should_act_fn or should_act
         self._action_recency = action_recency or RecencyLog()
+        self._pulse_config = pulse_config or PulseConfig()
+        self._mistake_aware_tags_fn = mistake_aware_tags_fn or self._default_mistake_aware_tags
+        self._enable_reservoir_drive = enable_reservoir_drive
+        self._event_log = event_log
+        self._agent_id = agent_id
 
         self._last_action_ts: float | None = None
         self._last_contemplation_ts: float | None = None
@@ -427,27 +449,41 @@ class IdleLoop:
         contemplation: ContemplationResult | None,
     ) -> tuple[frozenset[str], RegisteredAction | None, ActionOutcome | None]:
         """Run Roll 2/3 when an action registry is configured."""
-        if self._registry is None or face is None or contemplation is None:
+        if self._registry is None:
             return frozenset(), None, None
 
-        tags = self._tags_fn(
-            contemplation.pre_mood,
-            contemplation.post_mood,
-            self._physics.soul,
-        )
+        if contemplation is None:
+            if not self._enable_reservoir_drive or not self._failure_pressure_active():
+                return frozenset(), None, None
+            pre = self._current_mood_tuple(ctx)
+            post = pre
+            tags = self._mistake_aware_tags_fn(pre, post, self._physics.soul)
+            threshold_candidates = self._registry.filter(tags)
+            trigger = self._failure_trigger(ctx)
+        else:
+            tags = self._tags_fn(
+                contemplation.pre_mood,
+                contemplation.post_mood,
+                self._physics.soul,
+            ) | self._mistake_aware_tags_fn(
+                contemplation.pre_mood,
+                contemplation.post_mood,
+                self._physics.soul,
+            )
+            threshold_candidates = [
+                action
+                for action in self._registry.filter(tags)
+                if self._should_act_fn(
+                    contemplation.delta,
+                    action,
+                    self._action_threshold_config,
+                )
+            ]
+            trigger = self._synthesize_trigger(ctx)
         if not tags:
             return tags, None, None
 
-        candidates = [
-            action
-            for action in self._registry.filter(tags)
-            if self._should_act_fn(
-                contemplation.delta,
-                action,
-                self._action_threshold_config,
-            )
-        ]
-        if not candidates:
+        if not threshold_candidates:
             return tags, None, None
 
         now = self._now_fn()
@@ -457,7 +493,7 @@ class IdleLoop:
             recency=self._action_recency,
             rng=self._rng,
             now=now,
-            actions=candidates,
+            actions=threshold_candidates,
         )
         if chosen is None:
             return tags, None, None
@@ -465,7 +501,7 @@ class IdleLoop:
         self._action_recency.note_fired(chosen.name, now)
         self._last_action_ts = now
         context = CascadeActionContext(
-            trigger=self._synthesize_trigger(ctx),
+            trigger=trigger,
             face=face,
             contemplation=contemplation,
             tags=tags,
@@ -488,6 +524,76 @@ class IdleLoop:
 
         self._absorb_action_consequences(outcome)
         return tags, chosen, outcome
+
+    def _default_mistake_aware_tags(
+        self,
+        pre: tuple[int, int, int, int, int, int, int],
+        post: tuple[int, int, int, int, int, int, int],
+        soul: SoulState,
+    ) -> frozenset[str]:
+        return mistake_aware_tags(
+            pre,
+            post,
+            soul,
+            mistake_pressure=self._physics.mistakes.load(),
+            obstruction_count=self._recent_obstruction_count(),
+            pulse_config=self._pulse_config,
+        )
+
+    def _failure_pressure_active(self) -> bool:
+        return (
+            self._physics.mistakes.load() > self._pulse_config.mistake_pressure_floor
+            or self._recent_obstruction_count() > self._pulse_config.obstruction_count_floor
+        )
+
+    def _failure_trigger(self, ctx: GateRollContext) -> Trigger:
+        mistake_pressure = self._physics.mistakes.load()
+        obstruction_count = self._recent_obstruction_count()
+        soul_dict = self._physics.soul.to_dict()
+        mood = list(self._current_mood_tuple(ctx))
+        if mistake_pressure > self._pulse_config.mistake_pressure_floor:
+            return Trigger(
+                kind="stuck_impulse",
+                soul=soul_dict,
+                mood=mood,
+                metrics={"mistake_pressure": round(mistake_pressure, 1)},
+            )
+        return Trigger(
+            kind="obstructed_impulse",
+            soul=soul_dict,
+            mood=mood,
+            metrics={
+                "obstruction_count": obstruction_count,
+                "obstruction_window_events": self._pulse_config.obstruction_window_events,
+            },
+        )
+
+    def _current_mood_tuple(
+        self,
+        ctx: GateRollContext,
+    ) -> tuple[int, int, int, int, int, int, int]:
+        if ctx.mood is not None:
+            return ctx.mood
+        soul = self._physics.soul
+        return (soul.v, soul.a, soul.d, soul.u, soul.g, soul.w, soul.i)
+
+    def _recent_obstruction_count(self) -> int:
+        if self._event_log is None or self._agent_id is None:
+            return 0
+        reader = getattr(self._event_log, "read_ingest", None)
+        if not callable(reader):
+            return 0
+        try:
+            records = reader(self._agent_id, limit=self._pulse_config.obstruction_window_events)
+        except Exception:
+            logger.exception("event_log.read_ingest failed for cascade obstruction count")
+            return 0
+        count = 0
+        for record in records:
+            patterns = set(record.raw.patterns or record.patterns or ())
+            if any(p.startswith("TOOL_") and p != "TOOL_BAD_CALL" for p in patterns):
+                count += 1
+        return count
 
     def _absorb_action_consequences(self, outcome: ActionOutcome) -> None:
         for score in outcome.consequences:
