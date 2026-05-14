@@ -28,6 +28,7 @@ from clanker_soul import (
     PulseAction,
     PulseConfig,
     PulseEngine,
+    PulseHostAdapter,
     PulseTarget,
     SoulPlugin,
 )
@@ -92,7 +93,7 @@ class _NoOpDispatcher:
         )
 
 
-class _PulseHostAdapter:
+class _PulseHostAdapter(PulseHostAdapter):
     """Implements :py:class:`PulseHost` by proxying to a SoulPlugin and
     delegating dispatch to a configurable callback."""
 
@@ -102,8 +103,8 @@ class _PulseHostAdapter:
         dispatcher: PulseDispatcher,
         target_factory: Callable[[], Optional[PulseTarget]] | None = None,
     ) -> None:
+        super().__init__(dispatcher=dispatcher)
         self._plugin = plugin
-        self._dispatcher = dispatcher
         self._target_factory = target_factory or (lambda: None)
 
     def snapshot(self) -> dict:
@@ -122,14 +123,6 @@ class _PulseHostAdapter:
         except Exception:
             logger.exception("target_factory raised")
             return None
-
-    def dispatch_action(
-        self,
-        action: PulseAction,
-    ) -> Union[ActionOutcome, Awaitable[ActionOutcome]]:
-        """Hand off to the operator-supplied dispatcher. Sync or async
-        — the engine handles both via ``asyncio.iscoroutine``."""
-        return self._dispatcher(action)
 
     def due_reminders(self) -> list[dict]:
         # No host-side reminders integration in this default adapter.

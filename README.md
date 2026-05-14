@@ -325,8 +325,8 @@ The pulse engine is host-agnostic. It evaluates 12 trigger kinds against the age
 
 ```python
 from clanker_soul import (
-    ACTION_KINDS, ActionOutcome, PulseAction, PulseEngine, PulseHost,
-    PulseTarget, Score, SoulPlugin,
+    ACTION_KINDS, ActionOutcome, PulseAction, PulseDispatcher, PulseEngine,
+    PulseHost, PulseHostAdapter, PulseTarget, Score, SoulPlugin,
 )
 
 class MyHost:
@@ -364,6 +364,12 @@ with SoulPlugin(agent_id="my-agent", db_path="./soul.db") as plugin:
 ```
 
 **Legacy path** (still supported): implement `dispatch_pulse(target, trigger, prompt) -> bool` for direct-message-only behavior matching v0.1. Engine wraps the boolean return in `ActionOutcome(delivered=..., consequences=())`.
+
+**Adapter path**: if your host uses `PulseDispatcher`, subclass
+`PulseHostAdapter` and implement only the host-specific hooks
+(`snapshot`, `slow_drift_tick`, targets, reminders). The adapter provides
+`dispatch_action` by delegating to either `PulseDispatcher.dispatch(action)` or
+a plain sync/async callable.
 
 The engine never invents recipients, never knows about your message dataclass, and never imports your channel layer. It just decides when and why to fire, and asks the host to do it. Hosts decide what tools to use, what counts as a consequence, and how to score it.
 

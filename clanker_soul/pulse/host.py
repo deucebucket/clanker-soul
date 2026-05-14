@@ -29,7 +29,8 @@ flow.
 
 from __future__ import annotations
 
-from typing import Awaitable, Protocol, runtime_checkable
+import inspect
+from typing import Awaitable, Callable, Protocol, runtime_checkable
 
 from clanker_soul.pulse.triggers import (
     ActionOutcome,
@@ -37,6 +38,8 @@ from clanker_soul.pulse.triggers import (
     PulseTarget,
     Trigger,
 )
+
+PulseDispatchCallable = Callable[[PulseAction], Awaitable[ActionOutcome] | ActionOutcome]
 
 
 @runtime_checkable
@@ -141,4 +144,58 @@ class PulseHost(Protocol):
     #     fires.
 
 
-__all__ = ["PulseHost"]
+class PulseHostAdapter:
+    """Base adapter that binds ``dispatch_action`` to a dispatcher.
+
+    Subclasses provide host-specific state hooks such as ``snapshot``,
+    ``slow_drift_tick``, ``most_recent_target``, and reminders. The
+    adapter only owns the part that is identical across hosts: turning a
+    :class:`PulseAction` over to either a ``PulseDispatcher``-style
+    object with ``dispatch(action)`` or a plain callable.
+    """
+
+    def __init__(self, *, dispatcher: object) -> None:
+        self._dispatcher = dispatcher
+
+    def snapshot(self) -> dict:
+        raise NotImplementedError
+
+    def slow_drift_tick(self) -> None:
+        raise NotImplementedError
+
+    def most_recent_target(self) -> PulseTarget | None:
+        raise NotImplementedError
+
+    def dispatch_pulse(
+        self, target: PulseTarget, trigger: Trigger, prompt: str
+    ) -> Awaitable[bool] | bool:
+        raise NotImplementedError
+
+    async def dispatch_action(self, action: PulseAction) -> ActionOutcome:
+        """Delegate a pulse action to the configured dispatcher.
+
+        ``dispatcher`` may be a :class:`PulseDispatcher` instance
+        exposing ``dispatch(action)`` or a direct sync/async callable
+        accepting the action.
+        """
+        if callable(self._dispatcher):
+            result = self._dispatcher(action)
+        else:
+            dispatch = getattr(self._dispatcher, "dispatch", None)
+            if not callable(dispatch):
+                raise TypeError("dispatcher must be callable or expose dispatch(action)")
+            result = dispatch(action)
+        if inspect.isawaitable(result):
+            result = await result
+        if not isinstance(result, ActionOutcome):
+            raise TypeError(f"dispatcher returned {type(result).__name__}, expected ActionOutcome")
+        return result
+
+    def due_reminders(self) -> list[dict]:
+        raise NotImplementedError
+
+    def deliver_reminder(self, target: PulseTarget, reminder: dict) -> Awaitable[None] | None:
+        raise NotImplementedError
+
+
+__all__ = ["PulseDispatchCallable", "PulseHost", "PulseHostAdapter"]

@@ -5,7 +5,8 @@ Re-exports the public surface of the submodules:
   - :py:mod:`.triggers` — :py:class:`Trigger`, :py:class:`PulseTarget`,
     :py:class:`PulseAction`, :py:class:`ActionOutcome`,
     :py:data:`ACTION_KINDS`
-  - :py:mod:`.host` — :py:class:`PulseHost` Protocol
+  - :py:mod:`.host` — :py:class:`PulseHost` Protocol and
+    :py:class:`PulseHostAdapter`
   - :py:mod:`.prompt` — :py:func:`compose_self_prompt`
   - :py:mod:`.engine` — :py:class:`PulseEngine`
   - :py:mod:`.corpus` — :py:class:`PromptCorpus`, :py:class:`PromptFace`,
@@ -35,7 +36,7 @@ from clanker_soul.pulse.dispatcher import (
     PulseDispatcher,
 )
 from clanker_soul.pulse.engine import PulseEngine
-from clanker_soul.pulse.host import PulseHost
+from clanker_soul.pulse.host import PulseDispatchCallable, PulseHost, PulseHostAdapter
 from clanker_soul.pulse.prompt import (
     compose_self_prompt,
     compose_self_prompt_with_face,
@@ -51,6 +52,8 @@ from clanker_soul.pulse.triggers import (
 __all__ = [
     "PulseEngine",
     "PulseHost",
+    "PulseHostAdapter",
+    "PulseDispatchCallable",
     "PulseConfig",
     "PulseTarget",
     "Trigger",
