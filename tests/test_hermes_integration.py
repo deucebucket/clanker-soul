@@ -180,6 +180,8 @@ def test_provider_state_tool_returns_snapshot(tmp_path) -> None:
     snap = json.loads(raw)
     assert "soul" in snap
     assert "mood" in snap
+    assert "felt_state" in snap
+    assert "VADUGWI" not in snap["felt_state"]
     assert snap["capability_level"] == "UNRESTRICTED"
     p.shutdown()
 
