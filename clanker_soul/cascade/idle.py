@@ -14,7 +14,7 @@ Three cooldowns gate the loop independently:
   action. Hosts call :py:meth:`IdleLoop.note_action` from their action
   dispatch path. Default 300s.
 * ``cooldown_after_contemplation_s`` — quiet for N seconds after the
-  most recent gate-passed tick. Loop tracks this internally. Default 60s.
+  most recent actual contemplation. Loop tracks this internally. Default 60s.
 * ``min_quiet_s`` — quiet for N seconds after any external event (a
   Score arrives, a message lands). Hosts call :py:meth:`IdleLoop.note_event`
   from their ingest path. Default 30s.
@@ -344,10 +344,6 @@ class IdleLoop:
             now=now,
         )
         if face is None:
-            # Even on empty: the gate *passed*. Record the contemplation
-            # timestamp so we still observe the cooldown — otherwise a
-            # busy gate would re-roll every tick and spam the sampler.
-            self._last_contemplation_ts = self._now_fn()
             return None, None
 
         self._recency.note_fired(face.id, now)
