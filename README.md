@@ -290,6 +290,23 @@ CI smoke-tests every example on every PR — if you copy from one and your versi
 
 ## Advanced usage
 
+### Calibrating PromptFace affinities
+
+Static `PromptFace.vadugwi_affinity` values can be checked against an
+LLM-backed scorer without mutating the face:
+
+```python
+from clanker_soul.tools import calibrate_face
+
+report = await calibrate_face(face, inference, samples=5, threshold=25)
+print(report.median_score)
+print(report.divergence_by_dim())
+print(report.recommendation)
+```
+
+Use this as an authoring aid when tuning prompt faces. The report is
+advisory; it does not rewrite corpus entries.
+
 If you need to bypass persistence or compose your own event log, use `EmotionalPhysics` directly:
 
 ```python
