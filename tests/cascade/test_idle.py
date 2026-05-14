@@ -221,6 +221,47 @@ async def test_tick_gated_on_with_empty_corpus_returns_face_none() -> None:
     assert result.gate_passed is True
     assert result.face is None
     assert result.contemplation is None
+    assert loop.seconds_since_last_contemplation() == float("inf")
+
+
+async def test_empty_sample_does_not_reset_contemplation_cooldown() -> None:
+    """An empty sample is not a thought and must not block the next real one."""
+    clock = _FakeClock(start=1000.0)
+    cfg = GateConfig(
+        base_probability=1.0,
+        mood_arousal_bias=0.0,
+        cooldown_after_action_s=0.0,
+        cooldown_after_contemplation_s=60.0,
+        min_quiet_s=0.0,
+    )
+
+    class EmptyThenAvailableCorpus(PromptCorpus):
+        def __init__(self) -> None:
+            super().__init__([_affinity_face("idle.available")], rng=random.Random(1))
+            self._samples = 0
+
+        def sample(self, *args, **kwargs):
+            self._samples += 1
+            if self._samples == 1:
+                return None
+            return super().sample(*args, **kwargs)
+
+    loop = _loop(
+        corpus=EmptyThenAvailableCorpus(),
+        config=cfg,
+        now_fn=clock.now,
+    )
+
+    empty = await loop.tick()
+    assert empty.gate_passed is True
+    assert empty.face is None
+    assert loop.seconds_since_last_contemplation() == float("inf")
+
+    second = await loop.tick()
+    assert second.gate_passed is True
+    assert second.face is not None
+    assert second.face.id == "idle.available"
+    assert second.contemplation is not None
 
 
 def test_note_action_updates_action_cooldown() -> None:

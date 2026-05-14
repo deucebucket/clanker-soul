@@ -112,6 +112,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   automatically. Action selection (Roll 2 + Roll 3) lands separately
   in #82.
 
+### Fixed
+
+- **M4 cascade contemplation cooldown (#105).** ``IdleLoop`` now updates
+  its last-contemplation timestamp only when a contemplation face is
+  actually sampled. Empty or temporarily ineligible corpora no longer
+  make ``seconds_since_last_contemplation()`` report a fresh thought or
+  block the next eligible contemplation behind the global cooldown.
+
 ## [0.17.0] — 2026-05-10
 
 ### Added
