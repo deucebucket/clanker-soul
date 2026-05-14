@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **PromptFace affinity calibration helper (#114).** New
+  ``clanker_soul.tools.calibrate_face`` helper scores a ``PromptFace``
+  repeatedly through any ``Inference`` implementation and returns a
+  ``CalibrationReport`` with static affinity, median score, population
+  standard deviation, per-dimension divergence, max absolute delta, and
+  an advisory recommendation. This is intentionally non-mutating; authors
+  use the report to decide whether a static VADUGWI affinity should be
+  adjusted.
 - **M4 action registry + tag-based selection (#82).** New
   ``clanker_soul.cascade.action`` module with ``RegisteredAction``,
   ``ActionRegistry``, ``ActionThresholdConfig``, ``tags_from_delta``,
