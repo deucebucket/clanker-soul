@@ -138,10 +138,47 @@ def tags_from_delta(
 ) -> frozenset[str]:
     """Default reaction-shape mapper.
 
-    The research-backed matrix lands separately. Until then, the safe
-    default is no tags, so hosts opt in by passing their own mapper.
+    Maps the research-backed M4 action-tendency matrix (#83) into
+    host-action tags. This deliberately stays conservative: only the
+    documented sadness/anxiety/shame/grief shapes emit tags; unrecognized
+    shapes return an empty set so hosts can still opt in with their own
+    mapper without fighting broad defaults.
     """
-    _ = (pre, post, soul)
+    if _delta_is_quiet(pre, post):
+        return frozenset()
+
+    mood = Score.from_sequence(post)
+
+    # Shame paradox: low V + low W + high G hides even though the agent
+    # needs support. This must win before generic sadness.
+    if mood.v <= 70 and mood.w <= 80 and mood.g >= 190:
+        return frozenset({"withdraw", "isolate", "distract"})
+
+    # Fear/freeze shape: urgent, low-agency threat. No instrumental action.
+    if mood.v <= 100 and mood.u >= 180 and mood.d <= 70:
+        return frozenset({"withdraw", "isolate"})
+
+    # Grief / reflective loss: low-energy, high-gravity, not worth-collapsed.
+    if mood.v <= 80 and mood.a <= 90 and mood.g >= 220 and soul.w >= 120:
+        return frozenset({"reflect", "journal", "ritual", "reach_out", "share"})
+
+    # Anxiety with enough agency/worth: gather info and plan.
+    if mood.v <= 120 and mood.a >= 130 and mood.u >= 120 and soul.d >= 120 and soul.w >= 140:
+        return frozenset({"research", "problem_solve", "reflect", "journal", "plan"})
+
+    # Sadness: personality moderates active coping vs withdrawal.
+    if mood.v <= 100 and mood.a <= 100:
+        if soul.d >= 120 and soul.w >= 140:
+            return frozenset({"reach_out", "soothe", "problem_solve", "plan", "create", "journal"})
+        if soul.d <= 90 and soul.w <= 100:
+            return frozenset({"withdraw", "isolate", "reflect", "consume", "distract"})
+        return frozenset({"reflect", "journal"})
+
+    # Pride trap / defensive self-sufficiency: high D/W with negative
+    # movement favors self-directed planning over confiding.
+    if mood.d >= 200 and mood.w >= 190 and _valence_dropped(pre, post):
+        return frozenset({"plan", "problem_solve", "reflect"})
+
     return frozenset()
 
 
@@ -224,6 +261,21 @@ def _soul_affinity_weight(action: RegisteredAction, soul: SoulState) -> float:
 
 def _scale(value: int) -> float:
     return max(0.0, min(1.0, value / 255.0))
+
+
+def _delta_is_quiet(
+    pre: tuple[int, int, int, int, int, int, int],
+    post: tuple[int, int, int, int, int, int, int],
+) -> bool:
+    delta = tuple(after - before for before, after in zip(pre, post))
+    return max(abs(value) for value in delta) < 8 and sum(abs(value) for value in delta) < 20
+
+
+def _valence_dropped(
+    pre: tuple[int, int, int, int, int, int, int],
+    post: tuple[int, int, int, int, int, int, int],
+) -> bool:
+    return post[0] < pre[0]
 
 
 __all__ = [

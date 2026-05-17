@@ -9,7 +9,7 @@ import pytest
 pytest.importorskip("fastapi")
 pytest.importorskip("httpx")
 
-from fastapi.testclient import TestClient
+from tests.ui.asgi import asgi_client
 
 from clanker_soul import Score, SoulPlugin, SoulStore
 from clanker_soul.ui.app import create_app
@@ -63,49 +63,49 @@ def _populated_db(tmp_path) -> str:
 # ---------------------------------------------------------------------------
 
 
-def test_query_returns_all_events_unfiltered(tmp_path) -> None:
+async def test_query_returns_all_events_unfiltered(tmp_path) -> None:
     db = _populated_db(tmp_path)
     res = query_events(SoulStore.get(db), "alice")
     assert res.total == 9  # 5 + 3 + 1
     assert len(res.rows) == 9
 
 
-def test_query_default_sort_is_ts_desc(tmp_path) -> None:
+async def test_query_default_sort_is_ts_desc(tmp_path) -> None:
     db = _populated_db(tmp_path)
     res = query_events(SoulStore.get(db), "alice")
     timestamps = [r.ts for r in res.rows]
     assert timestamps == sorted(timestamps, reverse=True)
 
 
-def test_query_sort_weight_desc(tmp_path) -> None:
+async def test_query_sort_weight_desc(tmp_path) -> None:
     db = _populated_db(tmp_path)
     res = query_events(SoulStore.get(db), "alice", sort="weight_desc")
     weights = [r.weight_raw for r in res.rows]
     assert weights == sorted(weights, reverse=True)
 
 
-def test_query_filter_by_classification_negative(tmp_path) -> None:
+async def test_query_filter_by_classification_negative(tmp_path) -> None:
     db = _populated_db(tmp_path)
     res = query_events(SoulStore.get(db), "alice", classification="negative")
     assert all(r.classification == "negative" for r in res.rows)
     assert res.total == 6  # 5 ABANDONMENT + 1 EXISTENTIAL_NEGATION
 
 
-def test_query_filter_by_classification_positive(tmp_path) -> None:
+async def test_query_filter_by_classification_positive(tmp_path) -> None:
     db = _populated_db(tmp_path)
     res = query_events(SoulStore.get(db), "alice", classification="positive")
     assert all(r.classification == "positive" for r in res.rows)
     assert res.total == 3
 
 
-def test_query_filter_by_pattern_substring(tmp_path) -> None:
+async def test_query_filter_by_pattern_substring(tmp_path) -> None:
     db = _populated_db(tmp_path)
     res = query_events(SoulStore.get(db), "alice", pattern_q="ABANDONMENT")
     assert res.total == 5
     assert all("ABANDONMENT" in r.patterns for r in res.rows)
 
 
-def test_query_pagination(tmp_path) -> None:
+async def test_query_pagination(tmp_path) -> None:
     db = _populated_db(tmp_path)
     page1 = query_events(SoulStore.get(db), "alice", page=1, page_size=4)
     assert len(page1.rows) == 4
@@ -122,7 +122,7 @@ def test_query_pagination(tmp_path) -> None:
     assert page3.has_next is False
 
 
-def test_query_filter_by_ts_range(tmp_path) -> None:
+async def test_query_filter_by_ts_range(tmp_path) -> None:
     db = _populated_db(tmp_path)
     # All events were just ingested → ts ≈ now. A future timestamp
     # should match nothing.
@@ -131,19 +131,19 @@ def test_query_filter_by_ts_range(tmp_path) -> None:
     assert res.total == 0
 
 
-def test_parse_iso_date_handles_yyyy_mm_dd() -> None:
+async def test_parse_iso_date_handles_yyyy_mm_dd() -> None:
     ts = parse_iso_date("2026-01-01")
     assert ts is not None
     assert ts > 1735689000  # roughly Jan 1 2025 onward
 
 
-def test_parse_iso_date_rejects_garbage() -> None:
+async def test_parse_iso_date_rejects_garbage() -> None:
     assert parse_iso_date("not a date") is None
     assert parse_iso_date("") is None
     assert parse_iso_date(None) is None
 
 
-def test_query_unknown_sort_falls_back_to_default(tmp_path) -> None:
+async def test_query_unknown_sort_falls_back_to_default(tmp_path) -> None:
     db = _populated_db(tmp_path)
     res = query_events(SoulStore.get(db), "alice", sort="garbage")
     timestamps = [r.ts for r in res.rows]
@@ -155,66 +155,66 @@ def test_query_unknown_sort_falls_back_to_default(tmp_path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_events_page_renders_table(tmp_path) -> None:
+async def test_events_page_renders_table(tmp_path) -> None:
     db = _populated_db(tmp_path)
     app = create_app(db)
-    with TestClient(app) as client:
-        res = client.get("/events?agent_id=alice")
+    async with asgi_client(app) as client:
+        res = await client.get("/events?agent_id=alice")
     assert res.status_code == 200
     assert "<table" in res.text
     assert "ABANDONMENT" in res.text
     assert "AFFIRMATION" in res.text
 
 
-def test_events_partial_returns_only_table_fragment(tmp_path) -> None:
+async def test_events_partial_returns_only_table_fragment(tmp_path) -> None:
     db = _populated_db(tmp_path)
     app = create_app(db)
-    with TestClient(app) as client:
-        res = client.get("/events?agent_id=alice&partial=1")
+    async with asgi_client(app) as client:
+        res = await client.get("/events?agent_id=alice&partial=1")
     assert res.status_code == 200
     # Fragment-only: no <html> chrome
     assert "<html" not in res.text.lower()
     assert "<table" in res.text
 
 
-def test_events_filter_by_classification_via_route(tmp_path) -> None:
+async def test_events_filter_by_classification_via_route(tmp_path) -> None:
     db = _populated_db(tmp_path)
     app = create_app(db)
-    with TestClient(app) as client:
-        res = client.get("/events?agent_id=alice&classification=positive&partial=1")
+    async with asgi_client(app) as client:
+        res = await client.get("/events?agent_id=alice&classification=positive&partial=1")
     assert res.status_code == 200
     assert "AFFIRMATION" in res.text
     assert "ABANDONMENT" not in res.text
 
 
-def test_events_drill_down_includes_full_record(tmp_path) -> None:
+async def test_events_drill_down_includes_full_record(tmp_path) -> None:
     """The <details> drill-down has source, direction, mood-before/after,
     weight breakdown — all in the initial HTML (no extra round trip)."""
     db = _populated_db(tmp_path)
     app = create_app(db)
-    with TestClient(app) as client:
-        res = client.get("/events?agent_id=alice&partial=1")
+    async with asgi_client(app) as client:
+        res = await client.get("/events?agent_id=alice&partial=1")
     assert "x.com/post/news" in res.text  # source
     assert "EXTERNAL_REPORT" in res.text  # direction
     assert "raw score" in res.text.lower()
     assert "mood before" in res.text.lower()
 
 
-def test_events_pagination_via_route(tmp_path) -> None:
+async def test_events_pagination_via_route(tmp_path) -> None:
     db = _populated_db(tmp_path)
     app = create_app(db)
-    with TestClient(app) as client:
-        res = client.get("/events?agent_id=alice&partial=1&page_size=4&page=1")
+    async with asgi_client(app) as client:
+        res = await client.get("/events?agent_id=alice&partial=1&page_size=4&page=1")
     assert "page 1" in res.text
     assert "next" in res.text.lower()
 
 
-def test_events_no_agent_no_table(tmp_path) -> None:
+async def test_events_no_agent_no_table(tmp_path) -> None:
     """No agent selected → no events table; just the empty-state."""
     db = tmp_path / "empty.db"
     SoulStore(db)
     app = create_app(db)
-    with TestClient(app) as client:
-        res = client.get("/events")
+    async with asgi_client(app) as client:
+        res = await client.get("/events")
     assert res.status_code == 200
     assert "<table" not in res.text

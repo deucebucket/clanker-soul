@@ -1,8 +1,8 @@
 name: clanker-soul
-version: 0.14.0
+version: 0.17.0
 description: "Emotional learning tool for AI agents. Persistent VADUGWI state, motivation-driven proactive messaging, action-consequence feedback loop."
 pip_dependencies:
-  - clanker-soul>=0.14.0
+  - clanker-soul>=0.17.0
 hooks:
   - on_turn_start
   - sync_turn

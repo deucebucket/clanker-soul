@@ -1,0 +1,10 @@
+{
+  "name": "hello_world",
+  "version": "1.0.0",
+  "kind": "tool",
+  "entrypoint": "hello_world:HelloWorldPlugin",
+  "description": "Minimal reference plugin for the clanker-soul manifest loader.",
+  "settings": {
+    "greeting": "hello"
+  }
+}

@@ -27,6 +27,10 @@ from clanker_soul.pulse.corpus_defaults import (
     DEFAULT_FACES,
     build_default_corpus,
 )
+from clanker_soul.pulse.contemplation_defaults import (
+    DEFAULT_CONTEMPLATION_FACES,
+    build_default_contemplation_corpus,
+)
 from clanker_soul.pulse.corpus_store import (
     CorpusStore,
     PersistentRecencyLog,
@@ -71,6 +75,9 @@ __all__ = [
     # Default baseline corpus (M3.2)
     "DEFAULT_FACES",
     "build_default_corpus",
+    # Default M4 contemplation corpus (#84)
+    "DEFAULT_CONTEMPLATION_FACES",
+    "build_default_contemplation_corpus",
     # Corpus persistence (M3.3)
     "CorpusStore",
     "PersistentRecencyLog",

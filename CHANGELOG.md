@@ -9,6 +9,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **M4 action-tendency tag defaults (#83).** ``tags_from_delta()`` now
+  implements the researched sadness, anxiety, shame, grief, pride-trap,
+  and fear-freeze mappings from
+  ``docs/research/m4_action_tendencies.md``. The mapper remains
+  conservative: quiet deltas and unrecognized mood shapes still return
+  no tags, while the documented low-worth/low-agency and shame traps
+  prefer withdrawal/isolation over generic reach-out.
+- **Plugin manifest data model (#54 Slice 1).** New
+  ``clanker_soul.plugins`` package with frozen ``PluginManifest``,
+  ``manifest_from_dict()``, ``parse_manifest_json()``, and
+  ``STANDARD_PLUGIN_KINDS``. The parser validates required
+  ``plugin.json`` fields, lowercase/underscore names, semantic versions,
+  standard kinds, ``module:attribute`` entrypoints, dependency names, and
+  list-shaped metadata. Invalid JSON or schema errors soft-fail with a
+  WARNING and return ``None`` so hosts can skip broken plugin folders
+  without aborting boot.
+- **Plugin master-file parser (#54 Slice 2).** New ``MasterEntry``,
+  ``parse_plugins_toml()``, and ``overlay_settings()`` parse the v1
+  ``plugins.toml`` shape (``enabled``, ``priority``, inline
+  ``settings``) without adding runtime dependencies. Missing master files
+  return an empty mapping; malformed lines and wrong-shaped values warn
+  and fall back to safe disabled/default entries.
+- **Plugin reference loader (#54 Slice 3).** New ``PluginLoader`` and
+  ``LoadedPlugin`` discover ``*/plugin.json`` folders, filter by
+  ``plugins.toml`` enablement, warn on missing env vars, skip
+  incompatible host-version ranges, skip missing dependencies, topological
+  sort dependency order ahead of priority order, import entrypoints, and
+  return resolved manifest/master settings for host registration.
+- **Plugin manifest docs and reference plugin (#54 Slice 4).** New
+  ``docs/plugins.md`` quick-start plus
+  ``examples/plugins/hello_world/`` validate the reference loader against
+  a real manifest-folder plugin.
+- **M4 ContemplationCorpus defaults (#84).** New
+  ``DEFAULT_CONTEMPLATION_FACES`` and
+  ``build_default_contemplation_corpus()`` expose 978
+  ``idle_introspection`` ``PromptFace`` entries across identity, bodily,
+  comparative, curious, creative, existential, present, future, past,
+  and relational introspection categories. Every shipped face has an
+  explicit ``vadugwi_affinity`` so it is safe for
+  ``EmotionalPhysics.contemplate()`` and ``IdleLoop`` use. The generated
+  source fragments are also preserved under
+  ``docs/research/m4_contemplation_corpus_draft/`` as ``*.pyfrag``
+  provenance artifacts.
 - **PromptFace affinity calibration helper (#114).** New
   ``clanker_soul.tools.calibrate_face`` helper scores a ``PromptFace``
   repeatedly through any ``Inference`` implementation and returns a

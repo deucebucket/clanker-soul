@@ -16,3 +16,6 @@ dist/
 .vscode/
 # Claude Code session artifacts
 .claude/
+
+# Local agent-session instructions are supplied by the harness.
+AGENTS.md

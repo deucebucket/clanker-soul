@@ -84,6 +84,17 @@ from clanker_soul.pending import (
     SqlitePendingActionStore,
 )
 from clanker_soul.plugin import SoulPlugin
+from clanker_soul.plugins import (
+    STANDARD_PLUGIN_KINDS,
+    LoadedPlugin,
+    MasterEntry,
+    PluginManifest,
+    PluginLoader,
+    manifest_from_dict,
+    overlay_settings,
+    parse_manifest_json,
+    parse_plugins_toml,
+)
 from clanker_soul.presets import (
     ADULT,
     ALL as PRESETS,
@@ -111,6 +122,7 @@ from clanker_soul.pulse import (
     ACTION_KINDS,
     ActionHandler,
     ActionOutcome,
+    DEFAULT_CONTEMPLATION_FACES,
     DEFAULT_FACES,
     CorpusStore,
     PersistentRecencyLog,
@@ -127,6 +139,7 @@ from clanker_soul.pulse import (
     RecencyLog,
     Trigger,
     VadugwiPredicate,
+    build_default_contemplation_corpus,
     build_default_corpus,
     default_tags_from_metrics,
 )
@@ -198,6 +211,9 @@ __all__ = [
     # Default baseline corpus (M3.2)
     "DEFAULT_FACES",
     "build_default_corpus",
+    # Default M4 contemplation corpus (#84)
+    "DEFAULT_CONTEMPLATION_FACES",
+    "build_default_contemplation_corpus",
     # Corpus persistence (M3.3)
     "CorpusStore",
     "PersistentRecencyLog",
@@ -238,6 +254,16 @@ __all__ = [
     "SoulPlugin",
     # Inference protocol (M4 #79)
     "Inference",
+    # Plugin manifest spec (#54)
+    "STANDARD_PLUGIN_KINDS",
+    "LoadedPlugin",
+    "PluginManifest",
+    "PluginLoader",
+    "MasterEntry",
+    "manifest_from_dict",
+    "overlay_settings",
+    "parse_manifest_json",
+    "parse_plugins_toml",
     # Tool-failure attribution (M4 #97)
     "score_from_action_failure",
     "score_from_correction",
