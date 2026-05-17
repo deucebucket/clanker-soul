@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Local Hermes M4 evidence (#86).** Added
+  ``integrations/hermes/EVIDENCE_M4_HERMES_LOCAL.md`` documenting a real
+  installed-Hermes ``hermes -z`` run with ``clanker-soul`` as active memory
+  provider, persisted DB evidence, and the remaining outbound-channel
+  limitation.
 - **Hermes M4 cascade smoke (#86).** New
   ``integrations/hermes/scripts/m4_idle_cascade_smoke.py`` initializes the
   Hermes memory provider, runs the shipped contemplation corpus through
