@@ -130,6 +130,11 @@ clanker-soul ui --db ~/.hermes/clanker-soul.db
 The dashboard shows the same state the model is reading via the system
 prompt block — useful for debugging "why did the agent do that?" answers.
 
+Local installed-Hermes evidence is recorded in
+[`EVIDENCE_M4_HERMES_LOCAL.md`](EVIDENCE_M4_HERMES_LOCAL.md), including a
+real `hermes -z` turn using the active `clanker-soul` memory provider and the
+persisted `~/.hermes/clanker-soul.db` event row.
+
 ## How it differs from hermes's built-in memory
 
 - **Built-in memory** (`MEMORY.md` / `USER.md`) is *facts*. Things the
