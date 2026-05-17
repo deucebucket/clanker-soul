@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **M4 idle-cascade example (#86).** Added
+  ``examples/05_m4_idle_cascade.py`` showing the opt-in path from the
+  shipped contemplation corpus through ``IdleLoop``, ``tags_from_delta()``,
+  ``ActionRegistry``, action handling, and consequence ingestion.
 - **M4 action-tendency tag defaults (#83).** ``tags_from_delta()`` now
   implements the researched sadness, anxiety, shame, grief, pride-trap,
   and fear-freeze mappings from
