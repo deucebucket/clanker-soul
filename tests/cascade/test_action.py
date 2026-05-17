@@ -140,15 +140,75 @@ def test_should_act_uses_dim_or_total_delta_and_cost() -> None:
     assert not should_act((12, 0, 0, 0, 0, 0, 0), _action("costly", cost=2), cfg)
 
 
-def test_default_tags_from_delta_is_empty_until_matrix_lands() -> None:
+def test_tags_from_delta_quiet_delta_returns_empty() -> None:
     assert (
         tags_from_delta(
             (128, 128, 128, 128, 128, 128, 128),
-            (80, 160, 128, 128, 200, 100, 128),
+            (132, 130, 128, 128, 130, 128, 128),
             SoulState(),
         )
         == frozenset()
     )
+
+
+def test_tags_from_delta_sadness_high_worth_high_agency_reaches_out() -> None:
+    tags = tags_from_delta(
+        (145, 110, 160, 80, 130, 175, 135),
+        (70, 70, 120, 40, 180, 150, 80),
+        SoulState(d=170, w=180),
+    )
+
+    assert tags == frozenset({"reach_out", "soothe", "problem_solve", "plan", "create", "journal"})
+
+
+def test_tags_from_delta_sadness_low_worth_low_agency_withdraws() -> None:
+    tags = tags_from_delta(
+        (145, 110, 160, 80, 130, 175, 135),
+        (60, 60, 40, 30, 180, 60, 40),
+        SoulState(d=70, w=80),
+    )
+
+    assert tags == frozenset({"withdraw", "isolate", "reflect", "consume", "distract"})
+
+
+def test_tags_from_delta_anxiety_secure_researches_and_plans() -> None:
+    tags = tags_from_delta(
+        (145, 110, 160, 80, 130, 175, 135),
+        (90, 150, 120, 140, 160, 180, 160),
+        SoulState(d=160, w=180),
+    )
+
+    assert tags == frozenset({"research", "problem_solve", "reflect", "journal", "plan"})
+
+
+def test_tags_from_delta_shame_paradox_hides_before_sadness_default() -> None:
+    tags = tags_from_delta(
+        (145, 110, 160, 80, 130, 175, 135),
+        (30, 100, 20, 80, 240, 30, 20),
+        SoulState(d=170, w=180),
+    )
+
+    assert tags == frozenset({"withdraw", "isolate", "distract"})
+
+
+def test_tags_from_delta_grief_reflects_and_shares_memory() -> None:
+    tags = tags_from_delta(
+        (145, 110, 160, 80, 130, 175, 135),
+        (40, 50, 60, 20, 255, 150, 30),
+        SoulState(w=150),
+    )
+
+    assert tags == frozenset({"reflect", "journal", "ritual", "reach_out", "share"})
+
+
+def test_tags_from_delta_fear_freeze_withdraws() -> None:
+    tags = tags_from_delta(
+        (145, 110, 160, 80, 130, 175, 135),
+        (80, 180, 40, 220, 170, 120, 40),
+        SoulState(),
+    )
+
+    assert tags == frozenset({"withdraw", "isolate"})
 
 
 def test_confide_proxy_uses_mood_when_available() -> None:

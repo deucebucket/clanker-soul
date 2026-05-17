@@ -253,9 +253,9 @@ async def run_demo(db_path: Path) -> InMemoryMemory:
             print(f"  [wiring #3] scored contemplation: V={score.v} W={score.w}")
 
             # The cascade's outer loop: when a contemplation crosses an
-            # action threshold, fire an action via the actor. This demo
-            # keeps it simple and just always fires a journal-shaped
-            # direct_message; #82 will replace this with a real registry.
+            # action threshold, fire an action via the actor. This demo keeps
+            # it simple and just always fires a journal-shaped direct_message;
+            # production hosts should wire ActionRegistry + tags_from_delta.
             from clanker_soul.pulse.triggers import Trigger
 
             outcome = await plugin.actor.act(

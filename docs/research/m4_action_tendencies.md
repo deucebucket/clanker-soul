@@ -1,6 +1,6 @@
 # M4 Research Output: Action-Tendency Matrix
 
-> **Status:** Initial deep-research deliverable for [#83](https://github.com/deucebucket/clanker-soul/issues/83) (sibling to [#87](https://github.com/deucebucket/clanker-soul/issues/87) thought-content; feeds [#82](https://github.com/deucebucket/clanker-soul/issues/82) action registry tag defaults). Originally pasted as a comment on #83 with Google Docs HTML markup; cleaned and re-saved here for durable diff-able reference. Some JSON entries are partial — cleanup, full normalization, and expansion happen during #82 implementation.
+> **Status:** Initial deep-research deliverable for [#83](https://github.com/deucebucket/clanker-soul/issues/83) (sibling to [#87](https://github.com/deucebucket/clanker-soul/issues/87) thought-content; feeds [#82](https://github.com/deucebucket/clanker-soul/issues/82) action registry tag defaults). Originally pasted as a comment on #83 with Google Docs HTML markup; cleaned and re-saved here for durable diff-able reference. The documented sadness, anxiety, shame, grief, pride-trap, and fear-freeze mappings are now implemented conservatively in `clanker_soul.cascade.tags_from_delta()`.
 
 ---
 
@@ -270,13 +270,21 @@ Weak/Contested Evidence: The exact VADUGWI signature for "Restlessness" or "Grie
 This report establishes the necessary topological mappings for an autonomous AI agent to navigate its own affective landscape, ensuring that its actions are not just logically sound, but emotionally and contextually grounded in human-like motivational logic.
 ---
 
-## Notes for #82 implementation
+## Notes from #82/#83 implementation
 
-Items to address when this matrix is converted into `tags_from_delta()` defaults:
+This matrix has been converted conservatively into
+`clanker_soul.cascade.tags_from_delta()`:
 
-1. **JSON entries are partial.** Several entries in the action-tendency matrix are missing their opening braces and `state` keys (artifacts of the HTML-to-text conversion from the Google Docs paste). When implementing, restore by reading the section context — entries appear in this order: sadness×high-worth/agency, sadness×low-worth/agency, anxiety×secure, shame×low-worth, grief×reflective.
-2. **Citations are bracketed numbers** — bibliography wasn't included. Treat as advisory tradition-source notes; not load-bearing for implementation.
-3. **Tag taxonomy alignment.** The matrix uses these action tags: `reach_out, withdraw, reflect, distract, create, journal, plan, research, ritual, problem_solve, share, isolate, consume, soothe`. Cross-walk with the canonical set in #82 — extend the canonical set rather than rename.
-4. **Coverage gaps.** Matrix covers sadness, anxiety, shame, grief explicitly. Joy, anger, fear, boredom, loneliness, excitement, contentment, pride, disgust, curiosity, restlessness all need filling in (either from a follow-up research pass or curated authoring during #82).
-5. **Mood-incongruent traps documented** (Shame Paradox, Pride Trap, Fear-Freeze) — these become test cases for `tags_from_delta()`: a sad+low-W input must produce withdraw/isolate tags, not reach-out, even though "sad → reach out" is the default.
-6. **Cultural variation note.** Collectivist vs. individualist defaults flip the shame→reach-out vs. shame→withdraw direction. Surface this as an operator override in the `tags_from_delta()` config rather than baking one direction in.
+1. **Implemented defaults:** sadness high-worth/high-agency, sadness
+   low-worth/low-agency, secure anxiety, shame paradox, grief, fear-freeze, and
+   pride-trap.
+2. **Tag set emitted:** `reach_out`, `soothe`, `problem_solve`, `plan`,
+   `create`, `journal`, `withdraw`, `isolate`, `reflect`, `consume`,
+   `distract`, `research`, `ritual`, and `share`.
+3. **Quiet deltas:** below-threshold mood shifts return an empty tag set.
+4. **Conservative fallback:** joy, anger, boredom, loneliness, excitement,
+   contentment, disgust, curiosity, and restlessness still return empty unless a
+   host supplies its own tag mapper or future defaults expand coverage.
+5. **Variation note:** cultural/individual variation remains a host policy
+   concern; `tags_from_delta()` intentionally chooses one documented default
+   rather than pretending the matrix is universal.

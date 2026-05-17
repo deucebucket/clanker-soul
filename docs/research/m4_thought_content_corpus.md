@@ -1,6 +1,6 @@
 # M4 Research Output: Thought-Content Corpus
 
-> **Status:** Initial research deliverable for [#87](https://github.com/deucebucket/clanker-soul/issues/87) (sibling to [#83](https://github.com/deucebucket/clanker-soul/issues/83), feeds [#84](https://github.com/deucebucket/clanker-soul/issues/84) ContemplationCorpus content). Research output as delivered — formatting quirks (mixed markdown / partial JSON blocks) preserved as-is. Cleanup, full JSON normalization, and expansion to the target ≥500 entries will happen during implementation of #84.
+> **Status:** Initial research deliverable for [#87](https://github.com/deucebucket/clanker-soul/issues/87) (sibling to [#83](https://github.com/deucebucket/clanker-soul/issues/83), feeds [#84](https://github.com/deucebucket/clanker-soul/issues/84) ContemplationCorpus content). Research output as delivered — formatting quirks (mixed markdown / partial JSON blocks) preserved as-is. The #84 implementation promoted the cleaned and expanded corpus into 978 `PromptFace` defaults in `clanker_soul.pulse.contemplation_defaults.DEFAULT_CONTEMPLATION_FACES`.
 
 ---
 
@@ -475,13 +475,18 @@ In conclusion, the idle states of an AI agent should be treated as a "fertile vo
 
 ---
 
-## Notes for #84 implementation
+## Notes from #84 implementation
 
-Items to address when this seed corpus gets converted into Python `PromptFace` entries:
+This seed corpus has been converted into Python `PromptFace` entries in
+`clanker_soul/pulse/contemplation_defaults.py`:
 
-1. **Some JSON entries are missing their `prompt` and top-level `mood_bias` fields** — the report compressed them away. When implementing, fill in by reading the cluster context. These represent ~10 fragments that need restoration.
-2. **Citations are bracketed numbers** — the underlying bibliography wasn't included. Treat as advisory tradition-source notes; not load-bearing for implementation.
-3. **Target ≥500 entries.** This deliverable includes ~25-30 explicit JSON entries + 10 cluster categories + 5 branch trees = a *seed*. Expansion to ≥500 entries requires either a follow-up research pass or curated authoring.
-4. **Tag taxonomy alignment.** Several tags (e.g. `identity`, `relational`, `existential`) overlap cleanly with the canonical action tags from #83. Cross-walk during implementation.
-5. **Cultural balance.** The seed leans Western/Stoic/Zen. A second pass could intentionally surface more from Sufi, Indigenous, African contemplative traditions.
-6. **Branch infrastructure already exists.** M3.4 shipped the branch_id mechanism. The 5 trees in this document map cleanly onto that existing scaffolding.
+1. **Current shipped count:** 978 idle-introspection faces, exposed through
+   `DEFAULT_CONTEMPLATION_FACES` and `build_default_contemplation_corpus()`.
+2. **Runtime shape:** every face uses the `idle_introspection` trigger and has
+   a 7-dimension `vadugwi_affinity`, so the existing `PromptCorpus` sampler can
+   weight by soul/mood fit.
+3. **Draft preservation:** generated conversion fragments that should not ship
+   on the Python path live under `docs/research/m4_contemplation_corpus_draft/`.
+4. **Remaining research gap:** cultural balance can still improve in future
+   authoring passes; the current default corpus is intentionally usable but not
+   culturally exhaustive.

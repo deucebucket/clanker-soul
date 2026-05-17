@@ -13,7 +13,7 @@ import pytest
 pytest.importorskip("fastapi")
 pytest.importorskip("httpx")
 
-from fastapi.testclient import TestClient
+from tests.ui.asgi import asgi_client
 
 from clanker_soul import Score, SoulPlugin
 
@@ -34,14 +34,14 @@ def _populated_db(tmp_path) -> str:
 # ---------------------------------------------------------------------------
 
 
-def test_ui_module_exposes_launch_and_create_app() -> None:
+async def test_ui_module_exposes_launch_and_create_app() -> None:
     from clanker_soul.ui import create_app, launch
 
     assert callable(create_app)
     assert callable(launch)
 
 
-def test_create_app_raises_when_db_missing(tmp_path) -> None:
+async def test_create_app_raises_when_db_missing(tmp_path) -> None:
     from clanker_soul.ui import create_app
 
     with pytest.raises(FileNotFoundError):
@@ -53,7 +53,7 @@ def test_create_app_raises_when_db_missing(tmp_path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_index_renders_with_no_agents(tmp_path) -> None:
+async def test_index_renders_with_no_agents(tmp_path) -> None:
     from clanker_soul.ui import create_app
     from clanker_soul.soul import SoulStore
 
@@ -61,32 +61,32 @@ def test_index_renders_with_no_agents(tmp_path) -> None:
     SoulStore(db)  # creates schema, no rows
     app = create_app(db)
 
-    with TestClient(app) as client:
-        res = client.get("/")
+    async with asgi_client(app) as client:
+        res = await client.get("/")
     assert res.status_code == 200
     assert "no agents found" in res.text.lower()
 
 
-def test_index_lists_agents_from_populated_db(tmp_path) -> None:
+async def test_index_lists_agents_from_populated_db(tmp_path) -> None:
     from clanker_soul.ui import create_app
 
     db = _populated_db(tmp_path)
     app = create_app(db)
 
-    with TestClient(app) as client:
-        res = client.get("/")
+    async with asgi_client(app) as client:
+        res = await client.get("/")
     assert res.status_code == 200
     assert "alice" in res.text
     assert "bob" in res.text
 
 
-def test_index_honors_agent_id_query_param(tmp_path) -> None:
+async def test_index_honors_agent_id_query_param(tmp_path) -> None:
     from clanker_soul.ui import create_app
 
     db = _populated_db(tmp_path)
     app = create_app(db)
-    with TestClient(app) as client:
-        res = client.get("/?agent_id=bob")
+    async with asgi_client(app) as client:
+        res = await client.get("/?agent_id=bob")
     assert res.status_code == 200
     # The selected option should reflect the query param. Tailwind
     # renders the agent id inside the form; we check for the
@@ -94,13 +94,13 @@ def test_index_honors_agent_id_query_param(tmp_path) -> None:
     assert 'value="bob" selected' in res.text
 
 
-def test_index_honors_default_agent_id(tmp_path) -> None:
+async def test_index_honors_default_agent_id(tmp_path) -> None:
     from clanker_soul.ui import create_app
 
     db = _populated_db(tmp_path)
     app = create_app(db, default_agent_id="bob")
-    with TestClient(app) as client:
-        res = client.get("/")
+    async with asgi_client(app) as client:
+        res = await client.get("/")
     assert 'value="bob" selected' in res.text
 
 
@@ -109,14 +109,14 @@ def test_index_honors_default_agent_id(tmp_path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_health_returns_json(tmp_path) -> None:
+async def test_health_returns_json(tmp_path) -> None:
     from clanker_soul import __version__
     from clanker_soul.ui import create_app
 
     db = _populated_db(tmp_path)
     app = create_app(db)
-    with TestClient(app) as client:
-        res = client.get("/health")
+    async with asgi_client(app) as client:
+        res = await client.get("/health")
     assert res.status_code == 200
     payload = res.json()
     assert payload["ok"] is True
@@ -129,7 +129,9 @@ def test_health_returns_json(tmp_path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_cli_ui_subcommand_no_longer_emits_install_hint(tmp_path, monkeypatch, capsys) -> None:
+async def test_cli_ui_subcommand_no_longer_emits_install_hint(
+    tmp_path, monkeypatch, capsys
+) -> None:
     """Once [ui] is installed, ``clanker-soul ui`` should NOT print
     the install-hint stub. Instead it tries to launch — we monkeypatch
     uvicorn.Server.run so the test doesn't actually bind a port."""

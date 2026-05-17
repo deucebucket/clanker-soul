@@ -7,7 +7,7 @@ import pytest
 pytest.importorskip("fastapi")
 pytest.importorskip("httpx")
 
-from fastapi.testclient import TestClient
+from tests.ui.asgi import asgi_client
 
 from clanker_soul import PhysicsConfig, Score, SoulPlugin, SoulState, SoulStore
 from clanker_soul.eventlog import SqliteEventLog
@@ -45,7 +45,7 @@ def _records(db: str, agent_id: str = "alice"):
 # ---------------------------------------------------------------------------
 
 
-def test_replay_empty_records_is_a_noop(tmp_path) -> None:
+async def test_replay_empty_records_is_a_noop(tmp_path) -> None:
     soul = SoulState(v=200)
     res = replay_events([], soul, PhysicsConfig())
     assert res.n_events == 0
@@ -53,7 +53,7 @@ def test_replay_empty_records_is_a_noop(tmp_path) -> None:
     assert res.soul_sim_end.v == 200
 
 
-def test_replay_produces_one_step_per_record(tmp_path) -> None:
+async def test_replay_produces_one_step_per_record(tmp_path) -> None:
     db = _populated_db(tmp_path)
     records = _records(db)
     res = replay_events(records, SoulState(), PhysicsConfig())
@@ -61,7 +61,7 @@ def test_replay_produces_one_step_per_record(tmp_path) -> None:
     assert len(res.steps) == len(records)
 
 
-def test_replay_is_deterministic(tmp_path) -> None:
+async def test_replay_is_deterministic(tmp_path) -> None:
     """Same (records, soul, config) → same simulated trajectory."""
     db = _populated_db(tmp_path)
     records = _records(db)
@@ -71,7 +71,7 @@ def test_replay_is_deterministic(tmp_path) -> None:
     assert a.soul_sim_end == b.soul_sim_end
 
 
-def test_replay_different_configs_produce_different_trajectories(tmp_path) -> None:
+async def test_replay_different_configs_produce_different_trajectories(tmp_path) -> None:
     db = _populated_db(tmp_path)
     records = _records(db)
     soft = replay_events(
@@ -89,7 +89,7 @@ def test_replay_different_configs_produce_different_trajectories(tmp_path) -> No
     assert soft_v != hard_v
 
 
-def test_replay_does_not_write_to_db(tmp_path) -> None:
+async def test_replay_does_not_write_to_db(tmp_path) -> None:
     """Sandbox guarantee: replay must never log new events to the live DB."""
     db = _populated_db(tmp_path)
     records = _records(db)
@@ -100,7 +100,7 @@ def test_replay_does_not_write_to_db(tmp_path) -> None:
     assert before == after
 
 
-def test_replay_pairs_real_with_sim(tmp_path) -> None:
+async def test_replay_pairs_real_with_sim(tmp_path) -> None:
     db = _populated_db(tmp_path)
     records = _records(db)
     res = replay_events(records, SoulState(), PhysicsConfig())
@@ -109,7 +109,7 @@ def test_replay_pairs_real_with_sim(tmp_path) -> None:
         assert step.mood_real == rec.mood_after
 
 
-def test_replay_performance_under_500ms_for_100_events(tmp_path) -> None:
+async def test_replay_performance_under_500ms_for_100_events(tmp_path) -> None:
     """Acceptance criterion from #29."""
     db = tmp_path / "perf.db"
     with SoulPlugin(agent_id="bob", db_path=db) as p:
@@ -125,31 +125,31 @@ def test_replay_performance_under_500ms_for_100_events(tmp_path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_parse_soul_uses_defaults_for_missing_fields() -> None:
+async def test_parse_soul_uses_defaults_for_missing_fields() -> None:
     soul = parse_soul({})
     base = SoulState()
     for d in ("v", "a", "d", "u", "g", "w", "i"):
         assert getattr(soul, d) == getattr(base, d)
 
 
-def test_parse_soul_reads_provided_fields() -> None:
+async def test_parse_soul_reads_provided_fields() -> None:
     soul = parse_soul({"soul_v": "210", "soul_w": "200"})
     assert soul.v == 210
     assert soul.w == 200
 
 
-def test_parse_soul_rejects_out_of_range() -> None:
+async def test_parse_soul_rejects_out_of_range() -> None:
     with pytest.raises(ValueError, match="out of range"):
         parse_soul({"soul_v": "999"})
 
 
-def test_parse_config_reads_provided_fields() -> None:
+async def test_parse_config_reads_provided_fields() -> None:
     cfg = parse_config({"physics_blend_alpha": "0.3", "physics_armor_max": "0.7"})
     assert cfg.blend_alpha == 0.3
     assert cfg.armor_max == 0.7
 
 
-def test_parse_config_rejects_out_of_range() -> None:
+async def test_parse_config_rejects_out_of_range() -> None:
     with pytest.raises(ValueError, match="out of range"):
         parse_config({"physics_blend_alpha": "5.0"})
 
@@ -159,22 +159,22 @@ def test_parse_config_rejects_out_of_range() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_simulate_page_renders_form(tmp_path) -> None:
+async def test_simulate_page_renders_form(tmp_path) -> None:
     db = _populated_db(tmp_path)
     app = create_app(db)
-    with TestClient(app) as client:
-        res = client.get("/simulate?agent_id=alice")
+    async with asgi_client(app) as client:
+        res = await client.get("/simulate?agent_id=alice")
     assert res.status_code == 200
     assert "hypothetical starting soul" in res.text
     assert "hypothetical physics config" in res.text
     assert "events to replay" in res.text
 
 
-def test_simulate_run_returns_result_fragment(tmp_path) -> None:
+async def test_simulate_run_returns_result_fragment(tmp_path) -> None:
     db = _populated_db(tmp_path)
     app = create_app(db)
-    with TestClient(app) as client:
-        res = client.post(
+    async with asgi_client(app) as client:
+        res = await client.post(
             "/simulate/run",
             data={"agent_id": "alice", "n_events": "10"},
         )
@@ -183,12 +183,12 @@ def test_simulate_run_returns_result_fragment(tmp_path) -> None:
     assert "replay result" in res.text
 
 
-def test_simulate_run_with_no_events_shows_empty_state(tmp_path) -> None:
+async def test_simulate_run_with_no_events_shows_empty_state(tmp_path) -> None:
     db = tmp_path / "empty.db"
     SoulStore(db)
     app = create_app(db)
-    with TestClient(app) as client:
-        res = client.post(
+    async with asgi_client(app) as client:
+        res = await client.post(
             "/simulate/run",
             data={"agent_id": "ghost", "n_events": "10"},
         )
@@ -196,36 +196,36 @@ def test_simulate_run_with_no_events_shows_empty_state(tmp_path) -> None:
     assert "nothing to replay" in res.text
 
 
-def test_simulate_run_rejects_out_of_range_field(tmp_path) -> None:
+async def test_simulate_run_rejects_out_of_range_field(tmp_path) -> None:
     db = _populated_db(tmp_path)
     app = create_app(db)
-    with TestClient(app) as client:
-        res = client.post(
+    async with asgi_client(app) as client:
+        res = await client.post(
             "/simulate/run",
             data={"agent_id": "alice", "n_events": "5", "physics_blend_alpha": "9.9"},
         )
     assert res.status_code == 400
 
 
-def test_simulate_run_clamps_n_events(tmp_path) -> None:
+async def test_simulate_run_clamps_n_events(tmp_path) -> None:
     """Out-of-range n_events should clamp, not error."""
     db = _populated_db(tmp_path)
     app = create_app(db)
-    with TestClient(app) as client:
-        res = client.post(
+    async with asgi_client(app) as client:
+        res = await client.post(
             "/simulate/run",
             data={"agent_id": "alice", "n_events": "99999"},
         )
     assert res.status_code == 200
 
 
-def test_simulate_apply_writes_only_non_default_fields(tmp_path) -> None:
+async def test_simulate_apply_writes_only_non_default_fields(tmp_path) -> None:
     """The apply handler is the bridge from simulator → live config."""
     db = _populated_db(tmp_path)
     app = create_app(db)
     # All-defaults form → no overrides written.
-    with TestClient(app) as client:
-        res = client.post(
+    async with asgi_client(app) as client:
+        res = await client.post(
             "/simulate/apply",
             data={"agent_id": "alice"},
             follow_redirects=False,
@@ -238,11 +238,11 @@ def test_simulate_apply_writes_only_non_default_fields(tmp_path) -> None:
     assert bundle.soul == {}
 
 
-def test_simulate_apply_writes_provided_overrides(tmp_path) -> None:
+async def test_simulate_apply_writes_provided_overrides(tmp_path) -> None:
     db = _populated_db(tmp_path)
     app = create_app(db)
-    with TestClient(app) as client:
-        res = client.post(
+    async with asgi_client(app) as client:
+        res = await client.post(
             "/simulate/apply",
             data={
                 "agent_id": "alice",

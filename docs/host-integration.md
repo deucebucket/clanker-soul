@@ -144,13 +144,20 @@ point for new integrations.
 4. Schedule `plugin.tick()` according to your event loop (every N
    seconds via a heartbeat, or every turn — both work; `tick()` is
    idempotent and cheap).
-5. Wire the M4 cascade pieces as they land (#81 heartbeat + gate, #82
-   action registry).
+5. Wire the M4 cascade explicitly when you want idle thought to become
+   behavior: build a contemplation corpus with
+   `build_default_contemplation_corpus()`, run `IdleLoop` on your heartbeat,
+   register host actions in `ActionRegistry`, and let `tags_from_delta()` map
+   contemplation mood shifts to action tags.
 
 ## Reference
 
 - `SoulPlugin.state_context()` — see `clanker_soul/plugin.py` and
   `clanker_soul/governor/context.py`
 - `EmotionalPhysics.contemplate()` — see `clanker_soul/physics/engine.py`
+- `build_default_contemplation_corpus()` and `DEFAULT_CONTEMPLATION_FACES` —
+  see `clanker_soul/pulse/contemplation_defaults.py`
+- `IdleLoop`, `ActionRegistry`, and `tags_from_delta()` — see
+  `clanker_soul/cascade/`
 - `Inference` protocol — see `clanker_soul/inference.py`
 - Reference host source — `clanker_soul/examples/reference_host.py`

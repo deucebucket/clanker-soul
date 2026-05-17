@@ -7,7 +7,7 @@ import pytest
 pytest.importorskip("fastapi")
 pytest.importorskip("httpx")
 
-from fastapi.testclient import TestClient
+from tests.ui.asgi import asgi_client
 
 from clanker_soul import (
     BRITTLE,
@@ -62,7 +62,7 @@ def _wounded_db(tmp_path) -> str:
 # ---------------------------------------------------------------------------
 
 
-def test_view_has_state_false_for_unknown_agent(tmp_path) -> None:
+async def test_view_has_state_false_for_unknown_agent(tmp_path) -> None:
     db = tmp_path / "v.db"
     SoulStore(db)
     view = build_live_view(SoulStore.get(db), "nobody")
@@ -70,7 +70,7 @@ def test_view_has_state_false_for_unknown_agent(tmp_path) -> None:
     assert view.mood is None
 
 
-def test_view_includes_mood_after_ingest(tmp_path) -> None:
+async def test_view_includes_mood_after_ingest(tmp_path) -> None:
     db = _populated_db(tmp_path, "alice")
     view = build_live_view(SoulStore.get(db), "alice")
     assert view.has_state is True
@@ -78,7 +78,7 @@ def test_view_includes_mood_after_ingest(tmp_path) -> None:
     assert len(view.mood) == 7
 
 
-def test_view_radar_polygon_has_seven_points(tmp_path) -> None:
+async def test_view_radar_polygon_has_seven_points(tmp_path) -> None:
     db = _populated_db(tmp_path, "alice")
     view = build_live_view(SoulStore.get(db), "alice")
     assert view.radar_soul is not None
@@ -89,7 +89,7 @@ def test_view_radar_polygon_has_seven_points(tmp_path) -> None:
     assert view.radar_soul.points_attr.count(",") == 7
 
 
-def test_view_capability_level_drops_under_distress(tmp_path) -> None:
+async def test_view_capability_level_drops_under_distress(tmp_path) -> None:
     from clanker_soul import CapabilityLevel
 
     db = _wounded_db(tmp_path)
@@ -97,14 +97,14 @@ def test_view_capability_level_drops_under_distress(tmp_path) -> None:
     assert view.capability_level >= CapabilityLevel.NON_DESTRUCTIVE
 
 
-def test_view_state_context_populated_under_distress(tmp_path) -> None:
+async def test_view_state_context_populated_under_distress(tmp_path) -> None:
     db = _wounded_db(tmp_path)
     view = build_live_view(SoulStore.get(db), "hurt")
     assert view.state_context  # non-empty
     assert "OPERATIONAL STATE" in view.state_context
 
 
-def test_view_recent_events_have_source_attribution(tmp_path) -> None:
+async def test_view_recent_events_have_source_attribution(tmp_path) -> None:
     db = _wounded_db(tmp_path)
     view = build_live_view(SoulStore.get(db), "hurt")
     assert view.recent_events
@@ -112,7 +112,7 @@ def test_view_recent_events_have_source_attribution(tmp_path) -> None:
     assert "abuser" in sources
 
 
-def test_view_trauma_by_pattern_capped_at_top_n(tmp_path) -> None:
+async def test_view_trauma_by_pattern_capped_at_top_n(tmp_path) -> None:
     """The top-N filter trims to 10; we only generate one pattern here."""
     db = _wounded_db(tmp_path)
     view = build_live_view(SoulStore.get(db), "hurt")
@@ -125,11 +125,11 @@ def test_view_trauma_by_pattern_capped_at_top_n(tmp_path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_snapshot_fragment_renders(tmp_path) -> None:
+async def test_snapshot_fragment_renders(tmp_path) -> None:
     db = _populated_db(tmp_path, "alice")
     app = create_app(db)
-    with TestClient(app) as client:
-        res = client.get("/snapshot?agent_id=alice")
+    async with asgi_client(app) as client:
+        res = await client.get("/snapshot?agent_id=alice")
     assert res.status_code == 200
     # Should NOT include the page chrome — fragment only.
     assert "<html" not in res.text.lower()
@@ -138,16 +138,16 @@ def test_snapshot_fragment_renders(tmp_path) -> None:
     assert "vadugwi" in res.text.lower() or "VADUGWI" in res.text
 
 
-def test_snapshot_fragment_shows_capability_badge(tmp_path) -> None:
+async def test_snapshot_fragment_shows_capability_badge(tmp_path) -> None:
     db = _wounded_db(tmp_path)
     app = create_app(db)
-    with TestClient(app) as client:
-        res = client.get("/snapshot?agent_id=hurt")
+    async with asgi_client(app) as client:
+        res = await client.get("/snapshot?agent_id=hurt")
     assert res.status_code == 200
     assert "capability" in res.text.lower()
 
 
-def test_snapshot_fragment_shows_emergency_when_external(tmp_path) -> None:
+async def test_snapshot_fragment_shows_emergency_when_external(tmp_path) -> None:
     """Diverse EXTERNAL_REPORT events → crisis_signal flags emergency
     → fragment shows the emergency badge."""
     db = tmp_path / "crisis.db"
@@ -164,56 +164,56 @@ def test_snapshot_fragment_shows_emergency_when_external(tmp_path) -> None:
                 )
             )
     app = create_app(db)
-    with TestClient(app) as client:
-        res = client.get("/snapshot?agent_id=agent")
+    async with asgi_client(app) as client:
+        res = await client.get("/snapshot?agent_id=agent")
     assert "emergency" in res.text.lower()
 
 
-def test_snapshot_fragment_shows_no_state_when_empty(tmp_path) -> None:
+async def test_snapshot_fragment_shows_no_state_when_empty(tmp_path) -> None:
     db = tmp_path / "empty.db"
     SoulStore(db)
     app = create_app(db)
-    with TestClient(app) as client:
-        res = client.get("/snapshot?agent_id=ghost")
+    async with asgi_client(app) as client:
+        res = await client.get("/snapshot?agent_id=ghost")
     assert res.status_code == 200
     assert "no state yet" in res.text.lower()
 
 
-def test_index_includes_initial_snapshot_inline(tmp_path) -> None:
+async def test_index_includes_initial_snapshot_inline(tmp_path) -> None:
     """Initial page load embeds the snapshot — no flash of empty content
     while HTMX warms up. Subsequent updates come via /snapshot polling."""
     db = _populated_db(tmp_path, "alice")
     app = create_app(db)
-    with TestClient(app) as client:
-        res = client.get("/")
+    async with asgi_client(app) as client:
+        res = await client.get("/")
     # Full page chrome
     assert "<html" in res.text.lower()
     # Plus the panel content
     assert "<svg" in res.text
 
 
-def test_index_wires_htmx_polling(tmp_path) -> None:
+async def test_index_wires_htmx_polling(tmp_path) -> None:
     db = _populated_db(tmp_path, "alice")
     app = create_app(db)
-    with TestClient(app) as client:
-        res = client.get("/")
+    async with asgi_client(app) as client:
+        res = await client.get("/")
     assert 'hx-get="/snapshot?agent_id=alice"' in res.text
     assert 'hx-trigger="every 2s"' in res.text
 
 
-def test_custom_governor_config_propagates(tmp_path) -> None:
+async def test_custom_governor_config_propagates(tmp_path) -> None:
     """Passing a stricter config to create_app changes which level
     the dashboard reports for the same DB state."""
     db = _populated_db(tmp_path, "alice")
     # Default config + healthy mood = unrestricted.
     app_default = create_app(db)
-    with TestClient(app_default) as client:
-        res_default = client.get("/snapshot?agent_id=alice")
+    async with asgi_client(app_default) as client:
+        res_default = await client.get("/snapshot?agent_id=alice")
     assert "unrestricted" in res_default.text.lower()
 
     # Absurdly strict config that always trips level 1 (W floor above max).
     strict = GovernorConfig(level1_w_floor=300, level1_v_floor=300)
     app_strict = create_app(db, governor_config=strict)
-    with TestClient(app_strict) as client:
-        res_strict = client.get("/snapshot?agent_id=alice")
+    async with asgi_client(app_strict) as client:
+        res_strict = await client.get("/snapshot?agent_id=alice")
     assert "non_destructive" in res_strict.text.lower()

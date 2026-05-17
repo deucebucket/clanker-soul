@@ -86,6 +86,34 @@ clanker-soul **folds into** an agent; it doesn't become one. To make the soul ac
 
 Skip any of these and the agent technically works but reads as emotionally inert.
 
+### Plugin manifests
+
+Hosts that want drag-drop runtime extensions can use the dependency-free
+manifest helpers in `clanker_soul.plugins`: `PluginManifest`,
+`parse_manifest_json()`, `parse_plugins_toml()`, and `PluginLoader`.
+See [`docs/plugins.md`](docs/plugins.md) and
+[`examples/plugins/hello_world/`](examples/plugins/hello_world/) for the
+reference folder shape.
+
+### M4 cascade defaults
+
+The idle/cascade primitives are opt-in, so existing hosts do not change
+behavior on upgrade. Hosts that wire the cascade can start with the shipped
+default contemplation corpus:
+
+```python
+from clanker_soul import IdleLoop, build_default_contemplation_corpus
+
+corpus = build_default_contemplation_corpus()
+loop = IdleLoop(host, physics=plugin.physics, corpus=corpus)
+```
+
+`DEFAULT_CONTEMPLATION_FACES` contains 978 first-person idle introspection
+faces with VADUGWI affinities. The action cascade uses `tags_from_delta()` to
+map contemplation mood shifts into conservative action tags such as
+`reach_out`, `withdraw`, `research`, `journal`, and `problem_solve`; hosts still
+own the actual `ActionRegistry` and handlers.
+
 ### Personality presets
 
 Soul can start anywhere. The package ships four bundles you can apply with one call:

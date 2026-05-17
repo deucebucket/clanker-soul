@@ -7,7 +7,7 @@ import pytest
 pytest.importorskip("fastapi")
 pytest.importorskip("httpx")
 
-from fastapi.testclient import TestClient
+from tests.ui.asgi import asgi_client
 
 from clanker_soul import SoulStore
 from clanker_soul.overrides import ConfigOverrides
@@ -34,7 +34,7 @@ def _fresh_db(tmp_path) -> str:
     return str(db)
 
 
-def test_view_has_all_physics_and_soul_rows(tmp_path) -> None:
+async def test_view_has_all_physics_and_soul_rows(tmp_path) -> None:
     db = _fresh_db(tmp_path)
     overrides = ConfigOverrides(SoulStore.get(db))
     view = build_config_view(overrides, "alice")
@@ -46,7 +46,7 @@ def test_view_has_all_physics_and_soul_rows(tmp_path) -> None:
     assert soul_names == {f.name for f in SOUL_FIELDS}
 
 
-def test_view_no_overrides_means_current_equals_default(tmp_path) -> None:
+async def test_view_no_overrides_means_current_equals_default(tmp_path) -> None:
     db = _fresh_db(tmp_path)
     overrides = ConfigOverrides(SoulStore.get(db))
     view = build_config_view(overrides, "alice")
@@ -58,7 +58,7 @@ def test_view_no_overrides_means_current_equals_default(tmp_path) -> None:
         assert row.is_overridden is False
 
 
-def test_view_reflects_existing_override(tmp_path) -> None:
+async def test_view_reflects_existing_override(tmp_path) -> None:
     db = _fresh_db(tmp_path)
     overrides = ConfigOverrides(SoulStore.get(db))
     overrides.update("alice", physics={"blend_alpha": 0.42}, soul={"v": 200})
@@ -79,25 +79,25 @@ def test_view_reflects_existing_override(tmp_path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_coerce_int_field_returns_int() -> None:
+async def test_coerce_int_field_returns_int() -> None:
     meta = next(f for f in SOUL_FIELDS if f.name == "v")
     assert coerce_value(meta, "180") == 180
     assert isinstance(coerce_value(meta, "180"), int)
 
 
-def test_coerce_float_field_returns_float() -> None:
+async def test_coerce_float_field_returns_float() -> None:
     meta = next(f for f in PHYSICS_FIELDS if f.name == "blend_alpha")
     assert coerce_value(meta, "0.5") == 0.5
     assert isinstance(coerce_value(meta, "0.5"), float)
 
 
-def test_coerce_rejects_out_of_range_high() -> None:
+async def test_coerce_rejects_out_of_range_high() -> None:
     meta = next(f for f in SOUL_FIELDS if f.name == "v")
     with pytest.raises(ValueError, match="out of range"):
         coerce_value(meta, "999")
 
 
-def test_coerce_rejects_out_of_range_low() -> None:
+async def test_coerce_rejects_out_of_range_low() -> None:
     meta = next(f for f in PHYSICS_FIELDS if f.name == "blend_alpha")
     with pytest.raises(ValueError, match="out of range"):
         coerce_value(meta, "-0.1")
@@ -108,7 +108,7 @@ def test_coerce_rejects_out_of_range_low() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_apply_physics_field_override(tmp_path) -> None:
+async def test_apply_physics_field_override(tmp_path) -> None:
     db = _fresh_db(tmp_path)
     overrides = ConfigOverrides(SoulStore.get(db))
     apply_field_override(overrides, "alice", "physics", "blend_alpha", "0.7")
@@ -116,7 +116,7 @@ def test_apply_physics_field_override(tmp_path) -> None:
     assert bundle.physics["blend_alpha"] == 0.7
 
 
-def test_apply_soul_field_override_coerces_int(tmp_path) -> None:
+async def test_apply_soul_field_override_coerces_int(tmp_path) -> None:
     db = _fresh_db(tmp_path)
     overrides = ConfigOverrides(SoulStore.get(db))
     apply_field_override(overrides, "alice", "soul", "v", "200")
@@ -125,21 +125,21 @@ def test_apply_soul_field_override_coerces_int(tmp_path) -> None:
     assert isinstance(bundle.soul["v"], int)
 
 
-def test_apply_unknown_section_raises(tmp_path) -> None:
+async def test_apply_unknown_section_raises(tmp_path) -> None:
     db = _fresh_db(tmp_path)
     overrides = ConfigOverrides(SoulStore.get(db))
     with pytest.raises(ValueError, match="unknown section"):
         apply_field_override(overrides, "alice", "ghosts", "v", "100")
 
 
-def test_apply_unknown_field_raises(tmp_path) -> None:
+async def test_apply_unknown_field_raises(tmp_path) -> None:
     db = _fresh_db(tmp_path)
     overrides = ConfigOverrides(SoulStore.get(db))
     with pytest.raises(ValueError, match="unknown physics field"):
         apply_field_override(overrides, "alice", "physics", "bogus", "0.5")
 
 
-def test_clear_one_field_leaves_others(tmp_path) -> None:
+async def test_clear_one_field_leaves_others(tmp_path) -> None:
     db = _fresh_db(tmp_path)
     overrides = ConfigOverrides(SoulStore.get(db))
     overrides.update("alice", physics={"blend_alpha": 0.7, "armor_max": 0.4})
@@ -154,13 +154,13 @@ def test_clear_one_field_leaves_others(tmp_path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_config_page_renders_sliders(tmp_path) -> None:
+async def test_config_page_renders_sliders(tmp_path) -> None:
     db = _fresh_db(tmp_path)
     overrides = ConfigOverrides(SoulStore.get(db))
     overrides.update("alice", physics={"blend_alpha": 0.5})  # ensure agent exists
     app = create_app(db)
-    with TestClient(app) as client:
-        res = client.get("/config?agent_id=alice")
+    async with asgi_client(app) as client:
+        res = await client.get("/config?agent_id=alice")
     assert res.status_code == 200
     assert "blend_alpha" in res.text
     assert 'type="range"' in res.text
@@ -169,13 +169,13 @@ def test_config_page_renders_sliders(tmp_path) -> None:
     assert "adult" in res.text
 
 
-def test_config_partial_returns_only_panel(tmp_path) -> None:
+async def test_config_partial_returns_only_panel(tmp_path) -> None:
     db = _fresh_db(tmp_path)
     overrides = ConfigOverrides(SoulStore.get(db))
     overrides.update("alice", physics={"blend_alpha": 0.5})
     app = create_app(db)
-    with TestClient(app) as client:
-        res = client.get("/config?agent_id=alice&partial=1")
+    async with asgi_client(app) as client:
+        res = await client.get("/config?agent_id=alice&partial=1")
     assert res.status_code == 200
     assert "<html" not in res.text.lower()
     assert 'type="range"' in res.text
@@ -186,11 +186,11 @@ def test_config_partial_returns_only_panel(tmp_path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_post_override_persists(tmp_path) -> None:
+async def test_post_override_persists(tmp_path) -> None:
     db = _fresh_db(tmp_path)
     app = create_app(db)
-    with TestClient(app) as client:
-        res = client.post(
+    async with asgi_client(app) as client:
+        res = await client.post(
             "/config/override",
             data={
                 "agent_id": "alice",
@@ -204,24 +204,24 @@ def test_post_override_persists(tmp_path) -> None:
     assert overrides.get("alice").physics["blend_alpha"] == 0.65
 
 
-def test_post_override_rejects_out_of_range(tmp_path) -> None:
+async def test_post_override_rejects_out_of_range(tmp_path) -> None:
     db = _fresh_db(tmp_path)
     app = create_app(db)
-    with TestClient(app) as client:
-        res = client.post(
+    async with asgi_client(app) as client:
+        res = await client.post(
             "/config/override",
             data={"agent_id": "alice", "section": "soul", "field": "v", "value": "9999"},
         )
     assert res.status_code == 400
 
 
-def test_post_clear_field_removes_one_only(tmp_path) -> None:
+async def test_post_clear_field_removes_one_only(tmp_path) -> None:
     db = _fresh_db(tmp_path)
     overrides = ConfigOverrides(SoulStore.get(db))
     overrides.update("alice", physics={"blend_alpha": 0.7, "armor_max": 0.4})
     app = create_app(db)
-    with TestClient(app) as client:
-        res = client.post(
+    async with asgi_client(app) as client:
+        res = await client.post(
             "/config/clear",
             data={"agent_id": "alice", "section": "physics", "field": "blend_alpha"},
         )
@@ -231,24 +231,24 @@ def test_post_clear_field_removes_one_only(tmp_path) -> None:
     assert bundle.physics["armor_max"] == 0.4
 
 
-def test_post_clear_all_wipes_bundle(tmp_path) -> None:
+async def test_post_clear_all_wipes_bundle(tmp_path) -> None:
     db = _fresh_db(tmp_path)
     overrides = ConfigOverrides(SoulStore.get(db))
     overrides.update("alice", physics={"blend_alpha": 0.7}, soul={"v": 220})
     app = create_app(db)
-    with TestClient(app) as client:
-        res = client.post("/config/clear", data={"agent_id": "alice"})
+    async with asgi_client(app) as client:
+        res = await client.post("/config/clear", data={"agent_id": "alice"})
     assert res.status_code == 200
     bundle = ConfigOverrides(SoulStore.get(db)).get("alice")
     assert bundle.physics == {}
     assert bundle.soul == {}
 
 
-def test_post_preset_applies_bundle(tmp_path) -> None:
+async def test_post_preset_applies_bundle(tmp_path) -> None:
     db = _fresh_db(tmp_path)
     app = create_app(db)
-    with TestClient(app) as client:
-        res = client.post(
+    async with asgi_client(app) as client:
+        res = await client.post(
             "/config/preset",
             data={"agent_id": "alice", "preset": "child"},
         )
@@ -259,11 +259,11 @@ def test_post_preset_applies_bundle(tmp_path) -> None:
     assert bundle.physics["soul_drift_per_hour"] == PRESETS["child"].config.soul_drift_per_hour
 
 
-def test_post_preset_rejects_unknown(tmp_path) -> None:
+async def test_post_preset_rejects_unknown(tmp_path) -> None:
     db = _fresh_db(tmp_path)
     app = create_app(db)
-    with TestClient(app) as client:
-        res = client.post(
+    async with asgi_client(app) as client:
+        res = await client.post(
             "/config/preset",
             data={"agent_id": "alice", "preset": "doesnotexist"},
         )
