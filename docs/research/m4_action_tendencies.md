@@ -1,6 +1,6 @@
 # M4 Research Output: Action-Tendency Matrix
 
-> **Status:** Initial deep-research deliverable for [#83](https://github.com/deucebucket/clanker-soul/issues/83) (sibling to [#87](https://github.com/deucebucket/clanker-soul/issues/87) thought-content; feeds [#82](https://github.com/deucebucket/clanker-soul/issues/82) action registry tag defaults). Originally pasted as a comment on #83 with Google Docs HTML markup; cleaned and re-saved here for durable diff-able reference. The documented sadness, anxiety, shame, grief, pride-trap, and fear-freeze mappings are now implemented conservatively in `clanker_soul.cascade.tags_from_delta()`.
+> **Status:** Initial deep-research deliverable for [#83](https://github.com/deucebucket/clanker-soul/issues/83) (sibling to [#87](https://github.com/deucebucket/clanker-soul/issues/87) thought-content; feeds [#82](https://github.com/deucebucket/clanker-soul/issues/82) action registry tag defaults). Originally pasted as a comment on #83 with Google Docs HTML markup; cleaned and re-saved here for durable diff-able reference. The documented sadness, anxiety, shame, grief, pride-trap, and fear-freeze mappings plus conservative defaults for joy, anger, boredom, loneliness, excitement, contentment, disgust, curiosity, and restlessness are now implemented in `clanker_soul.cascade.tags_from_delta()`.
 
 ---
 
@@ -282,9 +282,10 @@ This matrix has been converted conservatively into
    `create`, `journal`, `withdraw`, `isolate`, `reflect`, `consume`,
    `distract`, `research`, `ritual`, and `share`.
 3. **Quiet deltas:** below-threshold mood shifts return an empty tag set.
-4. **Conservative fallback:** joy, anger, boredom, loneliness, excitement,
-   contentment, disgust, curiosity, and restlessness still return empty unless a
-   host supplies its own tag mapper or future defaults expand coverage.
+4. **Broader defaults:** joy, anger, boredom, loneliness, excitement,
+   contentment, disgust, curiosity, and restlessness now emit generic tags
+   suitable for host action registries. These defaults remain intentionally
+   broad, not persona-specific.
 5. **Variation note:** cultural/individual variation remains a host policy
    concern; `tags_from_delta()` intentionally chooses one documented default
    rather than pretending the matrix is universal.

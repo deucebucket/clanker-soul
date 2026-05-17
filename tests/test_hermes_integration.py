@@ -17,6 +17,7 @@ loop) but is part of the release contract.
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -247,3 +248,21 @@ def test_provider_config_schema_includes_db_path() -> None:
     names = {f["name"] for f in schema}
     assert "db_path" in names
     assert "shared_agent_id" in names
+
+
+def test_m4_idle_cascade_smoke_script_runs() -> None:
+    script = _PLUGIN_DIR / "scripts" / "m4_idle_cascade_smoke.py"
+    result = subprocess.run(
+        [sys.executable, str(script)],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert result.returncode == 0, (
+        f"m4_idle_cascade_smoke.py exited {result.returncode}\n"
+        f"stdout:\n{result.stdout}\n"
+        f"stderr:\n{result.stderr}"
+    )
+    assert '"gate_passed": true' in result.stdout
+    assert '"mood_changed": true' in result.stdout

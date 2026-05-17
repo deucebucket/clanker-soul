@@ -300,6 +300,11 @@ clanker-soul ui    --db ./soul.db   # requires [ui] extra
 
 clanker-soul ships a first-class plugin for [Nous Research's hermes-agent](https://github.com/NousResearch/hermes-agent). Symlink `integrations/hermes/` into `hermes-agent/plugins/memory/clanker-soul/`, run `hermes config set memory.provider clanker-soul`, and the agent's soul state becomes part of its system prompt every turn. See [`integrations/hermes/README.md`](integrations/hermes/README.md) for full setup, and [`integrations/hermes/EVIDENCE.md`](integrations/hermes/EVIDENCE.md) for a captured A/B run on DeepSeek V4 Flash showing the model literally reflecting back the pattern names from the injected state-context block.
 
+For the M4 idle-cascade path, `python integrations/hermes/scripts/m4_idle_cascade_smoke.py`
+initializes the Hermes memory provider, runs `IdleLoop`, dispatches a
+host-owned `ActionRegistry` action, and verifies consequence ingestion without
+network access.
+
 ## Examples
 
 Runnable wire-up samples in [`examples/`](examples/README.md):
