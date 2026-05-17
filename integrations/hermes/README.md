@@ -146,8 +146,22 @@ integrations/hermes/
 ├── __init__.py                           # ClankerSoulMemoryProvider + get_provider()
 ├── scorer.py                             # KeywordScorer (the default scorer)
 ├── pulse_runner.py                       # daemon-thread PulseEngine bridge
+├── scripts/m4_idle_cascade_smoke.py      # local full-cascade smoke, no network
 └── inference_health.py                   # FailoverReason → Score mapping
 ```
+
+## M4 idle-cascade smoke
+
+To verify the Hermes-facing M4 path without a live model or outbound channel:
+
+```bash
+python integrations/hermes/scripts/m4_idle_cascade_smoke.py
+```
+
+The smoke initializes `ClankerSoulMemoryProvider`, builds the shipped
+contemplation corpus, runs `IdleLoop`, selects a host-owned
+`ActionRegistry` action, ingests the action consequence, and checks that the
+provider tool state reports mood.
 
 ## Replacing the scorer
 

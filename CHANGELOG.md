@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Hermes M4 cascade smoke (#86).** New
+  ``integrations/hermes/scripts/m4_idle_cascade_smoke.py`` initializes the
+  Hermes memory provider, runs the shipped contemplation corpus through
+  ``IdleLoop`` and ``ActionRegistry``, ingests a consequence, and verifies
+  provider tool state without network access.
+- **Broader M4 action tags (#86).** ``tags_from_delta()`` now emits
+  conservative defaults for joy, anger, boredom, loneliness, excitement,
+  contentment, disgust, curiosity, and restlessness instead of falling
+  through to an empty tag set for those common mood shapes.
 - **M4 idle-cascade example (#86).** Added
   ``examples/05_m4_idle_cascade.py`` showing the opt-in path from the
   shipped contemplation corpus through ``IdleLoop``, ``tags_from_delta()``,

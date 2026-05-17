@@ -140,9 +140,9 @@ def tags_from_delta(
 
     Maps the research-backed M4 action-tendency matrix (#83) into
     host-action tags. This deliberately stays conservative: only the
-    documented sadness/anxiety/shame/grief shapes emit tags; unrecognized
-    shapes return an empty set so hosts can still opt in with their own
-    mapper without fighting broad defaults.
+    documented sadness/anxiety/shame/grief shapes emit tags first; broader
+    mood families below stay intentionally generic so hosts can opt in with
+    their own mapper without fighting over-specific defaults.
     """
     if _delta_is_quiet(pre, post):
         return frozenset()
@@ -162,6 +162,11 @@ def tags_from_delta(
     if mood.v <= 80 and mood.a <= 90 and mood.g >= 220 and soul.w >= 120:
         return frozenset({"reflect", "journal", "ritual", "reach_out", "share"})
 
+    # Anger/frustration: activated, agentic negative valence. Prefer
+    # boundary-setting and problem work over impulsive social blast.
+    if mood.v <= 105 and mood.a >= 150 and mood.d >= 130:
+        return frozenset({"set_boundary", "problem_solve", "plan", "journal", "reflect"})
+
     # Anxiety with enough agency/worth: gather info and plan.
     if mood.v <= 120 and mood.a >= 130 and mood.u >= 120 and soul.d >= 120 and soul.w >= 140:
         return frozenset({"research", "problem_solve", "reflect", "journal", "plan"})
@@ -174,10 +179,47 @@ def tags_from_delta(
             return frozenset({"withdraw", "isolate", "reflect", "consume", "distract"})
         return frozenset({"reflect", "journal"})
 
+    # Disgust/repulsion: negative valence plus high agency and gravity
+    # tends toward distancing, cleanup, and boundary repair.
+    if mood.v <= 95 and mood.d >= 120 and mood.g >= 170:
+        return frozenset({"withdraw", "set_boundary", "clean_up", "reflect"})
+
     # Pride trap / defensive self-sufficiency: high D/W with negative
     # movement favors self-directed planning over confiding.
     if mood.d >= 200 and mood.w >= 190 and _valence_dropped(pre, post):
         return frozenset({"plan", "problem_solve", "reflect"})
+
+    # Loneliness: low valence with relational worth dip, but not the
+    # shame/grief traps above. Secure souls reach out; brittle ones
+    # retreat and reflect.
+    if mood.v <= 100 and mood.w <= 120 and mood.g >= 130:
+        if soul.d >= 120 and soul.w >= 130:
+            return frozenset({"reach_out", "share", "soothe", "journal"})
+        return frozenset({"withdraw", "isolate", "reflect", "journal"})
+
+    # Restlessness: activated with little gravity. Channel into novelty
+    # or movement before it becomes noisy action.
+    if mood.a >= 165 and mood.g <= 130 and mood.u <= 120:
+        return frozenset({"research", "create", "distract", "plan"})
+
+    # Excitement: high-valence, high-arousal, directed energy.
+    if mood.v >= 170 and mood.a >= 150 and (mood.u >= 110 or mood.i >= 140):
+        return frozenset({"share", "create", "plan", "research"})
+
+    # Curiosity: directed, non-crisis exploration.
+    if mood.v >= 120 and mood.a >= 100 and mood.i >= 150 and mood.g <= 170:
+        return frozenset({"research", "explore", "create", "problem_solve"})
+
+    # Joy/contentment: positive states reinforce sharing, savoring, and
+    # gentle reflection. Keep excitement above this branch.
+    if mood.v >= 170:
+        if mood.a <= 115 and mood.u <= 90:
+            return frozenset({"savor", "reflect", "journal", "share"})
+        return frozenset({"share", "create", "reach_out", "journal"})
+
+    # Boredom / under-stimulation: low arousal, low urgency, low intent.
+    if mood.a <= 80 and mood.u <= 80 and mood.i <= 90:
+        return frozenset({"explore", "research", "create", "consume"})
 
     return frozenset()
 
