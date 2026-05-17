@@ -12,12 +12,13 @@ plain `python examples/NN_*.py` after `pip install -e ".[ui]"`.
 | [`02_async_host.py`](02_async_host.py) | Async ticker that calls `plugin.tick()` (drift + reload_overrides) on each iteration. Demonstrates that there's no separate async API surface — the same context manager + methods work in both sync and async. |
 | [`03_custom_event_sink.py`](03_custom_event_sink.py) | Implementing the `EventLog` Protocol from scratch — an ndjson sink that ships ingest + pulse records to a file instead of (or in addition to) `SqliteEventLog`. Demonstrates the soft-fail invariant: logging failures must not raise into the engine. |
 | [`04_pulse_host.py`](04_pulse_host.py) | Smallest possible `PulseHost`: a stdout-only host that satisfies the protocol's six hooks. Drives mood far below soul to fire a `distress` pulse and prints the synthetic self-prompt the agent would read. |
+| [`05_m4_idle_cascade.py`](05_m4_idle_cascade.py) | End-to-end M4 idle cascade: default contemplation corpus → `IdleLoop` → `tags_from_delta()` → `ActionRegistry` handler → consequence ingest. |
 
 ## How to run
 
 ```bash
 pip install -e ".[ui]"          # one-time setup
-python examples/01_minimal.py   # any of the four
+python examples/01_minimal.py   # any numbered example
 ```
 
 Each script writes its `soul.db` (or ndjson log) to a fresh tmpdir and
@@ -46,6 +47,10 @@ clanker-soul ui --db /tmp/clanker-soul-exNN-XXXXXX/soul.db
 - **`PulseHost` hooks may be sync OR async.** The engine uses
   `asyncio.iscoroutine()` discipline rather than wrapping. Return what's
   natural for your codebase.
+- **M4 cascade is opt-in.** Build or load a contemplation corpus, construct
+  `IdleLoop`, register host-owned actions in `ActionRegistry`, then call
+  `await loop.tick()` from your heartbeat. `05_m4_idle_cascade.py` shows the
+  full path without adding behavior to `SoulPlugin`.
 - **Soft-fail invariant.** Storage and event-log failures must warn and
   continue, never raise into ingest. Custom event sinks should follow
   the pattern in `03_custom_event_sink.py`.

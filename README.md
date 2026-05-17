@@ -308,6 +308,7 @@ Runnable wire-up samples in [`examples/`](examples/README.md):
 - [`02_async_host.py`](examples/02_async_host.py) — async ticker calling `plugin.tick()`
 - [`03_custom_event_sink.py`](examples/03_custom_event_sink.py) — implementing the `EventLog` Protocol with an ndjson sink
 - [`04_pulse_host.py`](examples/04_pulse_host.py) — minimum `PulseHost` that fires a distress pulse to stdout
+- [`05_m4_idle_cascade.py`](examples/05_m4_idle_cascade.py) — opt-in M4 idle cascade from contemplation to action consequence
 
 ```bash
 pip install -e ".[ui]"

@@ -132,6 +132,11 @@ Read the source — it's the smallest possible "real" host:
 It's intentionally not production code. It's a copy-paste starting
 point for new integrations.
 
+For the M4 action cascade specifically, also read
+`examples/05_m4_idle_cascade.py`. It wires the shipped contemplation corpus,
+`IdleLoop`, `tags_from_delta()`, `ActionRegistry`, and consequence ingestion
+in one deterministic script.
+
 ## When you build a real host
 
 1. Replace the in-memory memory with your real one (vector store,
