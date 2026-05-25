@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Project license changed from AGPL-3.0 to MIT.** All future releases ship under the MIT license.
+
 ### Added
 
 - **Local Hermes M4 evidence (#86).** Added
