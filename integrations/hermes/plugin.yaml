@@ -6,3 +6,4 @@ pip_dependencies:
 hooks:
   - on_turn_start
   - sync_turn
+  - on_inference_failure

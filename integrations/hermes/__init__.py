@@ -26,22 +26,17 @@ from typing import Any, Dict, List, Optional
 from clanker_soul import SoulPlugin, render_felt_state
 from clanker_soul.presets import ALL as PRESETS
 
-# Hermes import — agent.memory_provider lives in the hermes-agent venv.
-# We do a try/import so a casual `python -m clanker_soul_hermes` outside
-# of hermes still imports without exploding.
 try:
     from agent.memory_provider import MemoryProvider
 except ImportError:  # pragma: no cover — only hits in test/dev tooling
     MemoryProvider = object  # type: ignore[assignment,misc]
 
 try:
-    # When loaded as a hermes plugin, we're a package and relative imports work.
-    from .scorer import KeywordScorer
+    from .scorer import ClankerScorer
     from .pulse_runner import PulseRunner
     from .inference_health import score_from_failover
 except ImportError:
-    # When the dir is on sys.path directly (test rigs), fall back.
-    from scorer import KeywordScorer  # type: ignore[no-redef]
+    from scorer import ClankerScorer  # type: ignore[no-redef]
     from pulse_runner import PulseRunner  # type: ignore[no-redef]
     from inference_health import score_from_failover  # type: ignore[no-redef]
 
@@ -57,7 +52,7 @@ class ClankerSoulMemoryProvider(MemoryProvider):  # type: ignore[misc,valid-type
     def __init__(self) -> None:
         super().__init__()
         self._plugin: Optional[SoulPlugin] = None
-        self._scorer = KeywordScorer()
+        self._scorer = ClankerScorer()
         self._session_id: str = ""
         self._db_path: Path = Path(_DEFAULT_DB_PATH).expanduser()
         self._enabled = True
@@ -437,4 +432,4 @@ def get_provider() -> "ClankerSoulMemoryProvider":
     return ClankerSoulMemoryProvider()
 
 
-__all__ = ["ClankerSoulMemoryProvider", "get_provider"]
+__all__ = ["ClankerSoulMemoryProvider", "ClankerScorer", "get_provider"]

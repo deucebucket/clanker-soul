@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Project license changed from AGPL-3.0 to MIT.** All future releases ship under the MIT license.
+- **Hermes scorer now routes through clanker-soul's own pattern system.**
+  ``KeywordScorer`` (17 ad-hoc regex patterns with hand-coded deltas) replaced
+  by ``ClankerScorer`` — 35+ patterns mapped to clanker's native
+  ``POSITIVE_PATTERNS`` and ``HEAVY_PATTERNS`` sets so the physics engine's
+  ``_classify()`` routes correctly into trauma/nourishment/breach/correction
+  pathways. VADUGWI baselines are set per-class so the V/W heuristic agrees
+  with pattern-based routing. ``KeywordScorer`` kept as backward-compatible
+  alias. Old scorer never triggered breach because its pattern names didn't
+  match clanker's heavy set; the new one does.
+- **Hermes plugin.yaml now declares ``on_inference_failure`` hook.** Previously
+  the plugin implemented the hook but didn't list it in the manifest, so
+  hermes agents that validate hooks against the manifest would silently skip
+  inference-failure ingestion.
 
 ### Added
 

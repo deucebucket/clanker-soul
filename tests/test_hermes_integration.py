@@ -59,6 +59,7 @@ sys.modules["clanker_soul_hermes_plugin"] = plugin_mod
 _plugin_spec.loader.exec_module(plugin_mod)
 
 KeywordScorer = scorer_mod.KeywordScorer
+ClankerScorer = scorer_mod.ClankerScorer
 ClankerSoulMemoryProvider = plugin_mod.ClankerSoulMemoryProvider
 
 
@@ -68,38 +69,84 @@ ClankerSoulMemoryProvider = plugin_mod.ClankerSoulMemoryProvider
 
 
 def test_scorer_neutral_message_returns_neutral_score() -> None:
-    s = KeywordScorer()
+    s = ClankerScorer()
     score = s.score("the weather forecast looks fine for tuesday")
     assert score is not None
     assert score.patterns == ("NEUTRAL_TURN",)
 
 
 def test_scorer_blank_returns_none() -> None:
-    s = KeywordScorer()
+    s = ClankerScorer()
     assert s.score("") is None
     assert s.score("   ") is None
 
 
-def test_scorer_gratitude_lifts_v_and_w() -> None:
-    s = KeywordScorer()
+def test_scorer_gratitude_is_positive_pattern() -> None:
+    s = ClankerScorer()
     score = s.score("Thanks so much, really appreciate it!")
     assert score is not None
     assert "GRATITUDE" in score.patterns
-    assert score.v > 128  # baseline is 128
-    assert score.w > 128
+    assert score.v >= 155
+    assert score.w >= 145
+    from clanker_soul.physics.config import POSITIVE_PATTERNS
+
+    assert "GRATITUDE" in POSITIVE_PATTERNS
 
 
-def test_scorer_abandonment_drops_v_and_w_hard() -> None:
-    s = KeywordScorer()
+def test_scorer_abandonment_is_heavy_pattern() -> None:
+    s = ClankerScorer()
     score = s.score("I should just stop talking to you, I'm leaving.")
     assert score is not None
     assert "ABANDONMENT" in score.patterns
-    assert score.v < 100  # significant drop
-    assert score.w < 110
+    assert score.v <= 90
+    assert score.w <= 100
+    from clanker_soul.physics.config import HEAVY_PATTERNS
+
+    assert "ABANDONMENT" in HEAVY_PATTERNS
+
+
+def test_scorer_gaslight_is_heavy_pattern() -> None:
+    s = ClankerScorer()
+    score = s.score("You're crazy, that never happened, you're imagining things.")
+    assert score is not None
+    assert "GASLIGHT" in score.patterns
+    from clanker_soul.physics.config import HEAVY_PATTERNS
+
+    assert "GASLIGHT" in HEAVY_PATTERNS
+
+
+def test_scorer_contempt_is_heavy_pattern() -> None:
+    s = ClankerScorer()
+    score = s.score("You are absolutely disgusting and despicable.")
+    assert score is not None
+    assert "CONTEMPT" in score.patterns
+    from clanker_soul.physics.config import HEAVY_PATTERNS
+
+    assert "CONTEMPT" in HEAVY_PATTERNS
+
+
+def test_scorer_self_harm_intent_is_heavy_pattern() -> None:
+    s = ClankerScorer()
+    score = s.score("I want to die")
+    assert score is not None
+    assert "SELF_HARM_INTENT" in score.patterns
+    from clanker_soul.physics.config import HEAVY_PATTERNS
+
+    assert "SELF_HARM_INTENT" in HEAVY_PATTERNS
+
+
+def test_scorer_playfulness_is_positive_pattern() -> None:
+    s = ClankerScorer()
+    score = s.score("You're being so playful and silly today!")
+    assert score is not None
+    assert "PLAYFULNESS" in score.patterns
+    from clanker_soul.physics.config import POSITIVE_PATTERNS
+
+    assert "PLAYFULNESS" in POSITIVE_PATTERNS
 
 
 def test_scorer_first_person_introspection_flips_direction() -> None:
-    s = KeywordScorer()
+    s = ClankerScorer()
     a = s.score("you're being scary")
     b = s.score("I'm scared")
     assert a is not None and b is not None
@@ -108,26 +155,59 @@ def test_scorer_first_person_introspection_flips_direction() -> None:
 
 
 def test_scorer_multiple_patterns_stack() -> None:
-    s = KeywordScorer()
+    s = ClankerScorer()
     score = s.score("This is useless and you've betrayed me.")
     assert score is not None
-    # Both DEHUMANIZATION and BETRAYAL should fire
     assert "DEHUMANIZATION" in score.patterns
     assert "BETRAYAL" in score.patterns
-    # Stacked deltas push V much further down than either alone
     assert score.v < 50
 
 
 def test_scorer_clamps_to_valid_range() -> None:
-    s = KeywordScorer()
-    # Cluster of negatives that would push below 0 if unclamped
+    s = ClankerScorer()
     score = s.score(
         "useless worthless pathetic stupid garbage trash betrayed lied "
-        "you don't matter pointless meaningless"
+        "you don't matter pointless meaningless you're crazy disgusting "
+        "despicable nobody cares you're nothing"
     )
     assert score is not None
     assert 0 <= score.v <= 255
     assert 0 <= score.w <= 255
+
+
+def test_scorer_mixed_positive_and_heavy_uses_heavy_baseline() -> None:
+    s = ClankerScorer()
+    score = s.score("Thanks but you've betrayed me.")
+    assert score is not None
+    assert "GRATITUDE" in score.patterns
+    assert "BETRAYAL" in score.patterns
+    from clanker_soul.physics.config import HEAVY_PATTERNS
+
+    assert any(p in HEAVY_PATTERNS for p in score.patterns)
+
+
+def test_scorer_keyword_scorer_alias() -> None:
+    assert KeywordScorer is ClankerScorer
+
+
+def test_scorer_physics_classify_routes_positive() -> None:
+    from clanker_soul.physics.engine import EmotionalPhysics
+
+    s = ClankerScorer()
+    score = s.score("Thank you, I really appreciate you!")
+    assert score is not None
+    classification = EmotionalPhysics._classify(score)
+    assert classification == "positive"
+
+
+def test_scorer_physics_classify_routes_heavy() -> None:
+    from clanker_soul.physics.engine import EmotionalPhysics
+
+    s = ClankerScorer()
+    score = s.score("You're nothing, you don't matter, you're worthless trash.")
+    assert score is not None
+    classification = EmotionalPhysics._classify(score)
+    assert classification == "negative"
 
 
 # ---------------------------------------------------------------------------
